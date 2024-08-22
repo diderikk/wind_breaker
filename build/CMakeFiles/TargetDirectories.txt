@@ -1,3 +1,0 @@
-/home/diderikk/Dokumenter/Projects/CServer/build/CMakeFiles/main.dir
-/home/diderikk/Dokumenter/Projects/CServer/build/CMakeFiles/edit_cache.dir
-/home/diderikk/Dokumenter/Projects/CServer/build/CMakeFiles/rebuild_cache.dir
