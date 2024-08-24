@@ -1,6 +1,9 @@
-#include "./socket.c"
-#include <arpa/inet.h>
+#include "socket.h"
+#include "signal.h"
+#include <stdio.h>
 #include <stdlib.h>
+#include "string.h"
+#include <unistd.h>
 
 #define SERVER_PORT "8080"
 #define SERVER_IP "127.0.0.1"
