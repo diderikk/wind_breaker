@@ -7,13 +7,15 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #define LISTEN_BACKLOG 50 // TODO: Justify
 
+POLL_ERROR_CLASS classify_poll_error(int code);
 void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
-void del_from_pfds_sync(struct pollfd pfds[], int i, int *fd_count);
+void del_from_pfds_sync(struct pollfd pfds[], int* i, int *fd_count);
 const char* get_poll_event_description(short event);
-const char* get_poll_error_description(int code);
+int check_for_socket_error(int fd);
 
 int get_listener_socket(char* port){
     struct addrinfo hints, *servinfo, *p;
@@ -75,68 +77,148 @@ int get_listener_socket(char* port){
 
 
 void listen_sync(int listener, size_t buffer_size){
-    struct sockaddr_storage client_addr;
-    int client_socket_fd;
     char ip_str[INET6_ADDRSTRLEN], data[buffer_size];
     sigset_t sigmask;
     sigemptyset(&sigmask);
-    int fd_count = 0;
-    int poll_array_size = 5;
-    struct pollfd *poll_array = malloc(sizeof *poll_array * poll_array_size);
 
-    poll_array[0].fd = listener;
-    poll_array[0].events = POLLIN; // Report ready to read on incoming connection
-
-    fd_count = 1;
-
-    /* 
-     * TODO: Create reset function that is executed on relevant errors
-     * => Function must free or reallocate poll_array
-     * Check for error first => handle error first ^
-     *
-     * Handle other revents types to prevent clustering of bad fds.
-     * Maybe validate fds on every loop of poll_array.
+    /*
+     * The function is divided into 2 loops
+     * First loop is the resetting loop. When the inner loop wants to reset and clear all fds, it can break out
+     * Second loop (or the inner loop) continously runs polling for accepting new connections and handling existing connections
      */
 
-    // Continously listen for new connections
-    while(1) {
-        // https://man7.org/linux/man-pages/man2/poll.2.html
-        // NULL causes the poll system call to poll until a revents 
-        // is updated by the kernel
-        int poll_count = ppoll(poll_array, fd_count, NULL, &sigmask);
+    while(1){
+        char loop_counter = 0;
+        int fd_count = 0;
+        int poll_array_size = 5;
+        struct pollfd *poll_array = malloc(sizeof *poll_array * poll_array_size);
 
-        if(poll_count < 0){
-            perror(get_poll_error_description(errno));
-            exit(EXIT_FAILURE);
-        }
+        poll_array[0].fd = listener;
+        poll_array[0].events = POLLIN; // Report ready to read on incoming connection
 
-        for(int i = 0; i < fd_count; i++){
-            
-        }
+        fd_count = 1;
 
-        printf("Polling for new client to connect...\n");
-        client_socket_fd = accept_socket(listener, (struct sockaddr *)&client_addr);
+        bool exit_loop = false;
+        // Continously listen for new connections
+        while(!exit_loop) {
+            loop_counter++;
+            printf("Poller: Number of active sockets (including listener): %d\n", fd_count);
 
+            // https://man7.org/linux/man-pages/man2/poll.2.html
+            // NULL causes the poll system call to poll until a revents 
+            // is updated by the kernel
+            int poll_count = ppoll(poll_array, fd_count, NULL, &sigmask);
+            POLL_ERROR_CLASS error_class;
 
-        get_in_addr_str((struct sockaddr *)&client_addr, ip_str, sizeof(ip_str));
-        printf("Client connect %s:%d\n", ip_str, get_in_addr_port((struct sockaddr *)&client_addr));
-
-        int recv_return = recv_socket(client_socket_fd, data, buffer_size, SHOULD_NOT_EXIT);
-        if(recv_return >= 0){
-            printf("Client request: %s\n", data);
-
-            if(strncmp(data, "Hello", 5) == 0){
-                strcpy(data, "Hello, client");
+            if(poll_count < 0){
+                error_class = classify_poll_error(errno);
+                if(error_class != CONTINUE)
+                    break;
             }
 
-            send_socket(client_socket_fd, data, SHOULD_NOT_EXIT);
-        }
+            for(int i = 0; i < fd_count; i++){
+                // ERROR HANDLING
+                if(poll_array[i].revents & POLLERR){
+                    error_class = classify_poll_error(errno);
+                    if(error_class ==  REMOVE_FD){
+                        del_from_pfds_sync(poll_array, &i, &fd_count);
+                        continue;
+                    }
+                    else {
+                        exit_loop = true;
+                        break;
+                    }
+                }
+                if(poll_array[i].revents & POLLNVAL){
+                    printf("Poller: %s\n", get_poll_event_description(POLLNVAL));
+                    if(check_for_socket_error(poll_array[i].fd) == -1){
+                        del_from_pfds_sync(poll_array, &i, &fd_count);
+                        continue;
+                    }
+                }
+                // HANDLES NEW SOCKET EVENTS
+                if(poll_array[i].revents & POLLIN){
+                    int client_socket_fd;
+                    struct sockaddr_storage client_addr;
+                    // New connection wants to connect from the accept.
+                    if(poll_array[i].fd == listener){
 
-        close(client_socket_fd);
+                        printf("Poller: Polling for new client to connect...\n");
+                        client_socket_fd = accept_socket(listener, (struct sockaddr *)&client_addr);
+
+                        if(client_socket_fd < 0)
+                            continue;
+
+                        get_in_addr_str((struct sockaddr *)&client_addr, ip_str, sizeof(ip_str));
+                        printf("Poller: Client connect %s:%d\n", ip_str, get_in_addr_port((struct sockaddr *)&client_addr));
+                        add_to_pfds_sync(&poll_array, client_socket_fd, &fd_count, &poll_array_size);
+                    } else {
+                        // Existing socket wants to send a request
+                        int recv_return = recv_socket(poll_array[i].fd, data, buffer_size, SHOULD_NOT_EXIT);
+                        if(recv_return > 0){
+                            printf("Poller: Client request: %s\n", data);
+
+                            if(strncmp(data, "Hello", 5) == 0){
+                                strcpy(data, "Hello, client");
+                            }
+
+                            send_socket(poll_array[i].fd, data, SHOULD_NOT_EXIT);
+                        } else {
+                            // Got error or connection closed by client
+                            if (recv_return == 0) {
+                                // Connection closed
+                                printf("Poller: socket %d hung up\n", poll_array[i].fd);
+                            }
+
+                            del_from_pfds_sync(poll_array, &i, &fd_count);
+                            continue;
+                        }
+                    }
+                }
+                // Already should have read the final data => can now close the close the channel
+                // This should already have happend when recv_return == 0.
+                if(poll_array[i].revents & POLLHUP){
+                    printf("Poller: %s\n", get_poll_event_description(POLLHUP));
+                    del_from_pfds_sync(poll_array, &i, &fd_count);
+                    continue;
+                }
+                if(poll_array[i].revents & POLLRDHUP){
+                    printf("Poller: %s\n", get_poll_event_description(POLLRDHUP));
+                    del_from_pfds_sync(poll_array, &i, &fd_count);
+                    continue;
+                }
+                // On every 50th event, validate the existing sockets:
+                if(loop_counter >= 50){
+                    if(check_for_socket_error(poll_array[i].fd) == -1){
+                        del_from_pfds_sync(poll_array, &i, &fd_count);
+                    }
+                    loop_counter = 0;
+                    continue;
+                }
+            }
+        }
+            // In case an error occurs, break the loop and reset the fd array.
+            for(int i = 0; i < fd_count; i++)
+                close(poll_array[i].fd);
+            free(poll_array);
     }
-    //NEVER RETURNS
 }
 
+POLL_ERROR_CLASS classify_poll_error(int code){
+    fprintf(stderr, "Poller Error: %s\n", strerror(code));
+    switch (code) {
+        case EFAULT:
+            return RESET;
+        case EINTR:
+            return CONTINUE;
+        case EINVAL:
+            return RESET;
+        case ENOMEM:
+            return REMOVE_FD;
+        default:
+            return CONTINUE;
+    }
+}
 
 
 // https://beej.us/guide/bgnet/html/split/slightly-advanced-techniques.html
@@ -157,12 +239,14 @@ void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_s
 }
 
 // Remove an index from the set
-void del_from_pfds_sync(struct pollfd pfds[], int i, int *fd_count)
+void del_from_pfds_sync(struct pollfd pfds[], int* i, int *fd_count)
 {
+    close(pfds[*i].fd);
     // Copy the one from the end over this one
-    pfds[i] = pfds[*fd_count-1];
+    pfds[*i] = pfds[*fd_count-1];
 
     (*fd_count)--;
+    (*i)--;
 }
 
 const char* get_poll_event_description(short event) {
@@ -186,17 +270,12 @@ const char* get_poll_event_description(short event) {
     }
 }
 
-const char* get_poll_error_description(int code) {
-    switch (code) {
-        case EFAULT:
-            return "fds points outside the process's accessible address space. The array given as argument was not contained in the calling program's address space.";
-        case EINTR:
-            return "A signal occurred before any requested event; see signal(7).";
-        case EINVAL:
-            return "The nfds value exceeds the RLIMIT_NOFILE value.";
-        case ENOMEM:
-            return "Unable to allocate memory for kernel data structures.";
-        default:
-            return "Unknown error.";
+int check_for_socket_error(int fd) {
+    int err = 0;
+    socklen_t len = sizeof(err);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == -1) {
+        fprintf(stderr, "Poller: Error on socket %d => %s\n", fd, strerror(errno));
+        return -1;
     }
+    return err;
 }

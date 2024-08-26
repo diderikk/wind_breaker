@@ -1,6 +1,11 @@
-
 #ifndef LISTENER_H
 #define LISTENER_H
+
+typedef enum {
+    RESET,
+    REMOVE_FD,
+    CONTINUE
+} POLL_ERROR_CLASS;
 
 #include "socket.h"
 #include <poll.h>
