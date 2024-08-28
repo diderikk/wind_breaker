@@ -5,12 +5,15 @@ project(CServer VERSION 0.0)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED True)
 
+find_package(Threads REQUIRED)
+
 add_library(socket_lib STATIC src/socket.c)
 add_library(listener_lib STATIC src/listener.c)
+add_library(worker_lib STATIC src/worker.c)
 
 add_executable(main src/main.c)
 target_compile_options(main PRIVATE -Wall -Wextra -Werror)
-target_link_libraries(main PRIVATE listener_lib socket_lib)
+target_link_libraries(main PRIVATE listener_lib socket_lib worker_lib Threads::Threads)
 
 add_executable(client src/client.c)
 target_link_libraries(client PRIVATE socket_lib)

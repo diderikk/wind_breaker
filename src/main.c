@@ -5,7 +5,6 @@
 #include <unistd.h>
 
 #define PORT "8080"
-#define BUFFER_SIZE 1024
 
 int socket_fd = -1;
 
@@ -27,7 +26,7 @@ int main(int argc, char *argv[]){
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
 
-    listen_sync(socket_fd, BUFFER_SIZE);
+    listen_sync(socket_fd);
 
     return 0;
 }

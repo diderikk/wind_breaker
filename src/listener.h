@@ -1,5 +1,7 @@
 #ifndef LISTENER_H
 #define LISTENER_H
+#define LISTEN_BACKLOG 50 // TODO: Justify
+#define BUFFER_SIZE 1024
 
 typedef enum {
     RESET,
@@ -7,10 +9,17 @@ typedef enum {
     CONTINUE
 } POLL_ERROR_CLASS;
 
+typedef struct {
+    int fd;
+    char data[BUFFER_SIZE];
+} request_data;
+
 #include "socket.h"
 #include <poll.h>
 
 int get_listener_socket(char* port);
-void listen_sync(int socket_fd, size_t buffer_size);
+void listen_sync(int socket_fd);
+//void listen_sync(int socket_fd, void *(*request_handler) (void *), void *request_handler_arg);
+void listen_async(int socket_fd);
 
 #endif // LISTENER_H

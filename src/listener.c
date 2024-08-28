@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "socket.h"
 #include "listener.h"
+#include "worker.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "string.h"
@@ -9,8 +10,7 @@
 #include <signal.h>
 #include <stdbool.h>
 
-#define LISTEN_BACKLOG 50 // TODO: Justify
-
+void _listen(int listener, void (*request_handler) (void *), request_data *request_handler_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
 void del_from_pfds_sync(struct pollfd pfds[], int* i, int *fd_count);
@@ -74,10 +74,36 @@ int get_listener_socket(char* port){
     return socket_fd;
 }
 
+void listen_async(int listener){
+    pthread_rwlock_t rwlock;
 
+    if (pthread_rwlock_init(&rwlock, NULL) != 0) {
+        perror("pthread_rwlock_init");
+        // TODO: Maybe revert back to listen_sync?
+        exit(EXIT_FAILURE);
+    }
 
-void listen_sync(int listener, size_t buffer_size){
-    char ip_str[INET6_ADDRSTRLEN], data[buffer_size];
+}
+
+void handle_request_sync(void* _arg){
+    request_data* arg = (request_data*)_arg;
+
+    printf("Poller: Client request: %s\n", arg->data);
+
+    if(strncmp(arg->data, "Hello", 5) == 0){
+        strcpy(arg->data, "Hello, client");
+    }
+
+    send_socket(arg->fd, arg->data, SHOULD_NOT_EXIT);
+}
+
+void listen_sync(int listener){
+    request_data data;
+    _listen(listener, handle_request_sync, &data);
+}
+
+void _listen(int listener, void (*request_handler) (void *), request_data *request_handler_arg){
+    char ip_str[INET6_ADDRSTRLEN], data[BUFFER_SIZE];
     sigset_t sigmask;
     sigemptyset(&sigmask);
 
@@ -154,15 +180,12 @@ void listen_sync(int listener, size_t buffer_size){
                         add_to_pfds_sync(&poll_array, client_socket_fd, &fd_count, &poll_array_size);
                     } else {
                         // Existing socket wants to send a request
-                        int recv_return = recv_socket(poll_array[i].fd, data, buffer_size, SHOULD_NOT_EXIT);
+                        int recv_return = recv_socket(poll_array[i].fd, data, BUFFER_SIZE, SHOULD_NOT_EXIT);
                         if(recv_return > 0){
-                            printf("Poller: Client request: %s\n", data);
+                           request_handler_arg->fd = poll_array[i].fd; 
+                           strcpy(request_handler_arg->data, data);
 
-                            if(strncmp(data, "Hello", 5) == 0){
-                                strcpy(data, "Hello, client");
-                            }
-
-                            send_socket(poll_array[i].fd, data, SHOULD_NOT_EXIT);
+                           request_handler(request_handler_arg);
                         } else {
                             // Got error or connection closed by client
                             if (recv_return == 0) {
