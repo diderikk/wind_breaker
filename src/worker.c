@@ -4,17 +4,29 @@
 #include <stdio.h>
 
 
-pthread_t * initialize_workers(int requested_size){
-    
-    pthread_t *workers = malloc(sizeof *workers * requested_size);
+int workers_init(pthread_t* workers[], int worker_size, void *(*worker_func) (void *), void* worker_func_arg){
 
-    return workers;
+    for(int i = 0; i < worker_size; i++){
+        pthread_t thread;
+        worker_arg* arg = (worker_arg*)malloc(sizeof(worker_arg));
+
+        arg->arg = worker_func_arg;
+        arg->worker_id = i;
+        if(pthread_create(&thread, NULL, worker_func, arg) != 0){
+            perror("Error occured initializing thread");
+            return -1;
+        }
+    }
+
+    printf("Initialized %d workers ready to handle requests\n", worker_size);
+
+    return 0;
 }
 
 
-int close_workers(pthread_t *threads[], int *thread_count){
+int workers_close(pthread_t *workers[], int *worker_size){
     int closed_threads = 0;
-    for(int i = 0; i < *thread_count; i++){
+    for(int i = 0; i < *worker_size; i++){
         // Request thread cancellation
     //    if (pthread_cancel(*threads[i]) != 0) {
     //        perror("Failed to cancel thread");
@@ -22,33 +34,10 @@ int close_workers(pthread_t *threads[], int *thread_count){
     //    }
 
         // Wait for the thread to exit
-        if (pthread_join(*threads[i], NULL) != 0) {
+        if (pthread_join(*workers[i], NULL) != 0) {
             perror("Failed to join thread");
             return -1;
         }
     }
     return closed_threads;
-}
-
-void add_to_threads_sync(pthread_t *threads[], pthread_t new_pthread, int *thread_count, int *thread_size)
-{
-    if (*thread_count == *thread_size) {
-        *thread_size *= 2; // Double it
-
-        *threads = realloc(*threads, sizeof(**threads) * (*thread_size));
-    }
-
-    (*threads)[*thread_count] = new_pthread;
-
-    (*thread_count)++;
-}
-
-// Remove an index from the set
-void del_from_threads_sync(pthread_t threads[], int* i, int *thread_count)
-{
-    // Copy the one from the end over this one
-    threads[*i] = threads[*thread_count-1];
-
-    (*thread_count)--;
-    (*i)--;
 }

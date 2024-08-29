@@ -26,7 +26,7 @@ int main(int argc, char *argv[]){
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
 
-    listen_sync(socket_fd);
+    listen_async(socket_fd);
 
     return 0;
 }

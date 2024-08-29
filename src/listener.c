@@ -1,7 +1,5 @@
 #define _GNU_SOURCE
-#include "socket.h"
 #include "listener.h"
-#include "worker.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "string.h"
@@ -10,7 +8,7 @@
 #include <signal.h>
 #include <stdbool.h>
 
-void _listen(int listener, void (*request_handler) (void *), request_data *request_handler_arg);
+void _listen(int listener, queue_t* queue, void (*request_handler) (void *, void *), request_data *request_handler_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
 void del_from_pfds_sync(struct pollfd pfds[], int* i, int *fd_count);
@@ -74,19 +72,54 @@ int get_listener_socket(char* port){
     return socket_fd;
 }
 
-void listen_async(int listener){
-    pthread_rwlock_t rwlock;
+void handle_request_async(void* _arg1, void* _arg2){
+    queue_t* queue = (queue_t*)_arg1;
+    request_data* arg = (request_data*)_arg2;
 
-    if (pthread_rwlock_init(&rwlock, NULL) != 0) {
-        perror("pthread_rwlock_init");
-        // TODO: Maybe revert back to listen_sync?
-        exit(EXIT_FAILURE);
-    }
+    printf("Adding request to worker queue. Size: %d\n", queue->count);
 
+    queue_push(queue, arg);
 }
 
-void handle_request_sync(void* _arg){
-    request_data* arg = (request_data*)_arg;
+void* worker_function(void* _arg){
+    worker_arg* arg = (worker_arg*) _arg;
+    queue_t* queue = (queue_t*)arg->arg;
+    request_data* data;
+
+    while(1){
+        data = (request_data*) queue_pop(queue);
+        printf("Handled by worker: %d, Client request: %s\n", arg->worker_id, data->data);
+
+        if(strncmp(data->data, "Hello", 5) == 0){
+            strcpy(data->data, "Hello, client");
+        }
+
+        send_socket(data->fd, data->data, SHOULD_NOT_EXIT);
+        sleep(2);
+    }
+
+    return NULL;
+}
+
+void listen_async(int listener){
+    request_data data;
+    queue_t queue;
+    pthread_t* workers[3];
+
+    if(queue_init(&queue) != 0){
+        listen_sync(listener);
+    }
+
+    if(workers_init(workers, 3, worker_function, &queue) != 0){
+
+    }
+
+    _listen(listener, &queue, handle_request_async, &data);
+    
+}
+
+void handle_request_sync(void* _arg1, void* _arg2){
+    request_data* arg = (request_data*)_arg2;
 
     printf("Poller: Client request: %s\n", arg->data);
 
@@ -99,10 +132,10 @@ void handle_request_sync(void* _arg){
 
 void listen_sync(int listener){
     request_data data;
-    _listen(listener, handle_request_sync, &data);
+    _listen(listener, NULL, handle_request_sync, &data);
 }
 
-void _listen(int listener, void (*request_handler) (void *), request_data *request_handler_arg){
+void _listen(int listener, queue_t* queue, void (*request_handler) (void *, void *), request_data *request_handler_arg){
     char ip_str[INET6_ADDRSTRLEN], data[BUFFER_SIZE];
     sigset_t sigmask;
     sigemptyset(&sigmask);
@@ -185,7 +218,7 @@ void _listen(int listener, void (*request_handler) (void *), request_data *reque
                            request_handler_arg->fd = poll_array[i].fd; 
                            strcpy(request_handler_arg->data, data);
 
-                           request_handler(request_handler_arg);
+                           request_handler(queue, request_handler_arg);
                         } else {
                             // Got error or connection closed by client
                             if (recv_return == 0) {

@@ -3,6 +3,11 @@
 #define LISTEN_BACKLOG 50 // TODO: Justify
 #define BUFFER_SIZE 1024
 
+#include "socket.h"
+#include "worker.h"
+#include "worker_queue.h"
+#include <poll.h>
+
 typedef enum {
     RESET,
     REMOVE_FD,
@@ -14,8 +19,6 @@ typedef struct {
     char data[BUFFER_SIZE];
 } request_data;
 
-#include "socket.h"
-#include <poll.h>
 
 int get_listener_socket(char* port);
 void listen_sync(int socket_fd);
