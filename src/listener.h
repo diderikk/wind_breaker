@@ -6,6 +6,7 @@
 #include "socket.h"
 #include "worker.h"
 #include "worker_queue.h"
+#include "http/parse.h"
 #include <poll.h>
 
 typedef enum {

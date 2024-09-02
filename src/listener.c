@@ -87,8 +87,10 @@ void* worker_function(void* _arg){
     request_data* data;
 
     while(1){
+        http_request_t http_request; 
         data = (request_data*) queue_pop(queue);
         printf("Handled by worker: %d, Client request: %s\n", arg->worker_id, data->data);
+        parse_http_request(&http_request, data->data);
 
         if(strncmp(data->data, "Hello", 5) == 0){
             strcpy(data->data, "Hello, client");
@@ -334,4 +336,5 @@ int check_for_socket_error(int fd) {
         return -1;
     }
     return err;
+
 }
