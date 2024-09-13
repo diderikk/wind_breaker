@@ -19,6 +19,8 @@ int parse_http_request(http_request_t* http_request, char * raw_request){
 
     printf("Extracted control data => Method: %d, URI: %s, Version: %s\n", 
             http_request->method, http_request->uri, http_request->version);
+
+    
     
     return 0;
 }
@@ -63,9 +65,53 @@ int parse_control_data(http_request_t* http_request, char * raw_control_data){
     return 0;
 }
 
-int parse_header_fields(http_request_t* http_request, char * char_data){
+int parse_header_fields(http_request_t* http_request, char * raw_header_field){
+    const char* pattern = "^([A-Za-z0-9-]+):\\s(.*)$";
+    regmatch_t matches[3]; // Header Name, Header Value
+    char header_name[100];
+
+    int matches_count = match_regex(pattern, raw_header_field, 3, matches, 0);
+
+    if(matches_count != 3)
+        return matches_count;
+
+    if(matches[1].rm_eo - matches[1].rm_so >= 100){
+        perror("HTTP Header name Too Big");
+        return -1;
+    }
+
+    if(matches[2].rm_eo - matches[2].rm_so >= HTTP_HEADER_SIZE){
+        perror("Header value Too Big");
+        return -1;
+    }
+
+    strncpy(header_name, raw_header_field + matches[1].rm_so, matches[1].rm_eo - matches[1].rm_so);
+    header_name[matches[1].rm_eo - matches[1].rm_so] = '\0';
+
+    if(strcmp(header_name, "Host") == 0){
+        strncpy(http_request->host, raw_header_field + matches[2].rm_so, matches[2].rm_eo - matches[2].rm_so);
+        http_request->host[matches[2].rm_eo - matches[2].rm_so] = '\0';
+    } else if(strcmp(header_name, "User-Agent") == 0){
+        strncpy(http_request->user_agent, raw_header_field + matches[2].rm_so, matches[2].rm_eo - matches[2].rm_so);
+        http_request->user_agent[matches[2].rm_eo - matches[2].rm_so] = '\0';
+    } else if(strcmp(header_name, "Accept") == 0){
+        strncpy(http_request->accept, raw_header_field + matches[2].rm_so, matches[2].rm_eo - matches[2].rm_so);
+        http_request->accept[matches[2].rm_eo - matches[2].rm_so] = '\0';
+    } else if(strcmp(header_name, "Accept-Language") == 0){
+        strncpy(http_request->accept_language, raw_header_field + matches[2].rm_so, matches[2].rm_eo - matches[2].rm_so);
+        http_request->accept_language[matches[2].rm_eo - matches[2].rm_so] = '\0';
+    } else if(strcmp(header_name, "Accept-Encoding") == 0){
+        strncpy(http_request->accept_encoding, raw_header_field + matches[2].rm_so, matches[2].rm_eo - matches[2].rm_so);
+        http_request->accept_encoding[matches[2].rm_eo - matches[2].rm_so] = '\0';
+    } else if(strcmp(header_name, "Connection") == 0){
+        if(strncmp(raw_header_field + matches[2].rm_so, "keep-alive", 10) == 0)
+            http_request->connection = KEEP_ALIVE;
+        else if(strncmp(raw_header_field + matches[2].rm_so, "close", 5) == 0)
+            http_request->connection = CLOSE;
+    }
 
     return 0;
+
 }
 
 int match_regex(const char * pattern, char * text, int match_count, regmatch_t* matches , int flags){
