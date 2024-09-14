@@ -17,10 +17,16 @@ int parse_http_request(http_request_t* http_request, char * raw_request){
     if(return_value != 0)
         return return_value;
 
-    printf("Extracted control data => Method: %d, URI: %s, Version: %s\n", 
+    printf("extracted control data => method: %d, uri: %s, version: %s\n", 
             http_request->method, http_request->uri, http_request->version);
 
-    
+   while((line = strtok(NULL, "\r\n")) != NULL){
+        return_value = parse_header_fields(http_request, line);
+        if(return_value != 0)
+            return return_value;
+    }
+
+   printf("extracted header fields => host: %s, user_agent: %s, accept: %s, accept_language: %s, accept_encoding: %s, connection: %d\n", http_request->host, http_request->user_agent, http_request->accept, http_request->accept_language, http_request->accept_encoding, http_request->connection);
     
     return 0;
 }
