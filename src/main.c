@@ -10,32 +10,31 @@ int socket_fd = -1;
 
 void handle_signal(int signum);
 
-int main(int argc, char *argv[]){
-    printf("Running main with %d args:\n", argc);
-    for(int i = 0; i < argc; ++i) {
-        printf("Argument %d: %s\n", i + 1, argv[i]);
-    }
+int main(int argc, char *argv[]) {
+  printf("Running main with %d args:\n", argc);
+  for (int i = 0; i < argc; ++i) {
+    printf("Argument %d: %s\n", i + 1, argv[i]);
+  }
 
-    socket_fd = get_listener_socket(PORT);
+  socket_fd = get_listener_socket(PORT);
 
-    if(socket_fd < 0){
-        perror("Failed to initalize socket");
-        exit(EXIT_FAILURE);
-    }
- 
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
+  if (socket_fd < 0) {
+    perror("Failed to initalize socket");
+    exit(EXIT_FAILURE);
+  }
 
-    listen_async(socket_fd);
+  signal(SIGINT, handle_signal);
+  signal(SIGTERM, handle_signal);
 
-    return 0;
+  listen_async(socket_fd);
+
+  return 0;
 }
 
-
 void handle_signal(int signum) {
-    if (socket_fd != -1) {
-        close(socket_fd);
-        printf("\nSocket closed due to signal %d\n", signum);
-    }
-    exit(signum);
+  if (socket_fd != -1) {
+    close(socket_fd);
+    printf("\nSocket closed due to signal %d\n", signum);
+  }
+  exit(signum);
 }
