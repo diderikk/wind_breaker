@@ -1,4 +1,4 @@
-#include "parse.h"
+#include "request.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -11,6 +11,16 @@ int parse_header_fields(http_request_t *http_request, char *char_data);
 // content_size);
 http_method method_str_to_enum(char *raw_method);
 
+
+int handle_request(http_request_t *http_request, char *raw_request) {
+    int return_value;
+    return_value = parse_http_request(http_request, raw_request);
+    
+    if (return_value != 0)
+        return return_value;
+    
+    return 0;
+}
 int parse_http_request(http_request_t *http_request, char *raw_request) {
   int return_value;
   char *line = strtok(raw_request, "\r\n");

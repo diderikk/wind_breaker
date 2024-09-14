@@ -1,12 +1,13 @@
-#ifndef HTTP_PARSE_H
-#define HTTP_PARSE_H
+#ifndef HTTP_STATIC_H
+#define HTTP_STATIC_H
+
 #define HTTP_HEADER_SIZE 1024
 #define HTTP_URI_SIZE 512
 #define HTTP_VERSION_SIZE 16
 #define HTTP_METHOD_SIZE 16
 #define HTTP_BODY_SIZE 8096
-
-#include <regex.h>
+#define HTTP_HEADER_SMALL_SIZE 128
+#define HTTP_VERSION "1.1"
 
 typedef enum {
   HTTP_POST,
@@ -31,6 +32,26 @@ typedef enum { KEEP_ALIVE, CLOSE } http_connection;
 // Sec-Fetch-User: ?1
 // Priority: u=0, i
 
+
+typedef enum {
+  HTTP_OK = 200,
+  HTTP_BAD_REQUEST = 400,
+  HTTP_NOT_FOUND = 404,
+  HTTP_METHOD_NOT_ALLOWED = 405,
+  HTTP_INTERNAL_SERVER_ERROR = 500,
+  HTTP_NOT_IMPLEMENTED = 501,
+  HTTP_SERVICE_UNAVAILABLE = 503
+} http_status_code;
+
+
+typedef struct {
+  http_status_code status_code;
+  char content_type[HTTP_HEADER_SIZE];
+  long content_length;
+  char content_language[HTTP_HEADER_SMALL_SIZE];
+  char body[HTTP_BODY_SIZE];
+} http_response_t;
+
 typedef struct {
   char uri[HTTP_URI_SIZE];
   http_method method;
@@ -43,9 +64,7 @@ typedef struct {
   http_connection connection;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
-
 } http_request_t;
 
-int parse_http_request(http_request_t *http_request, char *char_data);
 
-#endif // HTTP_PARSE_H
+#endif // HTTP_STATIC_H

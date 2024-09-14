@@ -91,14 +91,14 @@ void *worker_function(void *_arg) {
     http_request_t http_request;
     data = (request_data *)queue_pop(queue);
     printf("Handled by worker: %d\n", arg->worker_id);
-    parse_http_request(&http_request, data->data);
+    handle_request(&http_request, data->data);
 
-    if (strncmp(data->data, "Hello", 5) == 0) {
-      strcpy(data->data, "Hello, client");
-    }
+    construct_response(&http_request, data->data);
+
+    # printf("Poller: Sending response to client: %s\n", data->data);
 
     send_socket(data->fd, data->data, SHOULD_NOT_EXIT);
-    sleep(2);
+    # sleep(2);
   }
 
   return NULL;

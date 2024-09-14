@@ -3,7 +3,7 @@
 # Define the source directory
 SRC_DIR := src
 
-# Find all .c files in the source directory
+# Find all .c and .h files in the source directory
 SRC_FILES := $(shell find $(SRC_DIR) -type f \( -name "*.c" -o -name "*.h" \))
 
 # Define the clang-format command
