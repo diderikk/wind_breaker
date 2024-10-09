@@ -95,10 +95,10 @@ void *worker_function(void *_arg) {
 
     construct_response(&http_request, data->data);
 
-    # printf("Poller: Sending response to client: %s\n", data->data);
+    // printf("Poller: Sending response to client: %s\n", data->data);
 
     send_socket(data->fd, data->data, SHOULD_NOT_EXIT);
-    # sleep(2);
+    // sleep(2);
   }
 
   return NULL;

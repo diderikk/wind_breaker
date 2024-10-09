@@ -2,6 +2,7 @@
 #include "static.h"
 #include <string.h>
 #include <stdio.h>
+#include "../utils/file.h"
 
 char *http_status_code_to_str(http_status_code status_code);
 int http_response_to_str(http_response_t *http_response, char *response_str, size_t response_str_size);
@@ -15,7 +16,12 @@ int construct_response(http_request_t *http_request, char *response){
     strcpy(http_response.content_type, "text/html;charset=utf-8");
     strcpy(http_response.content_language, "en-US");
     if(http_response.status_code != HTTP_OK){
-        str(http_response.body, "<html><body><h1>404 Not Found</h1></body></html>");
+        char *status_code_str = http_status_code_to_str(http_response.status_code);
+        char body[HTTP_BODY_SIZE];
+
+        snprintf(body, HTTP_BODY_SIZE, "<html><body><h1>%d %s</h1></body></html>", http_response.status_code, status_code_str);
+
+        strcpy(http_response.body, body);
         http_response.content_length = strlen(http_response.body);
         return_value = http_response_to_str(&http_response, response, HTTP_BODY_SIZE);
         return return_value;
@@ -33,6 +39,10 @@ int validate_request_headers(http_request_t *http_request){
         return HTTP_METHOD_NOT_ALLOWED;
     }
 
+    if(strcmp(http_request->uri, "/") != 0 || !find_static_file("index.html")){
+        return HTTP_NOT_FOUND;
+    }  
+
     
     return HTTP_OK;
 }
@@ -41,7 +51,8 @@ int http_response_to_str(http_response_t *http_response, char *response_str, siz
     char *status_code_str = http_status_code_to_str(http_response->status_code);
     int offset = 0;
     
-    offset += snprintf(response_str + offset, response_str_size - offset, "HTTP/%s %d %s\r\n", HTTP_VERSION, http_response->status_code, status_code_str);
+    offset += snprintf(response_str + offset, response_str_size - offset, "HTTP/%s %d %s\r\n", 
+            HTTP_VERSION, http_response->status_code, status_code_str);
 
     offset += snprintf(response_str + offset, response_str_size - offset, "Content-Type: %s\r\n", http_response->content_type);
 

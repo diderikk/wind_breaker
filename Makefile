@@ -37,5 +37,15 @@ clean:
 	$(MAKE) -C $(BUILD_DIR) clean
 	rm -rf $(BUILD_DIR)
 
+post:
+	curl -X POST http://localhost:8080/ \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+  -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;" \
+  -H "Accept-Language: en-US,en;q=0.5" \
+  -H "Accept-Encoding: gzip, deflate, br" \
+  -H "Connection: keep-alive" \
+  -H "Content-Type: application/json" \
+  -d '{"key1":"value1", "key2":"value2"}'
+
 # Declare phony targets
 .PHONY: all clean
