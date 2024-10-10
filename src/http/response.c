@@ -41,7 +41,12 @@ int validate_request_headers(http_request_t *http_request){
 
     if(strcmp(http_request->uri, "/") != 0 || !find_static_file("index.html")){
         return HTTP_NOT_FOUND;
-    }  
+    } else if(strcmp(http_request->uri, "/favicon.ico") != 0 || !find_static_file("favicon.ico")){
+        return HTTP_NOT_FOUND;
+    }
+
+    // TODO: Validate Accept-Language header, Accept header. Set Content-Language and Content-Type headers accordingly.
+   
 
     
     return HTTP_OK;

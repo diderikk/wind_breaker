@@ -19,7 +19,7 @@ typedef struct {
 } request_data;
 
 int get_listener_socket(char *port);
-void listen_sync(int socket_fd);
+// void listen_sync(int socket_fd); // Deprecated
 // void listen_sync(int socket_fd, void *(*request_handler) (void *), void
 // *request_handler_arg);
 void listen_async(int socket_fd);

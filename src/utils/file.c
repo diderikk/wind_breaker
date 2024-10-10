@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#define STATIC_PATH "../../static/"
+#define STATIC_PATH "static/"
 
 int find_static_file(char *uri){
     char full_path[512 + sizeof(STATIC_PATH)];
@@ -11,7 +11,6 @@ int find_static_file(char *uri){
     printf("Checking file: %s\n", full_path);
 
     if(access(full_path, F_OK) == 0){
-        printf("File found: %s\n", full_path);
         return 1;
     }
 

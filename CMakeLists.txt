@@ -22,3 +22,12 @@ target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_l
 add_executable(client src/client.c)
 target_link_libraries(client PRIVATE socket_lib)
 target_compile_options(client PRIVATE -Wall -Wextra -Werror)
+
+# Add custom target to copy the static folder
+add_custom_target(copy_static ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/static ${CMAKE_BINARY_DIR}/static
+)
+
+# Ensure the main executable depends on the copy_static target
+add_dependencies(main copy_static)

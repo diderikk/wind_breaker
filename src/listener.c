@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define WORKER_COUNT 3
+
 void _listen(int listener, queue_t *queue,
              void (*request_handler)(void *, void *),
              request_data *request_handler_arg);
@@ -107,13 +109,14 @@ void *worker_function(void *_arg) {
 void listen_async(int listener) {
   request_data data;
   queue_t queue;
-  pthread_t *workers[3];
+  pthread_t *workers[WORKER_COUNT];
 
   if (queue_init(&queue) != 0) {
-    listen_sync(listener);
+      perror("Failed to initialize queue");
   }
 
   if (workers_init(workers, 3, worker_function, &queue) != 0) {
+      perror("Failed to initialize workers");
   }
 
   _listen(listener, &queue, handle_request_async, &data);
@@ -131,10 +134,10 @@ void handle_request_sync(void *_arg1, void *_arg2) {
   send_socket(arg->fd, arg->data, SHOULD_NOT_EXIT);
 }
 
-void listen_sync(int listener) {
-  request_data data;
-  _listen(listener, NULL, handle_request_sync, &data);
-}
+// void listen_sync(int listener) {
+//   request_data data;
+//   _listen(listener, NULL, handle_request_sync, &data);
+// }
 
 void _listen(int listener, queue_t *queue,
              void (*request_handler)(void *, void *),
@@ -182,6 +185,7 @@ void _listen(int listener, queue_t *queue,
           break;
       }
 
+      // Iterate through all the file descriptors and check for events
       for (int i = 0; i < fd_count; i++) {
         // ERROR HANDLING
         if (poll_array[i].revents & POLLERR) {
