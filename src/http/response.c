@@ -34,7 +34,7 @@ int construct_response(http_request_t *http_request, char *response) {
     strcpy(http_response.content_type, "text/html;charset=utf-8");
 
     char *status_code_str = http_status_code_to_str(http_response.status_code);
-    snprintf(http_response.body, HTTP_BODY_SIZE,
+    snprintf(tmp_buffer, HTTP_BODY_SIZE,
              "<html><body><h1>%d %s</h1></body></html>",
              http_response.status_code, status_code_str);
 
@@ -43,18 +43,28 @@ int construct_response(http_request_t *http_request, char *response) {
   } else {
 
     char *file_name = uri_to_file_name(http_request->uri);
-    int read_size = read_static_file(file_name, http_response.body, HTTP_BODY_SIZE);
+    int read_size = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
     // Set content type
     set_content_type_from_file_name(file_name, http_response.content_type,
                                     HTTP_HEADER_SIZE);
 
-    printf("read_size: %d\n", read_size);
     // Set content length
     http_response.content_length = read_size;
   }
-  return_value = http_response_to_str(&http_response, tmp_buffer, HTTP_BODY_SIZE);
+  int compressed_size = compress_gzip(tmp_buffer, http_response.content_length, http_response.body);
+  // If compression fails, return the uncompressed data.
+  // TODO: Validate header
+  if(compressed_size < 0) {
+    memcpy(http_response.body, tmp_buffer, http_response.content_length);
+  } else {
+    strcpy(http_response.content_encoding, "gzip");
+    http_response.content_length = compressed_size;
+  }
+  return_value = http_response_to_str(&http_response, response, HTTP_BODY_SIZE);
 
-  int compressed_size = compress_gzip(tmp_buffer, return_value, response);
+
+  printf("return_value: %d\n", return_value);
+
 
   return return_value;
 }
@@ -128,6 +138,14 @@ int http_response_to_str(http_response_t *http_response, char *response_str,
 
   offset += snprintf(response_str + offset, response_str_size - offset,
                      "Content-Length: %ld\r\n", http_response->content_length);
+
+  offset += snprintf(response_str + offset, response_str_size - offset,
+                     "Content-Language: %s\r\n", http_response->content_language);
+
+  if(strlen(http_response->content_encoding) > 0){
+    offset += snprintf(response_str + offset, response_str_size - offset,
+                     "Content-Encoding: %s\r\n", http_response->content_encoding);
+  }
 
   offset += snprintf(response_str + offset, response_str_size - offset, "\r\n");
 

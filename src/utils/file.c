@@ -8,13 +8,13 @@ int find_static_file(char *uri) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, uri);
 
-  printf("Checking file: %s\n", full_path);
-
   if (access(full_path, F_OK) == 0) {
+    printf("Found static file: %s\n", full_path);
     return 1;
+  } else {
+    printf("Static file not found: %s\n", full_path);
+    return 0;
   }
-
-  return 0;
 }
 
 int read_static_file(char *file_path, char *buffer, size_t buffer_size) {
@@ -28,6 +28,8 @@ int read_static_file(char *file_path, char *buffer, size_t buffer_size) {
 
   size_t read_size = fread(buffer, 1, buffer_size, file);
   fclose(file);
+
+  printf("read_size: %ld\n", read_size);
 
   return read_size;
 }

@@ -5,7 +5,8 @@
 #define HTTP_URI_SIZE 512
 #define HTTP_VERSION_SIZE 16
 #define HTTP_METHOD_SIZE 16
-#define HTTP_BODY_SIZE 8096
+#define HTTP_BODY_SIZE 16192
+#define HTTP_RESPONSE_MAX_SIZE 2 * HTTP_BODY_SIZE
 #define HTTP_HEADER_SMALL_SIZE 128
 #define HTTP_VERSION "1.1"
 
@@ -48,6 +49,7 @@ typedef struct {
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
   char content_language[HTTP_HEADER_SMALL_SIZE];
+  char content_encoding[HTTP_HEADER_SMALL_SIZE];
   char body[HTTP_BODY_SIZE];
 } http_response_t;
 
