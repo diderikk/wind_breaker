@@ -15,7 +15,8 @@ int bind_socket(int socket_fd, struct addrinfo *server_info);
 int listen_socket(int socket_fd, int backlog_size);
 int accept_socket(int socket_fd, struct sockaddr *in_addr);
 int connect_socket(int socket_fd, struct sockaddr *in_addr, size_t addr_length);
-int send_socket(int socket_fd, char *data, EXIT_ACTION should_exit);
+int send_socket(int socket_fd, char *buffer, size_t buffer_size,
+                EXIT_ACTION should_exit);
 int recv_socket(int socket_fd, char *buffer, size_t buffer_size,
                 EXIT_ACTION should_exit);
 void *get_in_addr(struct sockaddr *sa);

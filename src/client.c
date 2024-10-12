@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 
   // Send message to server
   char *message = "Hello, server!";
-  send_socket(socket_fd, message, SHOULD_EXIT);
+  send_socket(socket_fd, message, strlen(message), SHOULD_EXIT);
 
   // Read response from server
   recv_socket(socket_fd, data, BUFFER_SIZE, SHOULD_EXIT);

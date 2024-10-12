@@ -7,6 +7,10 @@
 * Static folder for HTML/CSS/JS files and favicon.ico
 * https://github.com/spring-projects/spring-data-redis/blob/main/src/main/java/org/springframework/data/redis/cache/DefaultRedisCacheWriter.java#L373
 
+## Requirements
+* CMake
+* C compiler
+* zlib
 
 ## Resources
 * [getaddrinfo](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html)

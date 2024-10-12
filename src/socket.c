@@ -82,10 +82,11 @@ int connect_socket(int socket_fd, struct sockaddr *in_addr,
   return connect_return;
 }
 
-int send_socket(int socket_fd, char *data, EXIT_ACTION should_exit) {
+int send_socket(int socket_fd, char *buffer, size_t buffer_size,
+                EXIT_ACTION should_exit) {
   int send_return;
 
-  send_return = send(socket_fd, data, strlen(data), 0);
+  send_return = send(socket_fd, buffer, buffer_size, 0);
   if (send_return < 0) {
     error(socket_fd, should_exit);
   }

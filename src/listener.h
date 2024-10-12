@@ -1,9 +1,9 @@
 #ifndef LISTENER_H
 #define LISTENER_H
-#include "http/static.h"
 #define LISTEN_BACKLOG 50 // TODO: Justify
 #define BUFFER_SIZE 1024
 
+#include "http/static.h"
 #include "http/request.h"
 #include "http/response.h"
 #include "socket.h"

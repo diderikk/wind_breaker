@@ -32,17 +32,16 @@ typedef enum { KEEP_ALIVE, CLOSE } http_connection;
 // Sec-Fetch-User: ?1
 // Priority: u=0, i
 
-
 typedef enum {
   HTTP_OK = 200,
   HTTP_BAD_REQUEST = 400,
   HTTP_NOT_FOUND = 404,
   HTTP_METHOD_NOT_ALLOWED = 405,
+  HTTP_NOT_ACCEPTABLE = 406,
   HTTP_INTERNAL_SERVER_ERROR = 500,
   HTTP_NOT_IMPLEMENTED = 501,
   HTTP_SERVICE_UNAVAILABLE = 503
 } http_status_code;
-
 
 typedef struct {
   http_status_code status_code;
@@ -65,6 +64,5 @@ typedef struct {
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
 } http_request_t;
-
 
 #endif // HTTP_STATIC_H

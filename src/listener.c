@@ -95,11 +95,11 @@ void *worker_function(void *_arg) {
     printf("Handled by worker: %d\n", arg->worker_id);
     handle_request(&http_request, data->data);
 
-    construct_response(&http_request, data->data);
+    size_t response_size = construct_response(&http_request, data->data);
 
-    // printf("Poller: Sending response to client: %s\n", data->data);
+    printf("Poller: Sending response to client: %s\n", data->data);
 
-    send_socket(data->fd, data->data, SHOULD_NOT_EXIT);
+    send_socket(data->fd, data->data, response_size, SHOULD_NOT_EXIT);
     // sleep(2);
   }
 
@@ -112,11 +112,11 @@ void listen_async(int listener) {
   pthread_t *workers[WORKER_COUNT];
 
   if (queue_init(&queue) != 0) {
-      perror("Failed to initialize queue");
+    perror("Failed to initialize queue");
   }
 
   if (workers_init(workers, 3, worker_function, &queue) != 0) {
-      perror("Failed to initialize workers");
+    perror("Failed to initialize workers");
   }
 
   _listen(listener, &queue, handle_request_async, &data);
@@ -131,7 +131,7 @@ void handle_request_sync(void *_arg1, void *_arg2) {
     strcpy(arg->data, "Hello, client");
   }
 
-  send_socket(arg->fd, arg->data, SHOULD_NOT_EXIT);
+  send_socket(arg->fd, arg->data, strlen(arg->data), SHOULD_NOT_EXIT);
 }
 
 // void listen_sync(int listener) {
