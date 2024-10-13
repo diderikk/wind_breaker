@@ -1,22 +1,22 @@
 #define _GNU_SOURCE
 #include "response.h"
-#include "../utils/compression.h"
-#include "../utils/file.h"
 #include "static.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 char *http_status_code_to_str(http_status_code status_code);
-int http_response_to_str(http_response_t *http_response, char *response_str,
+size_t to_string(http_response_t *http_response, char *response_str,
                          size_t response_str_size);
 int validate_request_headers(http_request_t *http_request);
 char *uri_to_file_name(char *uri);
-void set_content_type_from_file_name(char *file_name, char *buffer,
-                                     size_t buffer_size);
+size_t set_body(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer);
+size_t set_content_length(http_response_t *http_response, size_t content_length);
+int set_content_type(http_response_t *http_response, http_request_t *http_request);
+size_t set_compression(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer);
 
-int construct_response(http_request_t *http_request, char *response) {
-  int return_value;
+size_t construct_response(http_request_t *http_request, char *response) {
+  size_t return_value;
   http_response_t http_response;
   char *tmp_buffer = malloc(HTTP_BODY_SIZE);
   if (!*tmp_buffer) {
@@ -28,45 +28,101 @@ int construct_response(http_request_t *http_request, char *response) {
   http_response.status_code = validate_request_headers(http_request);
   // Set content language
   strcpy(http_response.content_language, "en-US");
-  if (http_response.status_code != HTTP_OK) {
 
-    // Set content type
-    strcpy(http_response.content_type, "text/html;charset=utf-8");
+  // Set body
+  size_t content_size = set_body(&http_response, http_request, tmp_buffer);
+  // Set content length
+  set_content_length(&http_response, content_size);
+  // Set content type
+  set_content_type(&http_response, http_request);
 
-    char *status_code_str = http_status_code_to_str(http_response.status_code);
-    snprintf(tmp_buffer, HTTP_BODY_SIZE,
-             "<html><body><h1>%d %s</h1></body></html>",
-             http_response.status_code, status_code_str);
-
-    // Set content length
-    http_response.content_length = strlen(http_response.body);
-  } else {
-
-    char *file_name = uri_to_file_name(http_request->uri);
-    int read_size = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
-    // Set content type
-    set_content_type_from_file_name(file_name, http_response.content_type,
-                                    HTTP_HEADER_SIZE);
-
-    // Set content length
-    http_response.content_length = read_size;
-  }
-  int compressed_size = compress_gzip(tmp_buffer, http_response.content_length, http_response.body);
-  // If compression fails, return the uncompressed data.
-  // TODO: Validate header
-  if(compressed_size < 0) {
-    memcpy(http_response.body, tmp_buffer, http_response.content_length);
-  } else {
-    strcpy(http_response.content_encoding, "gzip");
-    http_response.content_length = compressed_size;
-  }
-  return_value = http_response_to_str(&http_response, response, HTTP_BODY_SIZE);
+  // Set compression
+  size_t compressed_size = set_compression(&http_response, http_request, tmp_buffer);
+  // Set content length
+  set_content_length(&http_response, compressed_size);
+  
+  return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
 
 
-  printf("return_value: %d\n", return_value);
+  printf("Response body size: %ld\n", return_value);
 
 
   return return_value;
+}
+
+size_t set_body(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer) {
+  int return_value = 0;
+  if (http_response->status_code != HTTP_OK) {
+    char *status_code_str = http_status_code_to_str(http_response->status_code);
+    snprintf(tmp_buffer, HTTP_BODY_SIZE,
+             "<html><body><h1>%d %s</h1></body></html>",
+             http_response->status_code, status_code_str);
+
+    return_value = strlen(tmp_buffer);
+  } else {
+    char *file_name = uri_to_file_name(http_request->uri);
+    int read_size = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
+
+    return_value = read_size;
+  }
+  return return_value;
+}
+
+int set_content_type(http_response_t *http_response, http_request_t *http_request) {
+  if(http_response->status_code != HTTP_OK) {
+    strcpy(http_response->content_type, "text/html;charset=utf-8");
+  } else {
+    char *file_name = uri_to_file_name(http_request->uri);
+
+      if (strcasestr(file_name, ".html") != NULL) {
+        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "text/html;charset=utf-8");
+      } else if (strcasestr(file_name, ".png") != NULL) {
+        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "image/png");
+      } else if (strcasestr(file_name, ".css") != NULL) {
+        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "text/css;charset=utf-8");
+      } else if (strcasestr(file_name, ".js") != NULL) {
+        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "application/javascript;charset=utf-8");
+      } else {
+        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "text/plain;charset=utf-8");
+      }
+  }
+  return 0;
+}
+
+size_t set_compression(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer) {
+  size_t return_value = http_response->content_length;
+  int header_count = 0;
+  // Validate header
+  if(strcasestr(http_request->accept_encoding, "gzip") != NULL) {
+    header_count += 1;
+  }
+  if(strcasestr(http_request->accept_encoding, "deflate") != NULL) {
+    header_count += 2;
+  }
+
+  if (header_count == 1 || header_count == 3) {
+    strcpy(http_response->content_encoding, "gzip");
+    return_value = compress_gzip(tmp_buffer, http_response->content_length, http_response->body);
+  } else if (header_count == 2) {
+    strcpy(http_response->content_encoding, "deflate");
+    return_value = compress_deflate(tmp_buffer, http_response->content_length, http_response->body);
+  } else {
+    memcpy(http_response->body, tmp_buffer, http_response->content_length);
+  }
+  
+
+  // If compression fails, return the uncompressed data.
+  if(return_value < 0) {
+    memcpy(http_response->body, tmp_buffer, http_response->content_length);
+    return_value = http_response->content_length;
+  }
+
+  return return_value;
+}
+
+size_t set_content_length(http_response_t *http_response, size_t content_length) {
+  http_response->content_length = content_length;
+  return content_length;
 }
 
 int validate_request_headers(http_request_t *http_request) {
@@ -124,10 +180,10 @@ int validate_request_headers(http_request_t *http_request) {
   return HTTP_OK;
 }
 
-int http_response_to_str(http_response_t *http_response, char *response_str,
+size_t to_string(http_response_t *http_response, char *response_str,
                          size_t response_str_size) {
   char *status_code_str = http_status_code_to_str(http_response->status_code);
-  int offset = 0;
+  size_t offset = 0;
 
   offset += snprintf(response_str + offset, response_str_size - offset,
                      "HTTP/%s %d %s\r\n", HTTP_VERSION,
@@ -159,21 +215,6 @@ int http_response_to_str(http_response_t *http_response, char *response_str,
   offset += http_response->content_length;
 
   return offset;
-}
-
-void set_content_type_from_file_name(char *file_name, char *buffer,
-                                     size_t buffer_size) {
-  if (strcasestr(file_name, ".html") != NULL) {
-    snprintf(buffer, buffer_size, "text/html;charset=utf-8");
-  } else if (strcasestr(file_name, ".png") != NULL) {
-    snprintf(buffer, buffer_size, "image/png");
-  } else if (strcasestr(file_name, ".css") != NULL) {
-    snprintf(buffer, buffer_size, "text/css;charset=utf-8");
-  } else if (strcasestr(file_name, ".js") != NULL) {
-    snprintf(buffer, buffer_size, "application/javascript;charset=utf-8");
-  } else {
-    snprintf(buffer, buffer_size, "text/plain;charset=utf-8");
-  }
 }
 
 char *http_status_code_to_str(http_status_code status_code) {

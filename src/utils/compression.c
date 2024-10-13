@@ -59,3 +59,26 @@ int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
   return compressed_size;
 }
 
+
+int compress_deflate(char *buffer, size_t buffer_size, char *to_buffer) {
+    uLong compressed_len = compressBound(buffer_size);
+
+    z_stream defstream;
+    defstream.zalloc = Z_NULL;
+    defstream.zfree = Z_NULL;
+    defstream.opaque = Z_NULL;
+
+    defstream.avail_in = (uInt)buffer_size;
+    defstream.next_in = (Bytef *)buffer;
+    defstream.avail_out = (uInt)compressed_len;
+    defstream.next_out = (Bytef *)to_buffer;
+
+    deflateInit(&defstream, Z_BEST_COMPRESSION);
+    deflate(&defstream, Z_FINISH);
+    deflateEnd(&defstream);
+
+    printf("Original size: %lu, Compressed size: %lu\n", buffer_size, defstream.total_out);
+
+    return defstream.total_out;
+}
+
