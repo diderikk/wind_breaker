@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "listener.h"
+#include "utils/logger.h"
 #include "string.h"
 #include <errno.h>
 #include <signal.h>
@@ -35,7 +36,7 @@ int get_listener_socket(char *port) {
   // Simply put: fetches all possible hosts that the socket can be bound to
   // based on the options selected above
   if ((return_val = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(return_val));
+    log_error("getaddrinfo: %s\n", gai_strerror(return_val));
     return EXIT_FAILURE;
   }
 
@@ -48,7 +49,7 @@ int get_listener_socket(char *port) {
     // Allows for quick server restarts
     if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) ==
         -1) {
-      perror("Could not bind to the same address\n");
+      log_error("Could not bind to the same address");
       exit(EXIT_FAILURE);
     }
 
@@ -59,9 +60,10 @@ int get_listener_socket(char *port) {
   }
 
   freeaddrinfo(servinfo);
+  servinfo = NULL;
 
   if (p == NULL) {
-    perror("Failed to bind the socket\n");
+    log_error("Failed to bind the socket");
     exit(EXIT_FAILURE);
   }
 
@@ -69,7 +71,7 @@ int get_listener_socket(char *port) {
   listen_socket(socket_fd, LISTEN_BACKLOG);
 
   get_in_addr_str(p->ai_addr, ip_str, sizeof(ip_str));
-  printf("Listening for connections on: Address: %s, Port %d\n", ip_str,
+  log_info("Listening for connections on: Address: %s, Port %d", ip_str,
          get_in_addr_port(p->ai_addr));
 
   return socket_fd;
@@ -79,7 +81,7 @@ void handle_request_async(void *_arg1, void *_arg2) {
   queue_t *queue = (queue_t *)_arg1;
   request_data *arg = (request_data *)_arg2;
 
-  printf("Adding request to worker queue. Size: %d\n", queue->count);
+  log_info("Adding request to worker queue. Size: %d", queue->count);
 
   queue_push(queue, arg);
 }
@@ -88,16 +90,16 @@ void *worker_function(void *_arg) {
   worker_arg *arg = (worker_arg *)_arg;
   queue_t *queue = (queue_t *)arg->arg;
   request_data *data;
+  http_request_t http_request;
 
   while (1) {
-    http_request_t http_request;
     data = (request_data *)queue_pop(queue);
-    printf("Handled by worker: %d\n", arg->worker_id);
+    log_info("Handled by worker: %lu", (unsigned long)pthread_self());
     handle_request(&http_request, data->data);
 
     size_t response_size = construct_response(&http_request, data->data);
 
-    printf("Poller: Sending response to client: %s\n", data->data);
+    log_info("Poller: Sending response to client: %s", data->data);
 
     send_socket(data->fd, data->data, response_size, SHOULD_NOT_EXIT);
     // sleep(2);
@@ -112,32 +114,15 @@ void listen_async(int listener) {
   pthread_t *workers[WORKER_COUNT];
 
   if (queue_init(&queue) != 0) {
-    perror("Failed to initialize queue");
+    log_error("Failed to initialize queue");
   }
 
   if (workers_init(workers, 3, worker_function, &queue) != 0) {
-    perror("Failed to initialize workers");
+    log_error("Failed to initialize workers");
   }
 
   _listen(listener, &queue, handle_request_async, &data);
 }
-
-void handle_request_sync(void *_arg1, void *_arg2) {
-  request_data *arg = (request_data *)_arg2;
-
-  printf("Poller: Client request: %s\n", arg->data);
-
-  if (strncmp(arg->data, "Hello", 5) == 0) {
-    strcpy(arg->data, "Hello, client");
-  }
-
-  send_socket(arg->fd, arg->data, strlen(arg->data), SHOULD_NOT_EXIT);
-}
-
-// void listen_sync(int listener) {
-//   request_data data;
-//   _listen(listener, NULL, handle_request_sync, &data);
-// }
 
 void _listen(int listener, queue_t *queue,
              void (*request_handler)(void *, void *),
@@ -158,26 +143,29 @@ void _listen(int listener, queue_t *queue,
     char loop_counter = 0;
     int fd_count = 0;
     int poll_array_size = 5;
+    int poll_count = 0;
+    int client_socket_fd;
+    struct sockaddr_storage client_addr;
+    POLL_ERROR_CLASS error_class;
+    int recv_return;
     struct pollfd *poll_array = malloc(sizeof *poll_array * poll_array_size);
 
     poll_array[0].fd = listener;
     poll_array[0].events =
         POLLIN; // Report ready to read on incoming connection
-
     fd_count = 1;
 
     bool exit_loop = false;
     // Continously listen for new connections
     while (!exit_loop) {
       loop_counter++;
-      printf("Poller: Number of active sockets (including listener): %d\n",
+      log_info("Poller: Number of active sockets (including listener): %d",
              fd_count);
 
       // https://man7.org/linux/man-pages/man2/poll.2.html
       // NULL causes the poll system call to poll until a revents
       // is updated by the kernel
-      int poll_count = ppoll(poll_array, fd_count, NULL, &sigmask);
-      POLL_ERROR_CLASS error_class;
+      poll_count = ppoll(poll_array, fd_count, NULL, &sigmask);
 
       if (poll_count < 0) {
         error_class = classify_poll_error(errno);
@@ -199,7 +187,7 @@ void _listen(int listener, queue_t *queue,
           }
         }
         if (poll_array[i].revents & POLLNVAL) {
-          printf("Poller: %s\n", get_poll_event_description(POLLNVAL));
+          log_debug("Poller: %s", get_poll_event_description(POLLNVAL));
           if (check_for_socket_error(poll_array[i].fd) == -1) {
             del_from_pfds_sync(poll_array, &i, &fd_count);
             continue;
@@ -207,12 +195,10 @@ void _listen(int listener, queue_t *queue,
         }
         // HANDLES NEW SOCKET EVENTS
         if (poll_array[i].revents & POLLIN) {
-          int client_socket_fd;
-          struct sockaddr_storage client_addr;
           // New connection wants to connect from the accept.
           if (poll_array[i].fd == listener) {
 
-            printf("Poller: Polling for new client to connect...\n");
+            log_debug("Poller: Polling for new client to connect...");
             client_socket_fd =
                 accept_socket(listener, (struct sockaddr *)&client_addr);
 
@@ -221,13 +207,13 @@ void _listen(int listener, queue_t *queue,
 
             get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
                             sizeof(ip_str));
-            printf("Poller: Client connect %s:%d\n", ip_str,
+            log_info("Poller: Client connect %s:%d", ip_str,
                    get_in_addr_port((struct sockaddr *)&client_addr));
             add_to_pfds_sync(&poll_array, client_socket_fd, &fd_count,
                              &poll_array_size);
           } else {
             // Existing socket wants to send a request
-            int recv_return = recv_socket(poll_array[i].fd, data, BUFFER_SIZE,
+            recv_return = recv_socket(poll_array[i].fd, data, BUFFER_SIZE,
                                           SHOULD_NOT_EXIT);
             if (recv_return > 0) {
               request_handler_arg->fd = poll_array[i].fd;
@@ -238,7 +224,7 @@ void _listen(int listener, queue_t *queue,
               // Got error or connection closed by client
               if (recv_return == 0) {
                 // Connection closed
-                printf("Poller: socket %d hung up\n", poll_array[i].fd);
+                log_trace("Poller: socket %d hung up", poll_array[i].fd);
               }
 
               del_from_pfds_sync(poll_array, &i, &fd_count);
@@ -249,12 +235,12 @@ void _listen(int listener, queue_t *queue,
         // Already should have read the final data => can now close the close
         // the channel This should already have happend when recv_return == 0.
         if (poll_array[i].revents & POLLHUP) {
-          printf("Poller: %s\n", get_poll_event_description(POLLHUP));
+          log_warn("Poller: %s", get_poll_event_description(POLLHUP));
           del_from_pfds_sync(poll_array, &i, &fd_count);
           continue;
         }
         if (poll_array[i].revents & POLLRDHUP) {
-          printf("Poller: %s\n", get_poll_event_description(POLLRDHUP));
+          log_warn("Poller: %s", get_poll_event_description(POLLRDHUP));
           del_from_pfds_sync(poll_array, &i, &fd_count);
           continue;
         }
@@ -276,7 +262,7 @@ void _listen(int listener, queue_t *queue,
 }
 
 POLL_ERROR_CLASS classify_poll_error(int code) {
-  fprintf(stderr, "Poller Error: %s\n", strerror(code));
+  log_error("Poller Error: %s", strerror(code));
   switch (code) {
   case EFAULT:
     return RESET;
@@ -347,7 +333,7 @@ int check_for_socket_error(int fd) {
   int err = 0;
   socklen_t len = sizeof(err);
   if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == -1) {
-    fprintf(stderr, "Poller: Error on socket %d => %s\n", fd, strerror(errno));
+    log_error("Poller: Error on socket %d => %s", fd, strerror(errno));
     return -1;
   }
   return err;

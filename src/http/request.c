@@ -1,4 +1,5 @@
 #include "request.h"
+#include "../utils/logger.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -28,7 +29,7 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
   if (return_value != 0)
     return return_value;
 
-  printf("extracted control data => method: %d, uri: %s, version: %s\n",
+  log_info("extracted control data => method: %d, uri: %s, version: %s",
          http_request->method, http_request->uri, http_request->version);
 
   while ((line = strtok(NULL, "\r\n")) != NULL) {
@@ -37,8 +38,8 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
       return return_value;
   }
 
-  printf("extracted header fields => host: %s, user_agent: %s, accept: %s, "
-         "accept_language: %s, accept_encoding: %s, connection: %d\n",
+  log_info("extracted header fields => host: %s, user_agent: %s, accept: %s, "
+         "accept_language: %s, accept_encoding: %s, connection: %d",
          http_request->host, http_request->user_agent, http_request->accept,
          http_request->accept_language, http_request->accept_encoding,
          http_request->connection);
@@ -57,12 +58,12 @@ int parse_control_data(http_request_t *http_request, char *raw_control_data) {
     return matches_count;
 
   if (matches[2].rm_eo - matches[2].rm_so >= HTTP_URI_SIZE) {
-    perror("URI Too Big");
+    log_error("URI Too Big");
     return -1;
   }
 
   if (matches[3].rm_eo - matches[3].rm_so >= HTTP_VERSION_SIZE) {
-    perror("Version Too Big");
+    log_error("Version Too Big");
     return -1;
   }
 
@@ -99,12 +100,12 @@ int parse_header_fields(http_request_t *http_request, char *raw_header_field) {
     return matches_count;
 
   if (matches[1].rm_eo - matches[1].rm_so >= 100) {
-    perror("HTTP Header name Too Big");
+    log_error("HTTP Header name Too Big");
     return -1;
   }
 
   if (matches[2].rm_eo - matches[2].rm_so >= HTTP_HEADER_SIZE) {
-    perror("Header value Too Big");
+    log_error("Header value Too Big");
     return -1;
   }
 
@@ -147,7 +148,7 @@ int match_regex(const char *pattern, char *text, int match_count,
   regex_t regex;
   int ret = regcomp(&regex, pattern, REG_EXTENDED);
   if (ret) {
-    fprintf(stderr, "Could not compile regex\n");
+    log_error("Could not compile regex");
     return -1;
   }
 
@@ -164,12 +165,12 @@ int match_regex(const char *pattern, char *text, int match_count,
     //            }
     //        }
   } else if (ret == REG_NOMATCH) {
-    printf("No match\n");
+    log_trace("No match");
     return -1;
   } else {
     char errbuf[100];
     regerror(ret, &regex, errbuf, sizeof(errbuf));
-    fprintf(stderr, "Regex match failed: %s\n", errbuf);
+    log_error("Regex match failed: %s", errbuf);
     return -1;
   }
 

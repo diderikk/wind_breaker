@@ -5,7 +5,6 @@
 
 typedef struct {
   void *arg;
-  int worker_id;
 } worker_arg;
 
 int workers_init(pthread_t *workers[], int worker_size,

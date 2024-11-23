@@ -1,4 +1,5 @@
 #include "file.h"
+#include "logger.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -9,10 +10,10 @@ int find_static_file(char *uri) {
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, uri);
 
   if (access(full_path, F_OK) == 0) {
-    printf("Found static file: %s\n", full_path);
+    log_trace("Found static file: %s", full_path);
     return 1;
   } else {
-    printf("Static file not found: %s\n", full_path);
+    log_error("Static file not found: %s", full_path);
     return 0;
   }
 }
@@ -29,7 +30,7 @@ int read_static_file(char *file_path, char *buffer, size_t buffer_size) {
   size_t read_size = fread(buffer, 1, buffer_size, file);
   fclose(file);
 
-  printf("read_size: %ld\n", read_size);
+  log_trace("read_size: %ld", read_size);
 
   return read_size;
 }
@@ -40,13 +41,13 @@ int write_static_file(char *file_name, char *buffer, size_t buffer_size) {
 
   FILE *file = fopen(full_path, "wb");
   if (file == NULL) {
-    printf("Failed to open file: %s\n", full_path);
+    log_error("Failed to open file: %s", full_path);
     return -1;
   }
 
   size_t write_size = fwrite(buffer, 1, buffer_size, file);
   fclose(file);
-  printf("Wrote %ld bytes to file: %s\n", write_size, full_path);
+  log_trace("Wrote %ld bytes to file: %s", write_size, full_path);
 
   return write_size;
 }
