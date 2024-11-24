@@ -1,8 +1,8 @@
 #include "compression.h"
 #include "logger.h"
+#include <errno.h>
 #include <stdio.h>
 #include <zlib.h>
-#include <errno.h>
 
 int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
   // Create a temporary file to store the gzip output
@@ -35,7 +35,7 @@ int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
   log_trace("bytes_written: %d", bytes_written);
 
   int close_result = gzclose(gzfile);
-  if(close_result != Z_OK) {
+  if (close_result != Z_OK) {
     log_error("Failed to close gzip file");
     fclose(tmp_file);
     return -1;
@@ -59,26 +59,25 @@ int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
   return compressed_size;
 }
 
-
 int compress_deflate(char *buffer, size_t buffer_size, char *to_buffer) {
-    uLong compressed_len = compressBound(buffer_size);
+  uLong compressed_len = compressBound(buffer_size);
 
-    z_stream defstream;
-    defstream.zalloc = Z_NULL;
-    defstream.zfree = Z_NULL;
-    defstream.opaque = Z_NULL;
+  z_stream defstream;
+  defstream.zalloc = Z_NULL;
+  defstream.zfree = Z_NULL;
+  defstream.opaque = Z_NULL;
 
-    defstream.avail_in = (uInt)buffer_size;
-    defstream.next_in = (Bytef *)buffer;
-    defstream.avail_out = (uInt)compressed_len;
-    defstream.next_out = (Bytef *)to_buffer;
+  defstream.avail_in = (uInt)buffer_size;
+  defstream.next_in = (Bytef *)buffer;
+  defstream.avail_out = (uInt)compressed_len;
+  defstream.next_out = (Bytef *)to_buffer;
 
-    deflateInit(&defstream, Z_BEST_COMPRESSION);
-    deflate(&defstream, Z_FINISH);
-    deflateEnd(&defstream);
+  deflateInit(&defstream, Z_BEST_COMPRESSION);
+  deflate(&defstream, Z_FINISH);
+  deflateEnd(&defstream);
 
-    log_trace("Original size: %lu, Compressed size: %lu", buffer_size, defstream.total_out);
+  log_trace("Original size: %lu, Compressed size: %lu", buffer_size,
+            defstream.total_out);
 
-    return defstream.total_out;
+  return defstream.total_out;
 }
-

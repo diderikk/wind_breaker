@@ -1,7 +1,7 @@
 #define _GNU_SOURCE
 #include "listener.h"
-#include "utils/logger.h"
 #include "string.h"
+#include "utils/logger.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -72,7 +72,7 @@ int get_listener_socket(char *port) {
 
   get_in_addr_str(p->ai_addr, ip_str, sizeof(ip_str));
   log_info("Listening for connections on: Address: %s, Port %d", ip_str,
-         get_in_addr_port(p->ai_addr));
+           get_in_addr_port(p->ai_addr));
 
   return socket_fd;
 }
@@ -160,7 +160,7 @@ void _listen(int listener, queue_t *queue,
     while (!exit_loop) {
       loop_counter++;
       log_info("Poller: Number of active sockets (including listener): %d",
-             fd_count);
+               fd_count);
 
       // https://man7.org/linux/man-pages/man2/poll.2.html
       // NULL causes the poll system call to poll until a revents
@@ -208,13 +208,13 @@ void _listen(int listener, queue_t *queue,
             get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
                             sizeof(ip_str));
             log_info("Poller: Client connect %s:%d", ip_str,
-                   get_in_addr_port((struct sockaddr *)&client_addr));
+                     get_in_addr_port((struct sockaddr *)&client_addr));
             add_to_pfds_sync(&poll_array, client_socket_fd, &fd_count,
                              &poll_array_size);
           } else {
             // Existing socket wants to send a request
             recv_return = recv_socket(poll_array[i].fd, data, BUFFER_SIZE,
-                                          SHOULD_NOT_EXIT);
+                                      SHOULD_NOT_EXIT);
             if (recv_return > 0) {
               request_handler_arg->fd = poll_array[i].fd;
               strcpy(request_handler_arg->data, data);

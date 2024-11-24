@@ -8,13 +8,17 @@
 
 char *http_status_code_to_str(http_status_code status_code);
 size_t to_string(http_response_t *http_response, char *response_str,
-                         size_t response_str_size);
+                 size_t response_str_size);
 int validate_request_headers(http_request_t *http_request);
 char *uri_to_file_name(char *uri);
-size_t set_body(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer);
-size_t set_content_length(http_response_t *http_response, size_t content_length);
-int set_content_type(http_response_t *http_response, http_request_t *http_request);
-size_t set_compression(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer);
+size_t set_body(http_response_t *http_response, http_request_t *http_request,
+                char *tmp_buffer);
+size_t set_content_length(http_response_t *http_response,
+                          size_t content_length);
+int set_content_type(http_response_t *http_response,
+                     http_request_t *http_request);
+size_t set_compression(http_response_t *http_response,
+                       http_request_t *http_request, char *tmp_buffer);
 
 size_t construct_response(http_request_t *http_request, char *response) {
   size_t return_value;
@@ -38,20 +42,23 @@ size_t construct_response(http_request_t *http_request, char *response) {
   set_content_type(&http_response, http_request);
 
   // Set compression
-  size_t compressed_size = set_compression(&http_response, http_request, tmp_buffer);
+  size_t compressed_size =
+      set_compression(&http_response, http_request, tmp_buffer);
   // Set content length
   set_content_length(&http_response, compressed_size);
-  
+
   return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
 
   // TODO: LOGGING
-  log_trace("Returning response code %d, with response body size: %ld", http_response.status_code, return_value);
+  log_trace("Returning response code %d, with response body size: %ld",
+            http_response.status_code, return_value);
 
   free(tmp_buffer);
   return return_value;
 }
 
-size_t set_body(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer) {
+size_t set_body(http_response_t *http_response, http_request_t *http_request,
+                char *tmp_buffer) {
   int return_value = 0;
   if (http_response->status_code != HTTP_OK) {
     char *status_code_str = http_status_code_to_str(http_response->status_code);
@@ -69,51 +76,58 @@ size_t set_body(http_response_t *http_response, http_request_t *http_request, ch
   return return_value;
 }
 
-int set_content_type(http_response_t *http_response, http_request_t *http_request) {
-  if(http_response->status_code != HTTP_OK) {
+int set_content_type(http_response_t *http_response,
+                     http_request_t *http_request) {
+  if (http_response->status_code != HTTP_OK) {
     strcpy(http_response->content_type, "text/html;charset=utf-8");
   } else {
     char *file_name = uri_to_file_name(http_request->uri);
 
-      if (strcasestr(file_name, ".html") != NULL) {
-        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "text/html;charset=utf-8");
-      } else if (strcasestr(file_name, ".png") != NULL) {
-        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "image/png");
-      } else if (strcasestr(file_name, ".css") != NULL) {
-        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "text/css;charset=utf-8");
-      } else if (strcasestr(file_name, ".js") != NULL) {
-        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "application/javascript;charset=utf-8");
-      } else {
-        snprintf(http_response->content_type, HTTP_HEADER_SIZE, "text/plain;charset=utf-8");
-      }
+    if (strcasestr(file_name, ".html") != NULL) {
+      snprintf(http_response->content_type, HTTP_HEADER_SIZE,
+               "text/html;charset=utf-8");
+    } else if (strcasestr(file_name, ".png") != NULL) {
+      snprintf(http_response->content_type, HTTP_HEADER_SIZE, "image/png");
+    } else if (strcasestr(file_name, ".css") != NULL) {
+      snprintf(http_response->content_type, HTTP_HEADER_SIZE,
+               "text/css;charset=utf-8");
+    } else if (strcasestr(file_name, ".js") != NULL) {
+      snprintf(http_response->content_type, HTTP_HEADER_SIZE,
+               "application/javascript;charset=utf-8");
+    } else {
+      snprintf(http_response->content_type, HTTP_HEADER_SIZE,
+               "text/plain;charset=utf-8");
+    }
   }
   return 0;
 }
 
-size_t set_compression(http_response_t *http_response, http_request_t *http_request, char *tmp_buffer) {
+size_t set_compression(http_response_t *http_response,
+                       http_request_t *http_request, char *tmp_buffer) {
   size_t return_value = http_response->content_length;
   int header_count = 0;
   // Validate header
-  if(strcasestr(http_request->accept_encoding, "gzip") != NULL) {
+  if (strcasestr(http_request->accept_encoding, "gzip") != NULL) {
     header_count += 1;
   }
-  if(strcasestr(http_request->accept_encoding, "deflate") != NULL) {
+  if (strcasestr(http_request->accept_encoding, "deflate") != NULL) {
     header_count += 2;
   }
 
   if (header_count == 1 || header_count == 3) {
     strcpy(http_response->content_encoding, "gzip");
-    return_value = compress_gzip(tmp_buffer, http_response->content_length, http_response->body);
+    return_value = compress_gzip(tmp_buffer, http_response->content_length,
+                                 http_response->body);
   } else if (header_count == 2) {
     strcpy(http_response->content_encoding, "deflate");
-    return_value = compress_deflate(tmp_buffer, http_response->content_length, http_response->body);
+    return_value = compress_deflate(tmp_buffer, http_response->content_length,
+                                    http_response->body);
   } else {
     memcpy(http_response->body, tmp_buffer, http_response->content_length);
   }
-  
 
   // If compression fails, return the uncompressed data.
-  if(return_value < 0) {
+  if (return_value < 0) {
     memcpy(http_response->body, tmp_buffer, http_response->content_length);
     return_value = http_response->content_length;
   }
@@ -121,7 +135,8 @@ size_t set_compression(http_response_t *http_response, http_request_t *http_requ
   return return_value;
 }
 
-size_t set_content_length(http_response_t *http_response, size_t content_length) {
+size_t set_content_length(http_response_t *http_response,
+                          size_t content_length) {
   http_response->content_length = content_length;
   return content_length;
 }
@@ -182,7 +197,7 @@ int validate_request_headers(http_request_t *http_request) {
 }
 
 size_t to_string(http_response_t *http_response, char *response_str,
-                         size_t response_str_size) {
+                 size_t response_str_size) {
   char *status_code_str = http_status_code_to_str(http_response->status_code);
   size_t offset = 0;
 
@@ -196,12 +211,14 @@ size_t to_string(http_response_t *http_response, char *response_str,
   offset += snprintf(response_str + offset, response_str_size - offset,
                      "Content-Length: %ld\r\n", http_response->content_length);
 
-  offset += snprintf(response_str + offset, response_str_size - offset,
-                     "Content-Language: %s\r\n", http_response->content_language);
+  offset +=
+      snprintf(response_str + offset, response_str_size - offset,
+               "Content-Language: %s\r\n", http_response->content_language);
 
-  if(strlen(http_response->content_encoding) > 0){
-    offset += snprintf(response_str + offset, response_str_size - offset,
-                     "Content-Encoding: %s\r\n", http_response->content_encoding);
+  if (strlen(http_response->content_encoding) > 0) {
+    offset +=
+        snprintf(response_str + offset, response_str_size - offset,
+                 "Content-Encoding: %s\r\n", http_response->content_encoding);
   }
 
   offset += snprintf(response_str + offset, response_str_size - offset, "\r\n");

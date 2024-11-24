@@ -3,9 +3,9 @@
 #define LISTEN_BACKLOG 50 // TODO: Justify
 #define BUFFER_SIZE 1024
 
-#include "http/static.h"
 #include "http/request.h"
 #include "http/response.h"
+#include "http/static.h"
 #include "socket.h"
 #include "worker.h"
 #include "worker_queue.h"

@@ -30,7 +30,7 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
     return return_value;
 
   log_info("extracted control data => method: %d, uri: %s, version: %s",
-         http_request->method, http_request->uri, http_request->version);
+           http_request->method, http_request->uri, http_request->version);
 
   while ((line = strtok(NULL, "\r\n")) != NULL) {
     return_value = parse_header_fields(http_request, line);
@@ -39,10 +39,10 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
   }
 
   log_info("extracted header fields => host: %s, user_agent: %s, accept: %s, "
-         "accept_language: %s, accept_encoding: %s, connection: %d",
-         http_request->host, http_request->user_agent, http_request->accept,
-         http_request->accept_language, http_request->accept_encoding,
-         http_request->connection);
+           "accept_language: %s, accept_encoding: %s, connection: %d",
+           http_request->host, http_request->user_agent, http_request->accept,
+           http_request->accept_language, http_request->accept_encoding,
+           http_request->connection);
 
   return 0;
 }
