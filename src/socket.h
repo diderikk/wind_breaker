@@ -1,10 +1,10 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
-#include <arpa/inet.h>
 #include <sys/socket.h>
 
 typedef enum { SOCKET, BIND, LISTEN, ACCEPT, CONNECT, SEND, RECV } ERROR_TYPE;
