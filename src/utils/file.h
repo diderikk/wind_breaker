@@ -2,7 +2,6 @@
 #define FILE_H
 
 #include <fcntl.h>
-#include <stdio.h>
 #include <unistd.h>
 
 int find_static_file(char *uri);

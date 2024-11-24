@@ -1,9 +1,6 @@
 #include "listener.h"
 #include "signal.h"
 #include "utils/logger.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 
 #define PORT "8080"
 #define LOG_FILE_PATH "/home/diderikk/Dokumenter/Projects/CServer/app.log"

@@ -1,6 +1,5 @@
 #include "file.h"
 #include "logger.h"
-#include <stdio.h>
 #include <unistd.h>
 
 #define STATIC_PATH "static/"

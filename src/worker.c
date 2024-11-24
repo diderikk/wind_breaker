@@ -1,7 +1,5 @@
 #include "worker.h"
 #include "utils/logger.h"
-#include <pthread.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 int workers_init(pthread_t *workers[], int worker_size,

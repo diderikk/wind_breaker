@@ -1,9 +1,7 @@
 #include "socket.h"
 #include "string.h"
 #include "utils/logger.h"
-#include <arpa/inet.h>
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 

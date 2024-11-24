@@ -1,7 +1,6 @@
 #include "compression.h"
 #include "logger.h"
 #include <errno.h>
-#include <stdio.h>
 #include <zlib.h>
 
 int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {

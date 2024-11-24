@@ -1,7 +1,5 @@
 #include "worker_queue.h"
 #include "utils/logger.h"
-#include <stdio.h>
-#include <stdlib.h>
 
 int queue_init(queue_t *q) {
   q->front = 0;
