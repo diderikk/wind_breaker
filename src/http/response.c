@@ -19,6 +19,7 @@ int set_content_type(http_response_t *http_response,
                      http_request_t *http_request);
 size_t set_compression(http_response_t *http_response,
                        http_request_t *http_request, char *tmp_buffer);
+void log_response(http_response_t *http_response, char * tmp_body);
 
 size_t construct_response(http_request_t *http_request, char *response) {
   size_t return_value;
@@ -49,10 +50,7 @@ size_t construct_response(http_request_t *http_request, char *response) {
 
   return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
 
-  // TODO: LOGGING
-  log_trace(__FILE__,
-            "Returning response code %d, with response body size: %ld",
-            http_response.status_code, return_value);
+  log_response(&http_response, tmp_buffer);
 
   free(tmp_buffer);
   return return_value;
@@ -234,6 +232,15 @@ size_t to_string(http_response_t *http_response, char *response_str,
   offset += http_response->content_length;
 
   return offset;
+}
+
+void log_response(http_response_t *http_response, char * tmp_body) {
+  log_info(__FILE__, "Responding:\n Status Code: %d\n Content Type: %s\n "
+                     "Content Length: %ld\n Content Language: %s\n "
+                     "Content Encoding: %s\n Body: %s",
+           http_response->status_code, http_response->content_type,
+           http_response->content_length, http_response->content_language,
+           http_response->content_encoding, tmp_body);
 }
 
 char *http_status_code_to_str(http_status_code status_code) {

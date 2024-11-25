@@ -1,4 +1,5 @@
 #include "logger.h"
+#include "../session.h"
 #include <errno.h>
 #include <stdarg.h>
 #include <string.h>
@@ -20,7 +21,8 @@ FILE *logger_init(LOG_LEVEL level, LOG_DESTINATION destination,
   if (log_destination == FILE_ONLY || log_destination == CONSOLE_FILE) {
     log_file = fopen(file_path, "a");
     if (log_file == NULL) {
-      fprintf(stderr, "Failed to open log file: %s : %s\n", file_path, strerror(errno));
+      fprintf(stderr, "Failed to open log file: %s : %s\n", file_path,
+              strerror(errno));
       return NULL;
     }
   }
@@ -97,6 +99,7 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
   struct tm *timeinfo;
   char time_str[20];
   pthread_t thread_id = pthread_self();
+  struct session *session = get_session_for_thread();
 
   // Get the current time
   time(&rawtime);
@@ -109,8 +112,15 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
 
   if (log_destination == FILE_ONLY || log_destination == CONSOLE_FILE) {
     if (log_file != NULL) {
-      fprintf(log_file, "%s (%s) [%lu]: ", time_str, log_level_to_string(level),
-              (unsigned long)thread_id);
+      if (session != NULL) {
+        fprintf(log_file, "%s %s (%s) [%lu-%d]: ", time_str,
+                strstr(file, "src/") + 4, log_level_to_string(level),
+                (unsigned long)thread_id, session->id);
+      } else {
+        fprintf(log_file, "%s %s (%s) [%lu]: ", time_str,
+                strstr(file, "src/") + 4, log_level_to_string(level),
+                (unsigned long)thread_id);
+      }
       vfprintf(log_file, message, args_f);
       if (level == ERROR && errno != 0) {
         fprintf(log_file, ": %s\n", strerror(errno));
@@ -121,8 +131,15 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
     }
   }
   if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
-    fprintf(stdout, "%s %s (%s) [%lu]: ", time_str, strstr(file, "src/") + 4,
-            log_level_to_string(level), (unsigned long)thread_id);
+    if (session != NULL) {
+      fprintf(stdout, "%s %s (%s) [%lu-%d]: ", time_str,
+              strstr(file, "src/") + 4, log_level_to_string(level),
+              (unsigned long)thread_id, session->id);
+    } else {
+      fprintf(stdout, "%s %s (%s) [%lu]: ", time_str,
+              strstr(file, "src/") + 4, log_level_to_string(level),
+              (unsigned long)thread_id);
+    }
     vfprintf(stdout, message, args_c);
     if (level == ERROR && errno != 0) {
       fprintf(stdout, ": %s\n", strerror(errno));

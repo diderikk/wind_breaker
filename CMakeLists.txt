@@ -17,13 +17,14 @@ add_library(http_response_lib STATIC src/http/response.c)
 add_library(file_utils_lib STATIC src/utils/file.c)
 add_library(compression_utils_lib STATIC src/utils/compression.c)
 add_library(logger_utils_lib STATIC src/utils/logger.c)
+add_library(session_lib STATIC src/session.c)
 
 add_executable(main src/main.c)
 target_compile_options(main PRIVATE -Wall -Wextra -Werror)
-target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib file_utils_lib compression_utils_lib logger_utils_lib Threads::Threads ZLIB::ZLIB)
+target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib file_utils_lib compression_utils_lib logger_utils_lib session_lib Threads::Threads ZLIB::ZLIB)
 
 add_executable(client src/client.c)
-target_link_libraries(client PRIVATE socket_lib logger_utils_lib)
+target_link_libraries(client PRIVATE socket_lib logger_utils_lib session_lib)
 target_compile_options(client PRIVATE -Wall -Wextra -Werror)
 
 # Add custom target to copy the static folder

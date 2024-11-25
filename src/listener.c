@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "listener.h"
+#include "session.h"
 #include "string.h"
 #include "utils/logger.h"
 #include <errno.h>
@@ -93,15 +94,15 @@ void *worker_function(void *_arg) {
 
   while (1) {
     data = (request_data *)queue_pop(queue);
+    add_thread_to_session(data->fd);
     log_info(__FILE__, "Handled by worker: %lu", (unsigned long)pthread_self());
     handle_request(&http_request, data->data);
 
     size_t response_size = construct_response(&http_request, data->data);
 
-    log_info(__FILE__, "Poller: Sending response to client: %s", data->data);
-
     send_socket(data->fd, data->data, response_size, SHOULD_NOT_EXIT);
     // sleep(2);
+    remove_thread_from_session();
   }
 
   return NULL;
@@ -148,6 +149,7 @@ void _listen(int listener, queue_t *queue,
     POLL_ERROR_CLASS error_class;
     int recv_return;
     struct pollfd *poll_array = malloc(sizeof *poll_array * poll_array_size);
+    init_session_cache();
 
     poll_array[0].fd = listener;
     poll_array[0].events =
@@ -179,6 +181,7 @@ void _listen(int listener, queue_t *queue,
         if (poll_array[i].revents & POLLERR) {
           error_class = classify_poll_error(errno);
           if (error_class == REMOVE_FD) {
+            del_from_session_sync(poll_array[i].fd);
             del_from_pfds_sync(poll_array, &i, &fd_count);
             continue;
           } else {
@@ -190,6 +193,7 @@ void _listen(int listener, queue_t *queue,
           log_debug(__FILE__, "Poller: %s",
                     get_poll_event_description(POLLNVAL));
           if (check_for_socket_error(poll_array[i].fd) == -1) {
+            del_from_session_sync(poll_array[i].fd);
             del_from_pfds_sync(poll_array, &i, &fd_count);
             continue;
           }
@@ -210,6 +214,7 @@ void _listen(int listener, queue_t *queue,
                             sizeof(ip_str));
             log_info(__FILE__, "Poller: Client connect %s:%d", ip_str,
                      get_in_addr_port((struct sockaddr *)&client_addr));
+            add_to_session_sync(client_socket_fd);
             add_to_pfds_sync(&poll_array, client_socket_fd, &fd_count,
                              &poll_array_size);
           } else {
@@ -229,6 +234,7 @@ void _listen(int listener, queue_t *queue,
                           poll_array[i].fd);
               }
 
+              del_from_session_sync(poll_array[i].fd);
               del_from_pfds_sync(poll_array, &i, &fd_count);
               continue;
             }
@@ -238,18 +244,21 @@ void _listen(int listener, queue_t *queue,
         // the channel This should already have happend when recv_return == 0.
         if (poll_array[i].revents & POLLHUP) {
           log_warn(__FILE__, "Poller: %s", get_poll_event_description(POLLHUP));
+          del_from_session_sync(poll_array[i].fd);
           del_from_pfds_sync(poll_array, &i, &fd_count);
           continue;
         }
         if (poll_array[i].revents & POLLRDHUP) {
           log_warn(__FILE__, "Poller: %s",
                    get_poll_event_description(POLLRDHUP));
+          del_from_session_sync(poll_array[i].fd);
           del_from_pfds_sync(poll_array, &i, &fd_count);
           continue;
         }
         // On every 50th event, validate the existing sockets:
         if (loop_counter >= 50) {
           if (check_for_socket_error(poll_array[i].fd) == -1) {
+            del_from_session_sync(poll_array[i].fd);
             del_from_pfds_sync(poll_array, &i, &fd_count);
           }
           loop_counter = 0;
@@ -299,6 +308,7 @@ void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count,
 
 // Remove an index from the set
 void del_from_pfds_sync(struct pollfd pfds[], int *i, int *fd_count) {
+  log_trace(__FILE__, "Poller: Removing fd %d", pfds[*i].fd);
   close(pfds[*i].fd);
   // Copy the one from the end over this one
   pfds[*i] = pfds[*fd_count - 1];
