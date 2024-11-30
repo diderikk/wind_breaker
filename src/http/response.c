@@ -26,7 +26,7 @@ size_t construct_response(http_request_t *http_request, char *response) {
   http_response_t http_response;
   char *tmp_buffer = malloc(HTTP_BODY_SIZE);
   if (!*tmp_buffer) {
-    log_error(__FILE__, "Failed to allocate memory for compressed buffer");
+    log_error("Failed to allocate memory for compressed buffer");
     return -1;
   }
 
@@ -223,7 +223,7 @@ size_t to_string(http_response_t *http_response, char *response_str,
   offset += snprintf(response_str + offset, response_str_size - offset, "\r\n");
 
   if (offset + http_response->content_length >= response_str_size) {
-    log_error(__FILE__, "Response Buffer Overflow");
+    log_error("Response Buffer Overflow");
     return -1;
   }
 
@@ -235,7 +235,7 @@ size_t to_string(http_response_t *http_response, char *response_str,
 }
 
 void log_response(http_response_t *http_response, char * tmp_body) {
-  log_info(__FILE__, "Responding:\n Status Code: %d\n Content Type: %s\n "
+  log_info("Responding:\n Status Code: %d\n Content Type: %s\n "
                      "Content Length: %ld\n Content Language: %s\n "
                      "Content Encoding: %s\n Body: %s",
            http_response->status_code, http_response->content_type,

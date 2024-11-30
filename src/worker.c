@@ -11,12 +11,12 @@ int workers_init(pthread_t *workers[], int worker_size,
 
     arg->arg = worker_func_arg;
     if (pthread_create(&thread, NULL, worker_func, arg) != 0) {
-      log_error(__FILE__, "Error occured initializing thread");
+      log_error("Error occured initializing thread");
       return -1;
     }
   }
 
-  log_info(__FILE__, "Initialized %d workers ready to handle requests",
+  log_info("Initialized %d workers ready to handle requests",
            worker_size);
 
   return 0;
@@ -33,7 +33,7 @@ int workers_close(pthread_t *workers[], int *worker_size) {
 
     // Wait for the thread to exit
     if (pthread_join(*workers[i], NULL) != 0) {
-      log_error(__FILE__, "Failed to join thread");
+      log_error("Failed to join thread");
       return -1;
     }
   }

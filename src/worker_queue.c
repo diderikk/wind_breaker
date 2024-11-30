@@ -7,26 +7,26 @@ int queue_init(queue_t *q) {
   q->count = 0;
 
   if (pthread_mutex_init(&q->mutex, NULL) != 0) {
-    log_error(__FILE__, "Could not initialize mutex");
+    log_error("Could not initialize mutex");
     return -1;
   }
   if (pthread_cond_init(&q->cond, NULL) != 0) {
-    log_error(__FILE__, "Could not initialize cond");
+    log_error("Could not initialize cond");
     return -1;
   }
 
-  log_info(__FILE__, "Initialized queue with size %d", QUEUE_MAX_SIZE);
+  log_info("Initialized queue with size %d", QUEUE_MAX_SIZE);
 
   return 0;
 }
 
 int queue_destroy(queue_t *q) {
   if (pthread_mutex_destroy(&q->mutex) != 0) {
-    log_error(__FILE__, "Could not destroy mutex");
+    log_error("Could not destroy mutex");
     return -1;
   }
   if (pthread_cond_destroy(&q->cond)) {
-    log_error(__FILE__, "Could not destroy cond");
+    log_error("Could not destroy cond");
     return -1;
   }
 

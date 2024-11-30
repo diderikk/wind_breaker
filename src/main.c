@@ -13,15 +13,15 @@ void handle_signal(int signum);
 int main(int argc, char *argv[]) {
   log_file = logger_init(TRACE, CONSOLE_FILE, LOG_FILE_PATH);
 
-  log_info(__FILE__, "Running main with %d args:", argc);
+  log_info("Running main with %d args:", argc);
   for (int i = 0; i < argc; ++i) {
-    log_debug(__FILE__, "Argument %d: %s", i + 1, argv[i]);
+    log_debug("Argument %d: %s", i + 1, argv[i]);
   }
 
   socket_fd = get_listener_socket(PORT);
 
   if (socket_fd < 0) {
-    log_error(__FILE__, "Failed to initalize socket");
+    log_error("Failed to initalize socket");
     exit(EXIT_FAILURE);
   }
 
@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 }
 
 void handle_signal(int signum) {
-  log_info(__FILE__, "Socket closed due to signal %d", signum);
+  log_info("Socket closed due to signal %d", signum);
   if (log_file != NULL) {
     fclose(log_file);
   }

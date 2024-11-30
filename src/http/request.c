@@ -29,8 +29,7 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
   if (return_value != 0)
     return return_value;
 
-  log_info(__FILE__,
-           "extracted control data => method: %d, uri: %s, version: %s",
+  log_info("extracted control data => method: %d, uri: %s, version: %s",
            http_request->method, http_request->uri, http_request->version);
 
   while ((line = strtok(NULL, "\r\n")) != NULL) {
@@ -39,8 +38,7 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
       return return_value;
   }
 
-  log_info(__FILE__,
-           "extracted header fields => host: %s, user_agent: %s, accept: %s, "
+  log_info("extracted header fields => host: %s, user_agent: %s, accept: %s, "
            "accept_language: %s, accept_encoding: %s, connection: %d",
            http_request->host, http_request->user_agent, http_request->accept,
            http_request->accept_language, http_request->accept_encoding,
@@ -60,12 +58,12 @@ int parse_control_data(http_request_t *http_request, char *raw_control_data) {
     return matches_count;
 
   if (matches[2].rm_eo - matches[2].rm_so >= HTTP_URI_SIZE) {
-    log_error(__FILE__, "URI Too Big");
+    log_error("URI Too Big");
     return -1;
   }
 
   if (matches[3].rm_eo - matches[3].rm_so >= HTTP_VERSION_SIZE) {
-    log_error(__FILE__, "Version Too Big");
+    log_error("Version Too Big");
     return -1;
   }
 
@@ -102,12 +100,12 @@ int parse_header_fields(http_request_t *http_request, char *raw_header_field) {
     return matches_count;
 
   if (matches[1].rm_eo - matches[1].rm_so >= 100) {
-    log_error(__FILE__, "HTTP Header name Too Big");
+    log_error("HTTP Header name Too Big");
     return -1;
   }
 
   if (matches[2].rm_eo - matches[2].rm_so >= HTTP_HEADER_SIZE) {
-    log_error(__FILE__, "Header value Too Big");
+    log_error("Header value Too Big");
     return -1;
   }
 
@@ -150,7 +148,7 @@ int match_regex(const char *pattern, char *text, int match_count,
   regex_t regex;
   int ret = regcomp(&regex, pattern, REG_EXTENDED);
   if (ret) {
-    log_error(__FILE__, "Could not compile regex");
+    log_error("Could not compile regex");
     return -1;
   }
 
@@ -167,12 +165,12 @@ int match_regex(const char *pattern, char *text, int match_count,
     //            }
     //        }
   } else if (ret == REG_NOMATCH) {
-    log_warn(__FILE__, "No match");
+    log_warn("No match");
     return -1;
   } else {
     char errbuf[100];
     regerror(ret, &regex, errbuf, sizeof(errbuf));
-    log_error(__FILE__, "Regex match failed: %s", errbuf);
+    log_error("Regex match failed: %s", errbuf);
     return -1;
   }
 

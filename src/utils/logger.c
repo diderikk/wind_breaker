@@ -27,7 +27,7 @@ FILE *logger_init(LOG_LEVEL level, LOG_DESTINATION destination,
     }
   }
 
-  log_info(__FILE__, "Logger initialized with level %s and destination %s",
+  log_info_(__FILE__, "Logger initialized with level %s and destination %s",
            log_level_to_string(level),
            log_destination == CONSOLE_ONLY ? "CONSOLE_ONLY"
            : log_destination == FILE_ONLY  ? "FILE_ONLY"
@@ -35,7 +35,7 @@ FILE *logger_init(LOG_LEVEL level, LOG_DESTINATION destination,
   return log_file;
 }
 
-void log_trace(const char *file, const char *message, ...) {
+void log_trace_(const char *file, const char *message, ...) {
   if (log_level > TRACE) {
     return;
   }
@@ -47,7 +47,7 @@ void log_trace(const char *file, const char *message, ...) {
   va_end(args_f);
 }
 
-void log_debug(const char *file, const char *message, ...) {
+void log_debug_(const char *file, const char *message, ...) {
   if (log_level > DEBUG) {
     return;
   }
@@ -59,7 +59,7 @@ void log_debug(const char *file, const char *message, ...) {
   va_end(args_f);
 }
 
-void log_info(const char *file, const char *message, ...) {
+void log_info_(const char *file, const char *message, ...) {
   if (log_level > INFO) {
     return;
   }
@@ -71,7 +71,7 @@ void log_info(const char *file, const char *message, ...) {
   va_end(args_f);
 }
 
-void log_warn(const char *file, const char *message, ...) {
+void log_warn_(const char *file, const char *message, ...) {
   if (log_level > WARN) {
     return;
   }
@@ -83,7 +83,7 @@ void log_warn(const char *file, const char *message, ...) {
   va_end(args_f);
 }
 
-void log_error(const char *file, const char *message, ...) {
+void log_error_(const char *file, const char *message, ...) {
   va_list args;
   va_list args_f, args_c;
   va_start(args_c, message);

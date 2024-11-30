@@ -63,7 +63,7 @@ int accept_socket(int socket_fd, struct sockaddr *in_addr) {
     error(socket_fd, SHOULD_NOT_EXIT);
   }
 
-  log_info(__FILE__, "Accepted socket %d", client_socket_fd);
+  log_info("Accepted socket %d", client_socket_fd);
 
   return client_socket_fd;
 }
@@ -131,7 +131,7 @@ void get_in_addr_str(struct sockaddr *sa, char *buffer, size_t length) {
 }
 
 void error(int socket_fd, EXIT_ACTION should_exit) {
-  log_error(__FILE__, "Error: %s", strerror(errno));
+  log_error("Error: %s", strerror(errno));
 
   if (socket_fd != -1)
     close(socket_fd);
