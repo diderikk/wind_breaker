@@ -3,12 +3,12 @@
 #define LISTEN_BACKLOG 50 // TODO: Justify
 #define BUFFER_SIZE 1024
 
+#include "data_structures/worker_queue.h"
 #include "http/request.h"
 #include "http/response.h"
 #include "http/static.h"
 #include "socket.h"
 #include "worker.h"
-#include "worker_queue.h"
 #include <poll.h>
 
 typedef enum { RESET, REMOVE_FD, CONTINUE } POLL_ERROR_CLASS;

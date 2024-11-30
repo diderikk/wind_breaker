@@ -2,32 +2,33 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#define INITIAL_SESSION_SIZE 10
+#define INITIAL_SESSION_SIZE 500
 
 static struct session *session_array = NULL;
 static int session_count = 0;
-static int session_size = INITIAL_SESSION_SIZE;
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void init_session_cache() {
-  session_array = malloc(sizeof(*session_array) * session_size);
+  if (session_array != NULL) {
+    return;
+  }
+  // Static array of sessions, should not be resized... Tiger style
+  session_array = malloc(sizeof(*session_array) * INITIAL_SESSION_SIZE);
 }
 
 // Add a new session to the set
 void add_to_session_sync(int related_fd) {
   pthread_mutex_lock(&session_mutex);
-  // If we don't have room, add more space in the session array
-  if (session_count == session_size) {
-    session_size *= 2; // Double it
-
-    session_array =
-        realloc(session_array, sizeof(*session_array) * (session_size));
+  // Ring buffer... could also used modular arithmetic
+  if (session_count == INITIAL_SESSION_SIZE) {
+    session_count = 0;
   }
 
   session_array[session_count].id = rand();
   session_array[session_count].related_fd = related_fd;
   // Should only be called from the main thread (thread that polls for new
-  // connections) session_array[session_count].thread_id = pthread_self();
+  // connections)
+  // session_array[session_count].thread_id = pthread_self();
 
   session_count++;
   pthread_mutex_unlock(&session_mutex);
@@ -94,15 +95,8 @@ void del_from_session_sync(int related_fd) {
   for (; i < session_count - 1; i++) {
     session_array[i] = session_array[i + 1];
   }
-  //[*i] = sessions[*session_count - 1];
 
   session_count--;
-
-  if (session_count > 0 && session_count < session_size / 2) {
-    session_size /= 2;
-    session_array =
-        realloc(session_array, sizeof(*session_array) * session_size);
-  }
 
   pthread_mutex_unlock(&session_mutex);
 }

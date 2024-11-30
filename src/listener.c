@@ -1,8 +1,9 @@
 #define _GNU_SOURCE
 #include "listener.h"
 #include "session.h"
-#include "string.h"
+#include "utils/assert2.h"
 #include "utils/logger.h"
+#include "data_structures/poll_array.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -11,9 +12,9 @@
 
 #define WORKER_COUNT 3
 
-void _listen(int listener, queue_t *queue,
-             void (*request_handler)(void *, void *),
-             request_data *request_handler_arg);
+void _listen(int listener, void (*request_handler)(request_data));
+void handle_request_async(request_data _arg1);
+void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count,
                       int *fd_size);
@@ -21,7 +22,17 @@ void del_from_pfds_sync(struct pollfd pfds[], int *i, int *fd_count);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
+void listen_async(int listener) {
+  assert(init_queue() == 0);
+
+  assert(workers_init(WORKER_COUNT, worker_function, NULL) == 0);
+
+  _listen(listener, handle_request_async);
+}
+
 int get_listener_socket(char *port) {
+  assert(port != NULL);
+
   struct addrinfo hints, *servinfo, *p;
   int socket_fd, return_val;
   int yes = 1;
@@ -35,10 +46,8 @@ int get_listener_socket(char *port) {
   // https://man7.org/linux/man-pages/man3/getaddrinfo.3.html
   // Simply put: fetches all possible hosts that the socket can be bound to
   // based on the options selected above
-  if ((return_val = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
-    log_error("getaddrinfo: %s\n", gai_strerror(return_val));
-    return EXIT_FAILURE;
-  }
+  assert_log(return_val = getaddrinfo(NULL, port, &hints, &servinfo) == 0,
+             "getaddrinfo: %s\n", gai_strerror(return_val));
 
   // Iterates through all possible hosts and tries to bind a socket
   for (p = servinfo; p != NULL; p = p->ai_next) {
@@ -47,11 +56,8 @@ int get_listener_socket(char *port) {
 
     // allows the socket to bind to an address that is in a TIME_WAIT state.
     // Allows for quick server restarts
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) ==
-        -1) {
-      log_error("Could not bind to the same address");
-      exit(EXIT_FAILURE);
-    }
+    assert(setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) !=
+           -1);
 
     if ((bind_socket(socket_fd, p)) < 0)
       continue;
@@ -62,215 +68,167 @@ int get_listener_socket(char *port) {
   freeaddrinfo(servinfo);
   servinfo = NULL;
 
-  if (p == NULL) {
-    log_error("Failed to bind the socket");
-    exit(EXIT_FAILURE);
-  }
+  assert(p != NULL);
 
   // Begins listening, BACKLOG is the max amount of waiting connections
   listen_socket(socket_fd, LISTEN_BACKLOG);
 
   get_in_addr_str(p->ai_addr, ip_str, sizeof(ip_str));
-  log_info("Listening for connections on: Address: %s, Port %d",
-           ip_str, get_in_addr_port(p->ai_addr));
+  log_info("Listening for connections on: Address: %s, Port %d", ip_str,
+           get_in_addr_port(p->ai_addr));
 
   return socket_fd;
 }
 
-void handle_request_async(void *_arg1, void *_arg2) {
-  queue_t *queue = (queue_t *)_arg1;
-  request_data *arg = (request_data *)_arg2;
+void _listen(int listener, void (*request_handler)(request_data)) {
+  assert(listener > 0);
+  assert(request_handler != NULL);
 
-  log_info("Adding request to worker queue. Size: %d", queue->count);
+  char ip_str[INET6_ADDRSTRLEN], data[BUFFER_SIZE];
+  sigset_t sigmask;
+  sigemptyset(&sigmask);
+  char loop_counter = 0;
+  char event_count = 0;
+  int client_socket_fd;
+  struct sockaddr_storage client_addr;
+  struct pollfd* poll;
+  request_data request_data;
+  POLL_ERROR_CLASS error_class;
+  int recv_return;
+  init_session_cache();
+  init_poll_array(listener);
 
-  queue_push(queue, arg);
+
+
+  // Continously listen for new connections
+  while (1) {
+    loop_counter++;
+    assert(get_poll_array_size() > 0);
+    log_info("Number of active sockets (including listener): %d",
+             get_poll_array_size());
+
+    // https://man7.org/linux/man-pages/man2/poll.2.html
+    // NULL causes the poll system call to poll until a revents
+    // is updated by the kernel
+    event_count = ppoll(get_poll_array(), get_poll_array_size(), NULL, &sigmask);
+
+    if (event_count < 0) {
+      error_class = classify_poll_error(errno);
+      assert(error_class != RESET);
+
+      continue;
+    }
+
+    // Iterate through all the file descriptors and check for events
+    for (int i = 0; i < get_poll_array_size(); i++) {
+      poll = get_poll_fd_by_index(i);
+      assert(poll != NULL);
+      // ERROR HANDLING
+      if (poll->revents & POLLERR) {
+        error_class = classify_poll_error(errno);
+        assert(error_class != RESET);
+        if (error_class == REMOVE_FD) {
+          del_from_session_sync(poll->fd);
+          remove_poll_fd_by_index_sync(&i);
+          continue;
+        }       
+      }
+      if (poll->revents & POLLNVAL) {
+        log_debug("%s", get_poll_event_description(POLLNVAL));
+        if (check_for_socket_error(poll->fd) == -1) {
+          del_from_session_sync(poll->fd);
+          remove_poll_fd_by_index_sync(&i);
+          continue;
+        }
+      }
+      // HANDLES NEW SOCKET EVENTS
+      if (poll->revents & POLLIN) {
+        // New connection wants to connect from the accept.
+        if (poll->fd == listener) {
+
+          log_debug("Polling for new client to connect...");
+          client_socket_fd =
+              accept_socket(listener, (struct sockaddr *)&client_addr);
+
+          if (client_socket_fd < 0)
+            continue;
+
+          get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
+                          sizeof(ip_str));
+          log_info("Client connect %s:%d", ip_str,
+                   get_in_addr_port((struct sockaddr *)&client_addr));
+          add_to_session_sync(client_socket_fd);
+          add_poll_fd_sync(client_socket_fd);
+        } else {
+          // Existing socket wants to send a request
+          recv_return = recv_socket(poll->fd, data, BUFFER_SIZE);
+          if (recv_return > 0) {
+            request_data.fd = poll->fd;
+            strcpy(request_data.data, data);
+
+            request_handler(request_data);
+          } else {
+            // Got error or connection closed by client
+            if (recv_return == 0) {
+              // Connection closed
+              log_trace("Socket %d hung up", poll->fd);
+            }
+
+            del_from_session_sync(poll->fd);
+            remove_poll_fd_by_index_sync(&i);
+            continue;
+          }
+        }
+      }
+      // Already should have read the final data => can now close the close
+      // the channel This should already have happend when recv_return == 0.
+      if (poll->revents & POLLHUP) {
+        log_warn("%s", get_poll_event_description(POLLHUP));
+        del_from_session_sync(poll->fd);
+        remove_poll_fd_by_index_sync(&i);
+        continue;
+      }
+      if (poll->revents & POLLRDHUP) {
+        log_warn("%s", get_poll_event_description(POLLRDHUP));
+        del_from_session_sync(poll->fd);
+        remove_poll_fd_by_index_sync(&i);
+        continue;
+      }
+      // On every 50th event, validate the existing sockets:
+      if (loop_counter >= 50) {
+        if (check_for_socket_error(poll->fd) == -1) {
+          del_from_session_sync(poll->fd);
+          remove_poll_fd_by_index_sync(&i);
+        }
+        loop_counter = 0;
+        continue;
+      }
+    }
+  }
 }
+
+void handle_request_async(request_data _arg1) { queue_push(&_arg1); }
 
 void *worker_function(void *_arg) {
   worker_arg *arg = (worker_arg *)_arg;
-  queue_t *queue = (queue_t *)arg->arg;
   request_data *data;
   http_request_t http_request;
+  unsigned long response_size;
+  
 
   while (1) {
-    data = (request_data *)queue_pop(queue);
+    data = (request_data *)queue_pop();
     add_thread_to_session(data->fd);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
     handle_request(&http_request, data->data);
 
-    size_t response_size = construct_response(&http_request, data->data);
+    response_size = construct_response(&http_request, data->data);
 
-    send_socket(data->fd, data->data, response_size, SHOULD_NOT_EXIT);
-    // sleep(2);
+    send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
   }
 
   return NULL;
-}
-
-void listen_async(int listener) {
-  request_data data;
-  queue_t queue;
-  pthread_t *workers[WORKER_COUNT];
-
-  if (queue_init(&queue) != 0) {
-    log_error("Failed to initialize queue");
-  }
-
-  if (workers_init(workers, 3, worker_function, &queue) != 0) {
-    log_error("Failed to initialize workers");
-  }
-
-  _listen(listener, &queue, handle_request_async, &data);
-}
-
-void _listen(int listener, queue_t *queue,
-             void (*request_handler)(void *, void *),
-             request_data *request_handler_arg) {
-  char ip_str[INET6_ADDRSTRLEN], data[BUFFER_SIZE];
-  sigset_t sigmask;
-  sigemptyset(&sigmask);
-
-  /*
-   * The function is divided into 2 loops
-   * First loop is the resetting loop. When the inner loop wants to reset and
-   * clear all fds, it can break out Second loop (or the inner loop) continously
-   * runs polling for accepting new connections and handling existing
-   * connections
-   */
-
-  while (1) {
-    char loop_counter = 0;
-    int fd_count = 0;
-    int poll_array_size = 5;
-    int poll_count = 0;
-    int client_socket_fd;
-    struct sockaddr_storage client_addr;
-    POLL_ERROR_CLASS error_class;
-    int recv_return;
-    struct pollfd *poll_array = malloc(sizeof *poll_array * poll_array_size);
-    init_session_cache();
-
-    poll_array[0].fd = listener;
-    poll_array[0].events =
-        POLLIN; // Report ready to read on incoming connection
-    fd_count = 1;
-
-    bool exit_loop = false;
-    // Continously listen for new connections
-    while (!exit_loop) {
-      loop_counter++;
-      log_info(
-               "Poller: Number of active sockets (including listener): %d",
-               fd_count);
-
-      // https://man7.org/linux/man-pages/man2/poll.2.html
-      // NULL causes the poll system call to poll until a revents
-      // is updated by the kernel
-      poll_count = ppoll(poll_array, fd_count, NULL, &sigmask);
-
-      if (poll_count < 0) {
-        error_class = classify_poll_error(errno);
-        if (error_class != CONTINUE)
-          break;
-      }
-
-      // Iterate through all the file descriptors and check for events
-      for (int i = 0; i < fd_count; i++) {
-        // ERROR HANDLING
-        if (poll_array[i].revents & POLLERR) {
-          error_class = classify_poll_error(errno);
-          if (error_class == REMOVE_FD) {
-            del_from_session_sync(poll_array[i].fd);
-            del_from_pfds_sync(poll_array, &i, &fd_count);
-            continue;
-          } else {
-            exit_loop = true;
-            break;
-          }
-        }
-        if (poll_array[i].revents & POLLNVAL) {
-          log_debug("Poller: %s",
-                    get_poll_event_description(POLLNVAL));
-          if (check_for_socket_error(poll_array[i].fd) == -1) {
-            del_from_session_sync(poll_array[i].fd);
-            del_from_pfds_sync(poll_array, &i, &fd_count);
-            continue;
-          }
-        }
-        // HANDLES NEW SOCKET EVENTS
-        if (poll_array[i].revents & POLLIN) {
-          // New connection wants to connect from the accept.
-          if (poll_array[i].fd == listener) {
-
-            log_debug("Poller: Polling for new client to connect...");
-            client_socket_fd =
-                accept_socket(listener, (struct sockaddr *)&client_addr);
-
-            if (client_socket_fd < 0)
-              continue;
-
-            get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
-                            sizeof(ip_str));
-            log_info("Poller: Client connect %s:%d", ip_str,
-                     get_in_addr_port((struct sockaddr *)&client_addr));
-            add_to_session_sync(client_socket_fd);
-            add_to_pfds_sync(&poll_array, client_socket_fd, &fd_count,
-                             &poll_array_size);
-          } else {
-            // Existing socket wants to send a request
-            recv_return = recv_socket(poll_array[i].fd, data, BUFFER_SIZE,
-                                      SHOULD_NOT_EXIT);
-            if (recv_return > 0) {
-              request_handler_arg->fd = poll_array[i].fd;
-              strcpy(request_handler_arg->data, data);
-
-              request_handler(queue, request_handler_arg);
-            } else {
-              // Got error or connection closed by client
-              if (recv_return == 0) {
-                // Connection closed
-                log_trace("Poller: socket %d hung up",
-                          poll_array[i].fd);
-              }
-
-              del_from_session_sync(poll_array[i].fd);
-              del_from_pfds_sync(poll_array, &i, &fd_count);
-              continue;
-            }
-          }
-        }
-        // Already should have read the final data => can now close the close
-        // the channel This should already have happend when recv_return == 0.
-        if (poll_array[i].revents & POLLHUP) {
-          log_warn("Poller: %s", get_poll_event_description(POLLHUP));
-          del_from_session_sync(poll_array[i].fd);
-          del_from_pfds_sync(poll_array, &i, &fd_count);
-          continue;
-        }
-        if (poll_array[i].revents & POLLRDHUP) {
-          log_warn("Poller: %s",
-                   get_poll_event_description(POLLRDHUP));
-          del_from_session_sync(poll_array[i].fd);
-          del_from_pfds_sync(poll_array, &i, &fd_count);
-          continue;
-        }
-        // On every 50th event, validate the existing sockets:
-        if (loop_counter >= 50) {
-          if (check_for_socket_error(poll_array[i].fd) == -1) {
-            del_from_session_sync(poll_array[i].fd);
-            del_from_pfds_sync(poll_array, &i, &fd_count);
-          }
-          loop_counter = 0;
-          continue;
-        }
-      }
-    }
-    // In case an error occurs, break the loop and reset the fd array.
-    for (int i = 0; i < fd_count; i++)
-      close(poll_array[i].fd);
-    free(poll_array);
-  }
 }
 
 POLL_ERROR_CLASS classify_poll_error(int code) {
@@ -287,34 +245,6 @@ POLL_ERROR_CLASS classify_poll_error(int code) {
   default:
     return CONTINUE;
   }
-}
-
-// https://beej.us/guide/bgnet/html/split/slightly-advanced-techniques.html
-// Add a new file descriptor to the set
-void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count,
-                      int *fd_size) {
-  // If we don't have room, add more space in the pfds array
-  if (*fd_count == *fd_size) {
-    *fd_size *= 2; // Double it
-
-    *pfds = realloc(*pfds, sizeof(**pfds) * (*fd_size));
-  }
-
-  (*pfds)[*fd_count].fd = newfd;
-  (*pfds)[*fd_count].events = POLLIN; // Check ready-to-read
-
-  (*fd_count)++;
-}
-
-// Remove an index from the set
-void del_from_pfds_sync(struct pollfd pfds[], int *i, int *fd_count) {
-  log_trace("Poller: Removing fd %d", pfds[*i].fd);
-  close(pfds[*i].fd);
-  // Copy the one from the end over this one
-  pfds[*i] = pfds[*fd_count - 1];
-
-  (*fd_count)--;
-  (*i)--;
 }
 
 const char *get_poll_event_description(short event) {
@@ -346,8 +276,7 @@ int check_for_socket_error(int fd) {
   int err = 0;
   socklen_t len = sizeof(err);
   if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == -1) {
-    log_error("Poller: Error on socket %d => %s", fd,
-              strerror(errno));
+    log_error("Error on socket %d => %s", fd, strerror(errno));
     return -1;
   }
   return err;

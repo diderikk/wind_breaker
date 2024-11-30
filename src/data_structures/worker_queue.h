@@ -14,9 +14,9 @@ typedef struct {
   pthread_cond_t cond;
 } queue_t;
 
-int queue_init(queue_t *q);
-int queue_destroy(queue_t *q);
-void queue_push(queue_t *q, void *data);
-void *queue_pop(queue_t *q);
+int init_queue();
+int destory_queue();
+void queue_push(void *data);
+void *queue_pop();
 
 #endif // QUEUE_H

@@ -1,39 +1,42 @@
 #include "worker_queue.h"
-#include "utils/logger.h"
+#include "../utils/assert2.h"
+#include "../utils/logger.h"
+#include <stdlib.h>
 
-int queue_init(queue_t *q) {
+static queue_t *q = NULL;
+
+int init_queue() {
+  assert(QUEUE_MAX_SIZE > 0);
+  assert(q == NULL);
+
+  q = (queue_t *)malloc(sizeof(queue_t));
+
   q->front = 0;
   q->rear = 0;
   q->count = 0;
 
-  if (pthread_mutex_init(&q->mutex, NULL) != 0) {
-    log_error("Could not initialize mutex");
-    return -1;
-  }
-  if (pthread_cond_init(&q->cond, NULL) != 0) {
-    log_error("Could not initialize cond");
-    return -1;
-  }
+  assert(pthread_mutex_init(&q->mutex, NULL) == 0);
+  assert(pthread_cond_init(&q->cond, NULL) == 0);
 
   log_info("Initialized queue with size %d", QUEUE_MAX_SIZE);
-
   return 0;
 }
 
-int queue_destroy(queue_t *q) {
-  if (pthread_mutex_destroy(&q->mutex) != 0) {
-    log_error("Could not destroy mutex");
-    return -1;
-  }
-  if (pthread_cond_destroy(&q->cond)) {
-    log_error("Could not destroy cond");
-    return -1;
-  }
+int destroy_queue() {
+  assert(q != NULL);
+  assert(pthread_mutex_destroy(&q->mutex) == 0);
+  assert(pthread_cond_destroy(&q->cond) == 0);
 
+  free(q);
+  q = NULL;
+
+  log_info("Destroyed queue");
   return 0;
 }
 
-void queue_push(queue_t *q, void *data) {
+void queue_push(void *data) {
+  assert(q != NULL);
+  assert(data != NULL);
   pthread_mutex_lock(&q->mutex);
 
   while (q->count == QUEUE_MAX_SIZE) {
@@ -47,9 +50,12 @@ void queue_push(queue_t *q, void *data) {
 
   pthread_cond_signal(&q->cond);
   pthread_mutex_unlock(&q->mutex);
+
+  log_trace("Pushed data to queue, count: %d", q->count);
 }
 
-void *queue_pop(queue_t *q) {
+void *queue_pop() {
+  assert(q != NULL);
   pthread_mutex_lock(&q->mutex);
 
   while (q->count == 0) {
@@ -63,5 +69,8 @@ void *queue_pop(queue_t *q) {
 
   pthread_cond_signal(&q->cond);
   pthread_mutex_unlock(&q->mutex);
+
+  assert(data != NULL);
+  log_trace("Popped data from queue, count: %d", q->count);
   return data;
 }

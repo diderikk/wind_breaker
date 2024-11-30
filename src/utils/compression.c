@@ -1,11 +1,12 @@
 #include "compression.h"
+#include "assert2.h"
 #include "logger.h"
 #include <errno.h>
-#include <zlib.h>
 
 int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
   // Create a temporary file to store the gzip output
   FILE *tmp_file = tmpfile();
+
   if (!tmp_file) {
     log_error("Failed to create temporary file");
     return -1;

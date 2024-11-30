@@ -1,9 +1,12 @@
 #include "listener.h"
 #include "signal.h"
+#include "utils/assert2.h"
 #include "utils/logger.h"
 
 #define PORT "8080"
 #define LOG_FILE_PATH "/home/diderikk/Dokumenter/Projects/CServer/app.log"
+#define LOG_LEVEL TRACE
+#define LOG_TYPE CONSOLE_FILE
 
 static int socket_fd = -1;
 static FILE *log_file;
@@ -11,7 +14,9 @@ static FILE *log_file;
 void handle_signal(int signum);
 
 int main(int argc, char *argv[]) {
-  log_file = logger_init(TRACE, CONSOLE_FILE, LOG_FILE_PATH);
+  log_file = logger_init(LOG_LEVEL, LOG_TYPE, LOG_FILE_PATH);
+  // Log file is opened if LOG_TYPE is FILE_ONLY or CONSOLE_FILE
+  assert(LOG_TYPE == CONSOLE_ONLY || log_file != NULL);
 
   log_info("Running main with %d args:", argc);
   for (int i = 0; i < argc; ++i) {
@@ -19,11 +24,7 @@ int main(int argc, char *argv[]) {
   }
 
   socket_fd = get_listener_socket(PORT);
-
-  if (socket_fd < 0) {
-    log_error("Failed to initalize socket");
-    exit(EXIT_FAILURE);
-  }
+  assert(socket_fd >= 0);
 
   signal(SIGINT, handle_signal);
   signal(SIGTERM, handle_signal);

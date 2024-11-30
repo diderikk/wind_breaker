@@ -19,7 +19,7 @@ int set_content_type(http_response_t *http_response,
                      http_request_t *http_request);
 size_t set_compression(http_response_t *http_response,
                        http_request_t *http_request, char *tmp_buffer);
-void log_response(http_response_t *http_response, char * tmp_body);
+void log_response(http_response_t *http_response, char *tmp_body);
 
 size_t construct_response(http_request_t *http_request, char *response) {
   size_t return_value;
@@ -234,10 +234,10 @@ size_t to_string(http_response_t *http_response, char *response_str,
   return offset;
 }
 
-void log_response(http_response_t *http_response, char * tmp_body) {
+void log_response(http_response_t *http_response, char *tmp_body) {
   log_info("Responding:\n Status Code: %d\n Content Type: %s\n "
-                     "Content Length: %ld\n Content Language: %s\n "
-                     "Content Encoding: %s\n Body: %s",
+           "Content Length: %ld\n Content Language: %s\n "
+           "Content Encoding: %s\n Body: %s",
            http_response->status_code, http_response->content_type,
            http_response->content_length, http_response->content_language,
            http_response->content_encoding, tmp_body);

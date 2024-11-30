@@ -28,10 +28,10 @@ FILE *logger_init(LOG_LEVEL level, LOG_DESTINATION destination,
   }
 
   log_info_(__FILE__, "Logger initialized with level %s and destination %s",
-           log_level_to_string(level),
-           log_destination == CONSOLE_ONLY ? "CONSOLE_ONLY"
-           : log_destination == FILE_ONLY  ? "FILE_ONLY"
-                                           : "CONSOLE_FILE");
+            log_level_to_string(level),
+            log_destination == CONSOLE_ONLY ? "CONSOLE_ONLY"
+            : log_destination == FILE_ONLY  ? "FILE_ONLY"
+                                            : "CONSOLE_FILE");
   return log_file;
 }
 
@@ -136,9 +136,8 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
               strstr(file, "src/") + 4, log_level_to_string(level),
               (unsigned long)thread_id, session->id);
     } else {
-      fprintf(stdout, "%s %s (%s) [%lu]: ", time_str,
-              strstr(file, "src/") + 4, log_level_to_string(level),
-              (unsigned long)thread_id);
+      fprintf(stdout, "%s %s (%s) [%lu]: ", time_str, strstr(file, "src/") + 4,
+              log_level_to_string(level), (unsigned long)thread_id);
     }
     vfprintf(stdout, message, args_c);
     if (level == ERROR && errno != 0) {
