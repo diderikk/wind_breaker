@@ -14,6 +14,7 @@ static FILE *log_file;
 void handle_signal(int signum);
 
 int main(int argc, char *argv[]) {
+  log_logo();
   log_file = logger_init(LOG_LEVEL, LOG_TYPE, LOG_FILE_PATH);
   // Log file is opened if LOG_TYPE is FILE_ONLY or CONSOLE_FILE
   assert(LOG_TYPE == CONSOLE_ONLY || log_file != NULL);

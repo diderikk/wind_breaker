@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "response.h"
 #include "../utils/logger.h"
+#include "../utils/assert2.h"
 #include "static.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,14 +22,12 @@ size_t set_compression(http_response_t *http_response,
                        http_request_t *http_request, char *tmp_buffer);
 void log_response(http_response_t *http_response, char *tmp_body);
 
-size_t construct_response(http_request_t *http_request, char *response) {
+size_t construct_response(http_request_t *http_request, char *response, char* tmp_body_buffer) {
+  assert(tmp_body_buffer != NULL);
+  assert(http_request != NULL);
+
   size_t return_value;
   http_response_t http_response;
-  char *tmp_buffer = malloc(HTTP_BODY_SIZE);
-  if (!*tmp_buffer) {
-    log_error("Failed to allocate memory for compressed buffer");
-    return -1;
-  }
 
   // Set status code
   http_response.status_code = validate_request_headers(http_request);
@@ -36,7 +35,7 @@ size_t construct_response(http_request_t *http_request, char *response) {
   strcpy(http_response.content_language, "en-US");
 
   // Set body
-  size_t content_size = set_body(&http_response, http_request, tmp_buffer);
+  size_t content_size = set_body(&http_response, http_request, tmp_body_buffer);
   // Set content length
   set_content_length(&http_response, content_size);
   // Set content type
@@ -44,15 +43,14 @@ size_t construct_response(http_request_t *http_request, char *response) {
 
   // Set compression
   size_t compressed_size =
-      set_compression(&http_response, http_request, tmp_buffer);
+      set_compression(&http_response, http_request, tmp_body_buffer);
   // Set content length
   set_content_length(&http_response, compressed_size);
 
   return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
 
-  log_response(&http_response, tmp_buffer);
+  log_response(&http_response, tmp_body_buffer);
 
-  free(tmp_buffer);
   return return_value;
 }
 
@@ -68,9 +66,7 @@ size_t set_body(http_response_t *http_response, http_request_t *http_request,
     return_value = strlen(tmp_buffer);
   } else {
     char *file_name = uri_to_file_name(http_request->uri);
-    int read_size = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
-
-    return_value = read_size;
+    return_value = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
   }
   return return_value;
 }

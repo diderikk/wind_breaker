@@ -1,18 +1,18 @@
 #include "request.h"
 #include "../utils/logger.h"
+#include "../utils/regex2.h"
 #include <stdio.h>
 #include <string.h>
 
-int match_regex(const char *pattern, char *text, int match_count,
-                regmatch_t *matches, int flags);
 int parse_control_data(http_request_t *http_request, char *char_data);
-int parse_header_fields(http_request_t *http_request, char *char_data);
+int parse_header_field(http_request_t *http_request, char *char_data);
 // int parse_trailer_fields(http_request_t* http_request, char * char_data);
 // int extract_body(http_request_t* http_request, char * char_data, long
 // content_size);
 http_method method_str_to_enum(char *raw_method);
 
-int handle_request(http_request_t *http_request, char *raw_request) {
+int parse_request(http_request_t *http_request, char *raw_request) {
+  log_trace("Raw Request:\n %s", raw_request);
   int return_value;
   return_value = parse_http_request(http_request, raw_request);
 
@@ -33,7 +33,7 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
            http_request->method, http_request->uri, http_request->version);
 
   while ((line = strtok(NULL, "\r\n")) != NULL) {
-    return_value = parse_header_fields(http_request, line);
+    return_value = parse_header_field(http_request, line);
     if (return_value != 0)
       return return_value;
   }
@@ -89,7 +89,9 @@ int parse_control_data(http_request_t *http_request, char *raw_control_data) {
   return 0;
 }
 
-int parse_header_fields(http_request_t *http_request, char *raw_header_field) {
+// Extracts the header field from the raw data and stores it in the http_request
+// Only one header field is extracted at a time.
+int parse_header_field(http_request_t *http_request, char *raw_header_field) {
   const char *pattern = "^([A-Za-z0-9-]+):\\s(.*)$";
   regmatch_t matches[3]; // Header Name, Header Value
   char header_name[100];
@@ -141,43 +143,6 @@ int parse_header_fields(http_request_t *http_request, char *raw_header_field) {
   }
 
   return 0;
-}
-
-int match_regex(const char *pattern, char *text, int match_count,
-                regmatch_t *matches, int flags) {
-  regex_t regex;
-  int ret = regcomp(&regex, pattern, REG_EXTENDED);
-  if (ret) {
-    log_error("Could not compile regex");
-    return -1;
-  }
-
-  // Execute the regular expression
-  ret = regexec(&regex, text, match_count, matches, flags);
-  if (!ret) {
-    // printf("Match found:\n");
-
-    // Print the entire match
-    //        for (int i = 0; i < match_count; i++) {
-    //            if (matches[i].rm_so != -1) {
-    //                printf("Match %d: %.*s\n", i, matches[i].rm_eo -
-    //                matches[i].rm_so, text + matches[i].rm_so);
-    //            }
-    //        }
-  } else if (ret == REG_NOMATCH) {
-    log_warn("No match");
-    return -1;
-  } else {
-    char errbuf[100];
-    regerror(ret, &regex, errbuf, sizeof(errbuf));
-    log_error("Regex match failed: %s", errbuf);
-    return -1;
-  }
-
-  // Free the compiled regular expression
-  regfree(&regex);
-
-  return match_count;
 }
 
 http_method method_str_to_enum(char *raw_method) {

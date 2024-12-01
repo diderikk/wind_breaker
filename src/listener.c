@@ -103,6 +103,7 @@ void _listen(int listener, void (*request_handler)(request_data)) {
   // Continously listen for new connections
   while (1) {
     loop_counter++;
+    assert(loop_counter <= 51);
     assert(get_poll_array_size() > 0);
     log_info("Number of active sockets (including listener): %d",
              get_poll_array_size());
@@ -164,7 +165,7 @@ void _listen(int listener, void (*request_handler)(request_data)) {
           recv_return = recv_socket(poll->fd, data, BUFFER_SIZE);
           if (recv_return > 0) {
             request_data.fd = poll->fd;
-            strcpy(request_data.data, data);
+            memcpy(request_data.data, data, recv_return);
 
             request_handler(request_data);
           } else {
@@ -211,23 +212,38 @@ void handle_request_async(request_data _arg1) { queue_push(&_arg1); }
 
 void *worker_function(void *_arg) {
   worker_arg *arg = (worker_arg *)_arg;
-  request_data *data;
-  http_request_t http_request;
+  request_data *data = malloc(sizeof(request_data));
+  http_request_t *http_request = malloc(sizeof(http_request_t));
+  char * tmp_body_buffer = malloc(HTTP_BODY_SIZE);
   unsigned long response_size;
+
+  assert(tmp_body_buffer != NULL);
   
 
   while (1) {
     data = (request_data *)queue_pop();
+    assert(data != NULL);
+
     add_thread_to_session(data->fd);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
-    handle_request(&http_request, data->data);
+    parse_request(http_request, data->data);
 
-    response_size = construct_response(&http_request, data->data);
+    response_size = construct_response(http_request, data->data, tmp_body_buffer);
 
     send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
+
+    // Reset buffers
+    memset(tmp_body_buffer, 0, HTTP_BODY_SIZE);
+    memset(http_request, 0, sizeof(http_request_t));
   }
 
+  free(tmp_body_buffer);
+  free(http_request);
+  free(data);
+  tmp_body_buffer = NULL;
+  http_request = NULL;
+  data = NULL;
   return NULL;
 }
 

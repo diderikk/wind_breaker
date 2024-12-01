@@ -150,6 +150,15 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
   pthread_mutex_unlock(&log_mutex);
 }
 
+// https://www.asciiart.eu/text-to-ascii-art
+void log_logo() {
+	fprintf(stdout, "__        ___           _   ____                 _             \n");
+	fprintf(stdout, "\\ \\      / (_)_ __   __| | | __ ) _ __ ___  __ _| | _____ _ __ \n");
+	fprintf(stdout, " \\ \\ /\\ / /| | '_ \\ / _` | |  _ \\| '__/ _ \\/ _` | |/ / _ \\ '__|\n");
+	fprintf(stdout, "  \\ V  V / | | | | | (_| | | |_) | | |  __/ (_| |   <  __/ |   \n");
+	fprintf(stdout, "   \\_/\\_/  |_|_| |_|\\__,_| |____/|_|  \\___|\\__,_|_|\\_\\___|_|   \n");
+}
+
 char *log_level_to_string(LOG_LEVEL level) {
   switch (level) {
   case TRACE:

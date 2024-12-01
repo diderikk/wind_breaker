@@ -1,16 +1,18 @@
 # HTTP server implemented in C
 
 ## TODO
-* Logger with datetime and level => preferably JSON and to file and stdout.
-* Error handling - interpretting request headers
+* Add pixel start up screen in console/file.
+* Add simulator for testing.
+* Add more parsing for more HTTP headers.
+* Logger 
+    * Add JSON to file.
 * Config file
-* Static folder for HTML/CSS/JS files and favicon.ico
-* https://github.com/spring-projects/spring-data-redis/blob/main/src/main/java/org/springframework/data/redis/cache/DefaultRedisCacheWriter.java#L373
 
 ## Requirements
 * CMake
 * C compiler
 * zlib
+* Threads
 
 ## Resources
 * [getaddrinfo](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html)
