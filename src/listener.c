@@ -1,9 +1,9 @@
 #define _GNU_SOURCE
 #include "listener.h"
-#include "session.h"
+#include "data_structures/poll_array.h"
+#include "data_structures/session.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
-#include "data_structures/poll_array.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -91,14 +91,12 @@ void _listen(int listener, void (*request_handler)(request_data)) {
   char event_count = 0;
   int client_socket_fd;
   struct sockaddr_storage client_addr;
-  struct pollfd* poll;
+  struct pollfd *poll;
   request_data request_data;
   POLL_ERROR_CLASS error_class;
   int recv_return;
   init_session_cache();
   init_poll_array(listener);
-
-
 
   // Continously listen for new connections
   while (1) {
@@ -111,7 +109,8 @@ void _listen(int listener, void (*request_handler)(request_data)) {
     // https://man7.org/linux/man-pages/man2/poll.2.html
     // NULL causes the poll system call to poll until a revents
     // is updated by the kernel
-    event_count = ppoll(get_poll_array(), get_poll_array_size(), NULL, &sigmask);
+    event_count =
+        ppoll(get_poll_array(), get_poll_array_size(), NULL, &sigmask);
 
     if (event_count < 0) {
       error_class = classify_poll_error(errno);
@@ -132,7 +131,7 @@ void _listen(int listener, void (*request_handler)(request_data)) {
           del_from_session_sync(poll->fd);
           remove_poll_fd_by_index_sync(&i);
           continue;
-        }       
+        }
       }
       if (poll->revents & POLLNVAL) {
         log_debug("%s", get_poll_event_description(POLLNVAL));
@@ -214,11 +213,11 @@ void *worker_function(void *_arg) {
   worker_arg *arg = (worker_arg *)_arg;
   request_data *data = malloc(sizeof(request_data));
   http_request_t *http_request = malloc(sizeof(http_request_t));
-  char * tmp_body_buffer = malloc(HTTP_BODY_SIZE);
+  char *tmp_body_buffer = malloc(HTTP_BODY_SIZE);
+  int response_code = 500;
   unsigned long response_size;
 
   assert(tmp_body_buffer != NULL);
-  
 
   while (1) {
     data = (request_data *)queue_pop();
@@ -227,15 +226,22 @@ void *worker_function(void *_arg) {
     add_thread_to_session(data->fd);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
     parse_request(http_request, data->data);
+    response_code = validate_request_headers(http_request);
 
-    response_size = construct_response(http_request, data->data, tmp_body_buffer);
+    response_size = construct_response(response_code, http_request->uri,
+                                       http_request->accept_encoding,
+                                       data->data, tmp_body_buffer);
 
     send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
+    if(http_request->connection == CLOSE) {
+      del_from_session_sync(data->fd);
+    }
 
     // Reset buffers
     memset(tmp_body_buffer, 0, HTTP_BODY_SIZE);
     memset(http_request, 0, sizeof(http_request_t));
+    response_code = 500;
   }
 
   free(tmp_body_buffer);

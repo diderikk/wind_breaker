@@ -1,8 +1,8 @@
 #define _GNU_SOURCE
 #include "response.h"
-#include "request.h"
-#include "../utils/logger.h"
 #include "../utils/assert2.h"
+#include "../utils/logger.h"
+#include "request.h"
 #include "static.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,39 +11,37 @@
 char *http_status_code_to_str(http_status_code status_code);
 size_t to_string(http_response_t *http_response, char *response_str,
                  size_t response_str_size);
-size_t set_body(http_response_t *http_response, http_request_t *http_request,
-                char *tmp_buffer);
+size_t set_body(http_response_t *http_response, char *uri, char *tmp_buffer);
 size_t set_content_length(http_response_t *http_response,
                           size_t content_length);
-int set_content_type(http_response_t *http_response,
-                     http_request_t *http_request);
-size_t set_compression(http_response_t *http_response,
-                       http_request_t *http_request, char *tmp_buffer);
+int set_content_type(http_response_t *http_response, char *uri);
+size_t set_compression(http_response_t *http_response, char *accept_encoding,
+                       char *tmp_buffer);
 void log_response(http_response_t *http_response, char *tmp_body);
 
-size_t construct_response(http_request_t *http_request, char *response, char* tmp_body_buffer) {
+size_t construct_response(int response_code, char *uri, char *accept_encoding,
+                          char *response, char *tmp_body_buffer) {
   assert(tmp_body_buffer != NULL);
-  assert(http_request != NULL);
 
   size_t return_value;
   http_response_t http_response;
 
   // Set status code
-  http_response.status_code = validate_request_headers(http_request);
+  http_response.status_code = response_code;
   // Set content language
   strcpy(http_response.content_language, "en-US");
 
   // Set body
-  size_t content_size = set_body(&http_response, http_request, tmp_body_buffer);
+  size_t content_size = set_body(&http_response, uri, tmp_body_buffer);
   // Set content length
   set_content_length(&http_response, content_size);
   // Set content type
-  set_content_type(&http_response, http_request);
+  set_content_type(&http_response, uri);
 
   // Set compression
   size_t compressed_size =
-      set_compression(&http_response, http_request, tmp_body_buffer);
-  // Set content length
+      set_compression(&http_response, accept_encoding, tmp_body_buffer);
+  // Update content length
   set_content_length(&http_response, compressed_size);
 
   return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
@@ -53,8 +51,7 @@ size_t construct_response(http_request_t *http_request, char *response, char* tm
   return return_value;
 }
 
-size_t set_body(http_response_t *http_response, http_request_t *http_request,
-                char *tmp_buffer) {
+size_t set_body(http_response_t *http_response, char *uri, char *tmp_buffer) {
   int return_value = 0;
   if (http_response->status_code != HTTP_OK) {
     char *status_code_str = http_status_code_to_str(http_response->status_code);
@@ -64,18 +61,17 @@ size_t set_body(http_response_t *http_response, http_request_t *http_request,
 
     return_value = strlen(tmp_buffer);
   } else {
-    char *file_name = uri_to_file_name(http_request->uri);
+    char *file_name = uri_to_file_name(uri);
     return_value = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
   }
   return return_value;
 }
 
-int set_content_type(http_response_t *http_response,
-                     http_request_t *http_request) {
+int set_content_type(http_response_t *http_response, char *uri) {
   if (http_response->status_code != HTTP_OK) {
     strcpy(http_response->content_type, "text/html;charset=utf-8");
   } else {
-    char *file_name = uri_to_file_name(http_request->uri);
+    char *file_name = uri_to_file_name(uri);
 
     if (strcasestr(file_name, ".html") != NULL) {
       snprintf(http_response->content_type, HTTP_HEADER_SIZE,
@@ -96,15 +92,15 @@ int set_content_type(http_response_t *http_response,
   return 0;
 }
 
-size_t set_compression(http_response_t *http_response,
-                       http_request_t *http_request, char *tmp_buffer) {
+size_t set_compression(http_response_t *http_response, char *accept_encoding,
+                       char *tmp_buffer) {
   size_t return_value = http_response->content_length;
   int header_count = 0;
   // Validate header
-  if (strcasestr(http_request->accept_encoding, "gzip") != NULL) {
+  if (strcasestr(accept_encoding, "gzip") != NULL) {
     header_count += 1;
   }
-  if (strcasestr(http_request->accept_encoding, "deflate") != NULL) {
+  if (strcasestr(accept_encoding, "deflate") != NULL) {
     header_count += 2;
   }
 

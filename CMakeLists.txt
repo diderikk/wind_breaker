@@ -20,14 +20,15 @@ add_library(compression_utils_lib STATIC src/utils/compression.c)
 add_library(logger_utils_lib STATIC src/utils/logger.c)
 add_library(assert_utils_lib STATIC src/utils/assert2.c)
 add_library(regex_utils_lib STATIC src/utils/regex2.c)
-add_library(session_lib STATIC src/session.c)
+add_library(session_lib STATIC src/data_structures/session.c)
+add_library(simulator_cases_lib STATIC src/simulator/cases.c)
 
 add_executable(main src/main.c)
 target_compile_options(main PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib assert_utils_lib logger_utils_lib session_lib Threads::Threads ZLIB::ZLIB)
 
-add_executable(client src/client.c)
-target_link_libraries(client PRIVATE socket_lib assert_utils_lib logger_utils_lib session_lib)
+add_executable(client src/simulator/client.c)
+target_link_libraries(client PRIVATE simulator_cases_lib socket_lib assert_utils_lib logger_utils_lib session_lib)
 target_compile_options(client PRIVATE -Wall -Wextra -Werror)
 
 # Add custom target to copy the static folder

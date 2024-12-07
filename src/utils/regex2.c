@@ -1,7 +1,6 @@
 #include "regex2.h"
 #include "logger.h"
 
-
 int match_regex(const char *pattern, char *text, int match_count,
                 regmatch_t *matches, int flags) {
   regex_t regex;

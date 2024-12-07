@@ -5,5 +5,6 @@
 #include "../utils/static_file.h"
 #include "static.h"
 
-size_t construct_response(http_request_t *http_request, char *response, char *tmp_body_buffer);
+size_t construct_response(int response_code, char *uri, char *accept_encoding,
+                          char *response, char *tmp_body_buffer);
 #endif // HTTP_RESPONSE_H

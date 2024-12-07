@@ -1,11 +1,10 @@
 #include "poll_array.h"
-#include "../utils/logger.h"
 #include "../utils/assert2.h"
+#include "../utils/logger.h"
 #include <stdlib.h>
 #include <unistd.h>
 
 #define POLL_ARRAY_SIZE 64
-
 
 static struct pollfd *poll_array = NULL;
 static int poll_array_size = 0;
@@ -17,7 +16,7 @@ void init_poll_array(int listen_fd) {
   assert(poll_array == NULL);
 
   poll_array = malloc(sizeof *poll_array * POLL_ARRAY_SIZE);
-  
+
   log_info("Initialized poll array with size %d", POLL_ARRAY_SIZE);
   poll_array[0].fd = listen_fd;
   poll_array[0].events = POLLIN; // Report ready to read on incoming connection
@@ -61,7 +60,7 @@ void add_poll_fd_sync(int fd) {
   assert(poll_array_size > 0);
 }
 
-void remove_poll_fd_by_index_sync(int* i) {
+void remove_poll_fd_by_index_sync(int *i) {
   assert(*i >= 0);
   assert(*i < poll_array_size);
   assert(poll_array != NULL);

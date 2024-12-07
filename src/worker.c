@@ -5,8 +5,8 @@
 
 static pthread_t *workers = NULL;
 
-int workers_init(int worker_size,
-                 void *(*worker_func)(void *), void *worker_func_arg) {
+int workers_init(int worker_size, void *(*worker_func)(void *),
+                 void *worker_func_arg) {
   assert(worker_size > 0);
   assert(workers == NULL);
   assert(worker_func != NULL);

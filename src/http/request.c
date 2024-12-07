@@ -8,7 +8,7 @@
 
 int parse_control_data(http_request_t *http_request, char *char_data);
 int parse_header_field(http_request_t *http_request, char *char_data);
-char *uri_to_file_name(char *uri) ;
+char *uri_to_file_name(char *uri);
 // int parse_trailer_fields(http_request_t* http_request, char * char_data);
 // int extract_body(http_request_t* http_request, char * char_data, long
 // content_size);
