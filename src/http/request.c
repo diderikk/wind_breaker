@@ -1,11 +1,14 @@
+#define _GNU_SOURCE
 #include "request.h"
 #include "../utils/logger.h"
 #include "../utils/regex2.h"
+#include "../utils/static_file.h"
 #include <stdio.h>
 #include <string.h>
 
 int parse_control_data(http_request_t *http_request, char *char_data);
 int parse_header_field(http_request_t *http_request, char *char_data);
+char *uri_to_file_name(char *uri) ;
 // int parse_trailer_fields(http_request_t* http_request, char * char_data);
 // int extract_body(http_request_t* http_request, char * char_data, long
 // content_size);
@@ -45,6 +48,71 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
            http_request->connection);
 
   return 0;
+}
+
+int validate_request_headers(http_request_t *http_request) {
+  if (http_request->method != HTTP_GET) {
+    return HTTP_METHOD_NOT_ALLOWED;
+  }
+
+  // TODO: Validate Accept encoding header and version data.
+  // Accept encoding can also fallback to plain text if not supported.
+
+  // Validate Accept-Language header.
+  if (strcasestr(http_request->accept_language, "en-US") == NULL)
+    return HTTP_NOT_ACCEPTABLE;
+
+  // Validate URI to file path.
+  char *file_name = uri_to_file_name(http_request->uri);
+  if (strcmp(http_request->uri, "/") == 0) {
+    if (file_name == NULL || !find_static_file(file_name))
+      return HTTP_NOT_FOUND;
+
+  } else if (strcmp(http_request->uri, "/favicon") == 0) {
+    if (file_name == NULL || !find_static_file(file_name))
+      return HTTP_NOT_FOUND;
+
+  } else {
+    return HTTP_NOT_FOUND;
+  }
+
+  // Validate Accept header based on file type.
+  if (strcasestr(file_name, ".html") != NULL) {
+    if (strcasestr(http_request->accept, "text/html") == NULL &&
+        strcasestr(http_request->accept, "text/*") == NULL &&
+        strcasestr(http_request->accept, "*/*") == NULL) {
+      return HTTP_NOT_ACCEPTABLE;
+    }
+  } else if (strcasestr(file_name, ".png") != NULL) {
+    if (strcasestr(http_request->accept, "*/*") == NULL &&
+        strcasestr(http_request->accept, "image/*") == NULL &&
+        strcasestr(http_request->accept, "image/png") == NULL)
+      return HTTP_NOT_ACCEPTABLE;
+  } else if (strcasestr(file_name, ".css") != NULL) {
+    if (strcasestr(http_request->accept, "text/css") == NULL &&
+        strcasestr(http_request->accept, "text/*") == NULL &&
+        strcasestr(http_request->accept, "*/*") == NULL)
+      return HTTP_NOT_ACCEPTABLE;
+  } else if (strcasestr(file_name, ".js") != NULL) {
+    if (strcasestr(http_request->accept, "application/javascript") == NULL &&
+        strcasestr(http_request->accept, "application/*") == NULL &&
+        strcasestr(http_request->accept, "*/*") == NULL)
+      return HTTP_NOT_ACCEPTABLE;
+  } else {
+    return HTTP_NOT_ACCEPTABLE;
+  }
+
+  return HTTP_OK;
+}
+
+char *uri_to_file_name(char *uri) {
+  if (strcmp(uri, "/") == 0) {
+    return "index.html";
+  } else if (strcmp(uri, "/favicon") == 0) {
+    return "favicon.png";
+  } else {
+    return NULL;
+  }
 }
 
 int parse_control_data(http_request_t *http_request, char *raw_control_data) {
