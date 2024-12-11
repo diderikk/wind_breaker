@@ -1,4 +1,6 @@
 #include "../socket.h"
+#include "../utils/logger.h"
+#include "cases.h"
 #include "signal.h"
 #include "string.h"
 #include <stdio.h>
@@ -10,51 +12,19 @@
 #define BUFFER_SIZE 1024
 
 int main(int argc, char *argv[]) {
-  int socket_fd;
-  struct addrinfo hints, *servinfo, *p;
-  char data[BUFFER_SIZE];
-  int rv;
 
-  if (argc != 2) {
-    perror("forgot client hostname\n");
-    exit(1);
+  if (argc > 2) {
+    log_info("Running simulation against server at %s:%s", argv[1], argv[2]);
+    run_cases(argv[1], argv[2]);
+  } else if (argc > 1) {
+    log_info("Running simulation against server at %s:%s", argv[1],
+             SERVER_PORT);
+    run_cases(argv[1], SERVER_PORT);
+  } else {
+    log_info("Running simulation against server at %s:%s", SERVER_IP,
+             SERVER_PORT);
+    run_cases(SERVER_IP, SERVER_PORT);
   }
-
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-
-  if ((rv = getaddrinfo(argv[1], SERVER_PORT, &hints, &servinfo)) != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-    return 1;
-  }
-  for (p = servinfo; p != NULL; p = p->ai_next) {
-    if ((socket_fd = open_socket(p)) < 0)
-      continue;
-
-    if ((connect_socket(socket_fd, p->ai_addr, p->ai_addrlen)) < 0)
-      continue;
-
-    break;
-  }
-
-  if (p == NULL) {
-    perror("Failed to connect\n");
-    return 1;
-  }
-
-  printf("Connected to server at %s:%s\n", argv[1], SERVER_PORT);
-
-  // Send message to server
-  char *message = "Hello, server!";
-  send_socket(socket_fd, message, strlen(message));
-
-  // Read response from server
-  recv_socket(socket_fd, data, BUFFER_SIZE);
-  printf("Server response: %s\n", data);
-
-  // Close the socket
-  close(socket_fd);
 
   return 0;
 }

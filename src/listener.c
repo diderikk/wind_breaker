@@ -234,7 +234,7 @@ void *worker_function(void *_arg) {
 
     send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
-    if(http_request->connection == CLOSE) {
+    if (http_request->connection == CLOSE) {
       del_from_session_sync(data->fd);
     }
 
