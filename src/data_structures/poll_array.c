@@ -58,6 +58,7 @@ void add_poll_fd_sync(int fd) {
 
   assert(poll_array_size <= POLL_ARRAY_SIZE);
   assert(poll_array_size > 0);
+  log_trace("Added new socket %d", fd);
 }
 
 void remove_poll_fd_by_index_sync(int *i) {

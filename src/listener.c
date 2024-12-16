@@ -123,6 +123,17 @@ void _listen(int listener, void (*request_handler)(request_data)) {
     for (int i = 0; i < get_poll_array_size(); i++) {
       poll = get_poll_fd_by_index(i);
       assert(poll != NULL);
+
+      // On every 50th event, validate the existing sockets:
+      if (loop_counter >= 50) {
+        if (check_for_socket_error(poll->fd) == -1) {
+          del_from_session_sync(poll->fd);
+          remove_poll_fd_by_index_sync(&i);
+        }
+        loop_counter = 0;
+        continue;
+      }
+
       // ERROR HANDLING
       if (poll->revents & POLLERR) {
         error_class = classify_poll_error(errno);
@@ -159,7 +170,9 @@ void _listen(int listener, void (*request_handler)(request_data)) {
                    get_in_addr_port((struct sockaddr *)&client_addr));
           add_to_session_sync(client_socket_fd);
           add_poll_fd_sync(client_socket_fd);
+          continue;
         } else {
+          log_debug("Polling for existing client to send data...");
           // Existing socket wants to send a request
           recv_return = recv_socket(poll->fd, data, BUFFER_SIZE);
           if (recv_return > 0) {
@@ -167,7 +180,11 @@ void _listen(int listener, void (*request_handler)(request_data)) {
             memcpy(request_data.data, data, recv_return);
 
             request_handler(request_data);
-          } else {
+            continue;
+          } else if(recv_return == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+          }
+          else {
             // Got error or connection closed by client
             if (recv_return == 0) {
               // Connection closed
@@ -192,15 +209,6 @@ void _listen(int listener, void (*request_handler)(request_data)) {
         log_warn("%s", get_poll_event_description(POLLRDHUP));
         del_from_session_sync(poll->fd);
         remove_poll_fd_by_index_sync(&i);
-        continue;
-      }
-      // On every 50th event, validate the existing sockets:
-      if (loop_counter >= 50) {
-        if (check_for_socket_error(poll->fd) == -1) {
-          del_from_session_sync(poll->fd);
-          remove_poll_fd_by_index_sync(&i);
-        }
-        loop_counter = 0;
         continue;
       }
     }

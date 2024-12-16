@@ -4,14 +4,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 
-const char *handle_socket_error(int code);
-const char *handle_bind_error(int code);
-const char *handle_listen_error(int code);
-const char *handle_accept_error(int code);
-const char *handle_connect_error(int code);
-const char *handle_send_error(int code);
-const char *handle_recv_error(int code);
+void disable_socket_blocking(int socket_fd);
 
 int open_socket(struct addrinfo *server_info) {
   int socket_fd;
@@ -60,6 +55,7 @@ int accept_socket(int socket_fd, struct sockaddr *in_addr) {
 
   in_addr_size = sizeof(*in_addr);
   client_socket_fd = accept(socket_fd, in_addr, &in_addr_size);
+  disable_socket_blocking(client_socket_fd);
 
   assert(client_socket_fd != -1);
   log_info("Accepted socket %d", client_socket_fd);
@@ -100,7 +96,11 @@ int recv_socket(int socket_fd, char *buffer, size_t buffer_size) {
   memset(buffer, 0, buffer_size);
   recv_return = recv(socket_fd, buffer, buffer_size - 1, 0);
 
-  assert(recv_return != -1);
+  if (recv_return == -1) {
+    log_error("recv error");
+    return -1;
+  }
+
   buffer[buffer_size] = '\0';
   return recv_return;
 }
@@ -132,4 +132,17 @@ void get_in_addr_str(struct sockaddr *sa, char *buffer, size_t length) {
   assert(sa != NULL);
 
   inet_ntop(sa->sa_family, get_in_addr(sa), buffer, length);
+}
+
+// https://stackoverflow.com/questions/1543466/how-do-i-change-a-tcp-socket-to-be-non-blocking
+void disable_socket_blocking(int socket_fd) {
+  int flags;
+  assert(socket_fd > 0);
+
+  flags = fcntl(socket_fd, F_GETFL, 0);
+  assert(flags != -1);
+
+  flags |= O_NONBLOCK;
+  assert(fcntl(socket_fd, F_SETFL, flags) != -1);
+  log_trace("Set socket %d to non-blocking", socket_fd);
 }

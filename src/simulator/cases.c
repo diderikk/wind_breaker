@@ -20,6 +20,8 @@ void run_cases(char *ip, char *port) {
 
   struct connection_data arg = {ip, port, seed};
   start_case(start_connection_delay_before_close, &arg, 0);
+  start_case(start_connection_send_recv_ten_times, &arg, 1);
+  sleep(1);
   start_case(start_connections_simultaneously, &arg, 1);
 
   for (int i = 0; i < case_count; i++) {

@@ -8,8 +8,11 @@
 #include <time.h>
 #include <unistd.h>
 
-void *start_close_connection(void *arg);
+#define BUFFER_SIZE 8192
+
+void *start_write_recv_close_connection(void *arg);
 void sleep_ms(int ms);
+int set_recv_timeout(int socket, int milliseconds);
 
 int test_connection(char *ip, char *port) {
   int socket_fd = connect_to_server(ip, port);
@@ -51,7 +54,7 @@ void *start_connections_simultaneously(void *arg) {
 
   log_info("Starting %d connections simultaneously", amount_of_connections);
   for (int i = 0; i < amount_of_connections; i++) {
-    assert(pthread_create(&threads[i], NULL, start_close_connection, data) ==
+    assert(pthread_create(&threads[i], NULL, start_write_recv_close_connection, data) ==
            0);
     sleep_ms(100);
   }
@@ -63,15 +66,51 @@ void *start_connections_simultaneously(void *arg) {
   return 0;
 }
 
-void *start_close_connection(void *arg) {
+void *start_connection_send_recv_ten_times(void *arg) {
+  char buffer[BUFFER_SIZE];
+  int socket_fd, send, size;
   struct connection_data *data = (struct connection_data *)arg;
 
-  int socket_fd = connect_to_server(data->ip, data->port);
+  socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
 
+  set_recv_timeout(socket_fd, 1000);
+  for (int i = 0; i < 10; i++) {
+    log_trace("Sending message %d", i);
+    char *message = "Hello, server!";
+    send = send_socket(socket_fd, message, strlen(message));
+    assert(send > 0);
+
+    log_trace("Receiving message %d", i);
+    size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
+    assert(size > 0);
+    log_trace("Server response: %s", buffer);
+  }
+
+  close(socket_fd);
+  return 0;
+}
+
+void *start_write_recv_close_connection(void *arg) {
+  char buffer[BUFFER_SIZE];
+  int socket_fd, send, size;
+  struct connection_data *data = (struct connection_data *)arg;
+
+  socket_fd = connect_to_server(data->ip, data->port);
+  assert(socket_fd > 0);
+
+  set_recv_timeout(socket_fd, 1000);
+
+  char *message = "Hello, server!";
+  send = send_socket(socket_fd, message, strlen(message));
+  assert(send > 0);
   sleep(1);
 
-  log_trace("Connection established. Closing connection immediately");
+  size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
+  assert(size > 0);
+  // log_trace("Server response: %s", buffer);
+
+  // log_trace("Connection established. Closing connection immediately");
   close(socket_fd);
   return 0;
 }
@@ -111,7 +150,7 @@ int connect_to_server(const char *ip, const char *port) {
     return -1;
   }
 
-  log_trace("Connected to server at %s:%s", ip, port);
+  log_trace("Connected to server at %s:%s. Opened socket: %d", ip, port, socket_fd);
 
   // Send message to server
   // char *message = "Hello, server!";
@@ -124,4 +163,11 @@ int connect_to_server(const char *ip, const char *port) {
   // Close the socket
   freeaddrinfo(servinfo);
   return socket_fd;
+}
+
+int set_recv_timeout(int socket, int milliseconds) {
+  struct timeval timeout;
+  timeout.tv_sec = milliseconds / 1000;
+
+  return setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 }
