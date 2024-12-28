@@ -1,7 +1,8 @@
+#include "static.h"
 #define _GNU_SOURCE
-#include "listener.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
+#include "listener.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
 #include <errno.h>
@@ -12,8 +13,8 @@
 
 #define WORKER_COUNT 3
 
-void _listen(int listener, void (*request_handler)(request_data));
-void handle_request_async(request_data _arg1);
+void _listen(int listener, void (*request_handler)(int, char *));
+void handle_request_async(int fd, char *raw_request);
 void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count,
@@ -81,21 +82,23 @@ int get_listener_socket(char *port) {
   return socket_fd;
 }
 
-void _listen(int listener, void (*request_handler)(request_data)) {
+void _listen(int listener, void (*request_handler)(int, char *)) {
   assert(listener > 0);
   assert(request_handler != NULL);
 
-  char ip_str[INET6_ADDRSTRLEN], data[BUFFER_SIZE];
+  char ip_str[INET6_ADDRSTRLEN], data[REQUEST_RESPONSE_MAX_SIZE];
+  char loop_counter, event_count;
+  int client_socket_fd, recv_return;
   sigset_t sigmask;
-  sigemptyset(&sigmask);
-  char loop_counter = 0;
-  char event_count = 0;
-  int client_socket_fd;
   struct sockaddr_storage client_addr;
   struct pollfd *poll;
-  request_data request_data;
   POLL_ERROR_CLASS error_class;
-  int recv_return;
+
+  loop_counter = 0;
+  event_count = 0;
+  memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
+  memset(ip_str, 0, INET6_ADDRSTRLEN);
+  sigemptyset(&sigmask);
   init_poll_array(listener);
 
   // Continously listen for new connections
@@ -174,16 +177,10 @@ void _listen(int listener, void (*request_handler)(request_data)) {
         } else {
           log_debug("Polling for existing client to send data...");
           // Existing socket wants to send a request
-          recv_return = recv_socket(poll->fd, data, BUFFER_SIZE);
+          recv_return = recv_socket(poll->fd, data, REQUEST_RESPONSE_MAX_SIZE);
           if (recv_return > 0) {
-            request_data.fd = poll->fd;
-            memcpy(request_data.data, data, recv_return);
 
-            // Pass a copy of the data to the worker thread
-            request_handler(request_data);
-            // Reset the buffer and file descriptor
-            request_data.fd = 0;
-            memset(request_data.data, 0, BUFFER_SIZE);
+            request_handler(poll->fd, data);
             continue;
           } else if (recv_return == -1 &&
                      (errno == EAGAIN || errno == EWOULDBLOCK)) {
@@ -219,17 +216,23 @@ void _listen(int listener, void (*request_handler)(request_data)) {
   }
 }
 
-void handle_request_async(request_data _arg1) { queue_push(&_arg1); }
+void handle_request_async(int fd, char *raw_request) {
+  queue_push(fd, raw_request);
+}
 
 void *worker_function(void *_arg) {
-  worker_arg *arg = (worker_arg *)_arg;
-  request_data *data = malloc(sizeof(request_data));
-  http_request_t *http_request = malloc(sizeof(http_request_t));
-  char *tmp_body_buffer = malloc(HTTP_BODY_SIZE);
+  // worker_arg *arg = (worker_arg *)_arg;
   int response_code = 500;
   unsigned long response_size;
+  worker_data *data;
+  http_request_t *http_request = malloc(sizeof(http_request_t));
+  char *tmp_response_buffer = malloc(REQUEST_RESPONSE_MAX_SIZE);
 
-  assert(tmp_body_buffer != NULL);
+  assert(tmp_response_buffer != NULL);
+  assert(http_request != NULL);
+
+  memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+  memset(http_request, 0, sizeof(http_request_t));
 
   while (1) {
     data = queue_pop();
@@ -242,7 +245,7 @@ void *worker_function(void *_arg) {
 
     response_size = construct_response(response_code, http_request->uri,
                                        http_request->accept_encoding,
-                                       data->data, tmp_body_buffer);
+                                       data->data, tmp_response_buffer);
 
     send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
@@ -250,16 +253,20 @@ void *worker_function(void *_arg) {
       del_from_session_sync(data->fd);
     }
 
+    // Free worker queue data
+    free(data);
+
     // Reset buffers
-    memset(tmp_body_buffer, 0, HTTP_BODY_SIZE);
+    memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
     memset(http_request, 0, sizeof(http_request_t));
     response_code = 500;
+    response_size = 0;
   }
 
-  free(tmp_body_buffer);
+  free(tmp_response_buffer);
   free(http_request);
   free(data);
-  tmp_body_buffer = NULL;
+  tmp_response_buffer = NULL;
   http_request = NULL;
   data = NULL;
   return NULL;

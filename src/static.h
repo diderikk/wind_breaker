@@ -1,11 +1,11 @@
 #ifndef STATIC_H
 #define STATIC_H
 
-#include "http/static.h"
+#define REQUEST_RESPONSE_MAX_SIZE 32768
 
 typedef struct {
   int fd;
-  char data[HTTP_BODY_SIZE];
-} request_data;
+  char data[REQUEST_RESPONSE_MAX_SIZE];
+} worker_data;
 
 #endif // STATIC_H

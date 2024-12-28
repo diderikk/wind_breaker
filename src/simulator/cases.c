@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-static const int case_count = 2;
+static const int case_count = 4;
 static pthread_t *cases = NULL;
 
 int start_case(void *(*func)(void *), struct connection_data *arg, int case_id);
@@ -21,8 +21,9 @@ void run_cases(char *ip, char *port) {
   struct connection_data arg = {ip, port, seed};
   start_case(start_connection_delay_before_close, &arg, 0);
   start_case(start_connection_send_recv_ten_times, &arg, 1);
+  start_case(start_connection_close, &arg, 2);
   sleep(1);
-  start_case(start_connections_simultaneously, &arg, 1);
+  start_case(start_connections_simultaneously, &arg, 3);
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);

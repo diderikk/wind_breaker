@@ -1,7 +1,6 @@
 #ifndef LISTENER_H
 #define LISTENER_H
 #define LISTEN_BACKLOG 50 // TODO: Justify
-#define BUFFER_SIZE 1024
 
 #include "data_structures/worker_queue.h"
 #include "http/request.h"

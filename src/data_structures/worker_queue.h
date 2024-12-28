@@ -7,7 +7,7 @@
 #include "pthread.h"
 
 typedef struct {
-  request_data **data;
+  worker_data **data;
   int front;
   int rear;
   int count;
@@ -17,7 +17,7 @@ typedef struct {
 
 int init_queue();
 int destory_queue();
-void queue_push(request_data *data);
-request_data *queue_pop();
+void queue_push(int fd, char *data);
+worker_data *queue_pop();
 
 #endif // QUEUE_H

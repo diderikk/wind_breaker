@@ -91,6 +91,17 @@ void *start_connection_send_recv_ten_times(void *arg) {
   return 0;
 }
 
+void *start_connection_close(void *arg) {
+  struct connection_data *data = (struct connection_data *)arg;
+
+  int socket_fd = connect_to_server(data->ip, data->port);
+  assert(socket_fd > 0);
+
+  close(socket_fd);
+  log_trace("Connection closed manually");
+  return 0;
+}
+
 void *start_write_recv_close_connection(void *arg) {
   char buffer[BUFFER_SIZE];
   int socket_fd, send, size;

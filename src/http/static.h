@@ -6,9 +6,10 @@
 #define HTTP_VERSION_SIZE 16
 #define HTTP_METHOD_SIZE 16
 #define HTTP_BODY_SIZE 16192
-#define HTTP_RESPONSE_MAX_SIZE 2 * HTTP_BODY_SIZE
 #define HTTP_HEADER_SMALL_SIZE 128
 #define HTTP_VERSION "1.1"
+
+#include "../static.h"
 
 typedef enum {
   HTTP_POST,

@@ -44,7 +44,7 @@ size_t construct_response(int response_code, char *uri, char *accept_encoding,
   // Update content length
   set_content_length(&http_response, compressed_size);
 
-  return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
+  return_value = to_string(&http_response, response, REQUEST_RESPONSE_MAX_SIZE);
 
   // Contains the uncompressed data
   log_response(&http_response, tmp_body_buffer);

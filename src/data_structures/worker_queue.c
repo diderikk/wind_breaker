@@ -11,11 +11,9 @@ int init_queue() {
   assert(q == NULL);
 
   q = (queue_t *)malloc(sizeof(queue_t));
-  q->data = (request_data **)malloc(sizeof(request_data) * QUEUE_MAX_SIZE);
+  q->data = (worker_data **)calloc(QUEUE_MAX_SIZE, sizeof(worker_data));
   for (int i = 0; i < QUEUE_MAX_SIZE; i++) {
-    q->data[i] = (request_data *)malloc(sizeof(request_data));
-    q->data[i]->fd = 0;
-    memset(q->data[i]->data, 0, HTTP_BODY_SIZE);
+    q->data[i] = (worker_data *)calloc(1, sizeof(worker_data));
   }
 
   q->front = 0;
@@ -41,7 +39,7 @@ int destroy_queue() {
   return 0;
 }
 
-void queue_push(request_data *data) {
+void queue_push(int fd, char *data) {
   assert(q != NULL);
   assert(data != NULL);
   pthread_mutex_lock(&q->mutex);
@@ -51,7 +49,8 @@ void queue_push(request_data *data) {
     pthread_cond_wait(&q->cond, &q->mutex);
   }
 
-  memcpy(q->data[q->rear], data, sizeof(request_data));
+  q->data[q->rear]->fd = fd;
+  memcpy(q->data[q->rear]->data, data, REQUEST_RESPONSE_MAX_SIZE);
   q->rear = (q->rear + 1) % QUEUE_MAX_SIZE;
   q->count++;
 
@@ -61,7 +60,7 @@ void queue_push(request_data *data) {
   log_trace("Pushed data to queue, count: %d", q->count);
 }
 
-request_data *queue_pop() {
+worker_data *queue_pop() {
   assert(q != NULL);
   pthread_mutex_lock(&q->mutex);
 

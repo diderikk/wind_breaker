@@ -14,12 +14,7 @@ void init_session_cache() {
     return;
   }
   // Static array of sessions, should not be resized... Tiger style
-  session_array = malloc(sizeof(*session_array) * INITIAL_SESSION_SIZE);
-  for (int i = 0; i < INITIAL_SESSION_SIZE; i++) {
-    session_array[i].id = 0;
-    session_array[i].related_fd = 0;
-    session_array[i].thread_id = 0;
-  }
+  session_array = calloc(INITIAL_SESSION_SIZE, sizeof(*session_array));
 }
 
 // Add a new session to the set

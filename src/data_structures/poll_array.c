@@ -15,12 +15,7 @@ void init_poll_array(int listen_fd) {
   assert(listen_fd > 0);
   assert(poll_array == NULL);
 
-  poll_array = malloc(sizeof *poll_array * POLL_ARRAY_SIZE);
-  for (int i = 0; i < POLL_ARRAY_SIZE; i++) {
-    poll_array[i].fd = 0;
-    poll_array[i].events = 0;
-    poll_array[i].revents = 0;
-  }
+  poll_array = calloc(POLL_ARRAY_SIZE, sizeof *poll_array);
 
   log_info("Initialized poll array with size %d", POLL_ARRAY_SIZE);
   poll_array[0].fd = listen_fd;

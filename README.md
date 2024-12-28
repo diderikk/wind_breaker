@@ -14,6 +14,7 @@
 * C compiler
 * zlib
 * Threads
+* BearSSL (for SSL/TLS)
 
 ## Testing
 * Simulation testing (based on the [Tiger Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md))
