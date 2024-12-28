@@ -23,7 +23,7 @@ int match_regex(const char *pattern, char *text, int match_count,
     //            }
     //        }
   } else if (ret == REG_NOMATCH) {
-    log_warn("No match");
+    log_warn("No match for regex: %s on %s", pattern, text);
     return -1;
   } else {
     char errbuf[100];

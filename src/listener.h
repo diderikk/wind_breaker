@@ -6,17 +6,12 @@
 #include "data_structures/worker_queue.h"
 #include "http/request.h"
 #include "http/response.h"
-#include "http/static.h"
 #include "socket.h"
+#include "static.h"
 #include "worker.h"
 #include <poll.h>
 
 typedef enum { RESET, REMOVE_FD, CONTINUE } POLL_ERROR_CLASS;
-
-typedef struct {
-  int fd;
-  char data[HTTP_BODY_SIZE];
-} request_data;
 
 int get_listener_socket(char *port);
 // void listen_sync(int socket_fd); // Deprecated

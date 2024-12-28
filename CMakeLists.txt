@@ -4,6 +4,7 @@ project(CServer VERSION 0.0)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED True)
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -25,7 +26,7 @@ add_library(simulator_cases_lib STATIC src/simulator/cases.c)
 add_library(simulator_connection_lib STATIC src/simulator/connection_cases.c)
 
 add_executable(main src/main.c)
-target_compile_options(main PRIVATE -Wall -Wextra -Werror)
+target_compile_options(main PRIVATE -Wall -Wextra -Werror -g -O3)
 target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib assert_utils_lib logger_utils_lib session_lib Threads::Threads ZLIB::ZLIB)
 
 add_executable(client src/simulator/client.c)

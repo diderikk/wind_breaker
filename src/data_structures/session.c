@@ -1,4 +1,5 @@
 #include "session.h"
+#include <assert.h>
 #include <pthread.h>
 #include <stdlib.h>
 
@@ -14,10 +15,16 @@ void init_session_cache() {
   }
   // Static array of sessions, should not be resized... Tiger style
   session_array = malloc(sizeof(*session_array) * INITIAL_SESSION_SIZE);
+  for (int i = 0; i < INITIAL_SESSION_SIZE; i++) {
+    session_array[i].id = 0;
+    session_array[i].related_fd = 0;
+    session_array[i].thread_id = 0;
+  }
 }
 
 // Add a new session to the set
 void add_to_session_sync(int related_fd) {
+  assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   // Ring buffer... could also used modular arithmetic
   if (session_count == INITIAL_SESSION_SIZE) {
@@ -36,6 +43,9 @@ void add_to_session_sync(int related_fd) {
 
 // Get the session for a given thread id
 struct session *get_session_for_thread() {
+  if (session_array == NULL) {
+    return NULL;
+  }
   pthread_mutex_lock(&session_mutex);
   unsigned long thread_id = pthread_self();
   for (int i = 0; i < session_count; i++) {
@@ -50,6 +60,7 @@ struct session *get_session_for_thread() {
 
 // After a thread is done with a session, set the thread_id to 0 (unassign it)
 void remove_thread_from_session() {
+  assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   for (int i = 0; i < session_count; i++) {
     if (session_array[i].thread_id == pthread_self()) {
@@ -64,6 +75,7 @@ void remove_thread_from_session() {
 // Caused by having a worker queue, and we need to know which session a worker
 // is handling
 void add_thread_to_session(int related_fd) {
+  assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
@@ -83,6 +95,7 @@ void add_thread_to_session(int related_fd) {
 }
 
 void del_from_session_sync(int related_fd) {
+  assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
 
   int i = 0;

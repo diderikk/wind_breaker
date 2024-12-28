@@ -1,11 +1,12 @@
 # HTTP server implemented in C
 
 ## TODO
-* Add pixel start up screen in console/file.
+* SSL/TLS
+* Caching
+* SQLite
+* Images referencing
 * Add simulator for testing.
 * Add more parsing for more HTTP headers.
-* Logger 
-    * Add JSON to file.
 * Config file
 
 ## Requirements
@@ -13,6 +14,10 @@
 * C compiler
 * zlib
 * Threads
+
+## Testing
+* Simulation testing (based on the [Tiger Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md))
+* Valgrind (memory leak testing)
 
 ## Resources
 * [getaddrinfo](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html)

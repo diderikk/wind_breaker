@@ -54,8 +54,8 @@ void *start_connections_simultaneously(void *arg) {
 
   log_info("Starting %d connections simultaneously", amount_of_connections);
   for (int i = 0; i < amount_of_connections; i++) {
-    assert(pthread_create(&threads[i], NULL, start_write_recv_close_connection, data) ==
-           0);
+    assert(pthread_create(&threads[i], NULL, start_write_recv_close_connection,
+                          data) == 0);
     sleep_ms(100);
   }
 
@@ -150,7 +150,8 @@ int connect_to_server(const char *ip, const char *port) {
     return -1;
   }
 
-  log_trace("Connected to server at %s:%s. Opened socket: %d", ip, port, socket_fd);
+  log_trace("Connected to server at %s:%s. Opened socket: %d", ip, port,
+            socket_fd);
 
   // Send message to server
   // char *message = "Hello, server!";
@@ -169,5 +170,6 @@ int set_recv_timeout(int socket, int milliseconds) {
   struct timeval timeout;
   timeout.tv_sec = milliseconds / 1000;
 
-  return setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+  return setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout,
+                    sizeof(timeout));
 }

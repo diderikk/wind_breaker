@@ -46,6 +46,7 @@ size_t construct_response(int response_code, char *uri, char *accept_encoding,
 
   return_value = to_string(&http_response, response, HTTP_BODY_SIZE);
 
+  // Contains the uncompressed data
   log_response(&http_response, tmp_body_buffer);
 
   return return_value;

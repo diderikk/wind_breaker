@@ -2,9 +2,9 @@
 #include "string.h"
 #include "utils/assert2.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 void disable_socket_blocking(int socket_fd);
 

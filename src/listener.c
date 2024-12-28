@@ -24,6 +24,7 @@ int check_for_socket_error(int fd);
 
 void listen_async(int listener) {
   assert(init_queue() == 0);
+  init_session_cache();
 
   assert(workers_init(WORKER_COUNT, worker_function, NULL) == 0);
 
@@ -64,10 +65,6 @@ int get_listener_socket(char *port) {
 
     break;
   }
-
-  freeaddrinfo(servinfo);
-  servinfo = NULL;
-
   assert(p != NULL);
 
   // Begins listening, BACKLOG is the max amount of waiting connections
@@ -76,6 +73,10 @@ int get_listener_socket(char *port) {
   get_in_addr_str(p->ai_addr, ip_str, sizeof(ip_str));
   log_info("Listening for connections on: Address: %s, Port %d", ip_str,
            get_in_addr_port(p->ai_addr));
+
+  freeaddrinfo(servinfo);
+  servinfo = NULL;
+  p = NULL;
 
   return socket_fd;
 }
@@ -95,7 +96,6 @@ void _listen(int listener, void (*request_handler)(request_data)) {
   request_data request_data;
   POLL_ERROR_CLASS error_class;
   int recv_return;
-  init_session_cache();
   init_poll_array(listener);
 
   // Continously listen for new connections
@@ -179,12 +179,16 @@ void _listen(int listener, void (*request_handler)(request_data)) {
             request_data.fd = poll->fd;
             memcpy(request_data.data, data, recv_return);
 
+            // Pass a copy of the data to the worker thread
             request_handler(request_data);
+            // Reset the buffer and file descriptor
+            request_data.fd = 0;
+            memset(request_data.data, 0, BUFFER_SIZE);
             continue;
-          } else if(recv_return == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+          } else if (recv_return == -1 &&
+                     (errno == EAGAIN || errno == EWOULDBLOCK)) {
             continue;
-          }
-          else {
+          } else {
             // Got error or connection closed by client
             if (recv_return == 0) {
               // Connection closed
@@ -228,7 +232,7 @@ void *worker_function(void *_arg) {
   assert(tmp_body_buffer != NULL);
 
   while (1) {
-    data = (request_data *)queue_pop();
+    data = queue_pop();
     assert(data != NULL);
 
     add_thread_to_session(data->fd);

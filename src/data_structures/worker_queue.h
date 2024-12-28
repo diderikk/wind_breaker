@@ -3,10 +3,11 @@
 
 #define QUEUE_MAX_SIZE 1024
 
+#include "../static.h"
 #include "pthread.h"
 
 typedef struct {
-  void *data[QUEUE_MAX_SIZE];
+  request_data **data;
   int front;
   int rear;
   int count;
@@ -16,7 +17,7 @@ typedef struct {
 
 int init_queue();
 int destory_queue();
-void queue_push(void *data);
-void *queue_pop();
+void queue_push(request_data *data);
+request_data *queue_pop();
 
 #endif // QUEUE_H

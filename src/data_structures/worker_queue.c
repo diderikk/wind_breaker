@@ -2,6 +2,7 @@
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
 #include <stdlib.h>
+#include <string.h>
 
 static queue_t *q = NULL;
 
@@ -10,6 +11,12 @@ int init_queue() {
   assert(q == NULL);
 
   q = (queue_t *)malloc(sizeof(queue_t));
+  q->data = (request_data **)malloc(sizeof(request_data) * QUEUE_MAX_SIZE);
+  for (int i = 0; i < QUEUE_MAX_SIZE; i++) {
+    q->data[i] = (request_data *)malloc(sizeof(request_data));
+    q->data[i]->fd = 0;
+    memset(q->data[i]->data, 0, HTTP_BODY_SIZE);
+  }
 
   q->front = 0;
   q->rear = 0;
@@ -34,7 +41,7 @@ int destroy_queue() {
   return 0;
 }
 
-void queue_push(void *data) {
+void queue_push(request_data *data) {
   assert(q != NULL);
   assert(data != NULL);
   pthread_mutex_lock(&q->mutex);
@@ -44,7 +51,7 @@ void queue_push(void *data) {
     pthread_cond_wait(&q->cond, &q->mutex);
   }
 
-  q->data[q->rear] = data;
+  memcpy(q->data[q->rear], data, sizeof(request_data));
   q->rear = (q->rear + 1) % QUEUE_MAX_SIZE;
   q->count++;
 
@@ -54,7 +61,7 @@ void queue_push(void *data) {
   log_trace("Pushed data to queue, count: %d", q->count);
 }
 
-void *queue_pop() {
+request_data *queue_pop() {
   assert(q != NULL);
   pthread_mutex_lock(&q->mutex);
 
