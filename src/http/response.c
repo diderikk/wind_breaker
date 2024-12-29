@@ -1,12 +1,14 @@
 #define _GNU_SOURCE
 #include "response.h"
 #include "../utils/assert2.h"
+#include "../utils/hash.h"
 #include "../utils/logger.h"
 #include "request.h"
 #include "static.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 char *http_status_code_to_str(http_status_code status_code);
 size_t to_string(http_response_t *http_response, char *response_str,
@@ -15,12 +17,18 @@ size_t set_body(http_response_t *http_response, char *uri, char *tmp_buffer);
 size_t set_content_length(http_response_t *http_response,
                           size_t content_length);
 int set_content_type(http_response_t *http_response, char *uri);
+size_t set_last_modified(http_response_t *http_response, char *uri);
+size_t set_date(http_response_t *http_response);
+size_t set_etag(http_response_t *http_response, char *tmp_body,
+                size_t tmp_body_size);
 size_t set_compression(http_response_t *http_response, char *accept_encoding,
                        char *tmp_buffer);
+void handle_if_none_match(http_response_t *http_response, char *if_none_match);
 void log_response(http_response_t *http_response, char *tmp_body);
 
 size_t construct_response(int response_code, char *uri, char *accept_encoding,
-                          char *response, char *tmp_body_buffer) {
+                          char *if_none_match, char *response,
+                          char *tmp_body_buffer) {
   assert(tmp_body_buffer != NULL);
 
   size_t return_value;
@@ -37,12 +45,22 @@ size_t construct_response(int response_code, char *uri, char *accept_encoding,
   set_content_length(&http_response, content_size);
   // Set content type
   set_content_type(&http_response, uri);
+  // Set last modified
+  set_last_modified(&http_response, uri);
+  // Set date
+  set_date(&http_response);
+  // Set etag
+  set_etag(&http_response, tmp_body_buffer, content_size);
+  // Handle if-none-match
+  handle_if_none_match(&http_response, if_none_match);
 
-  // Set compression
-  size_t compressed_size =
-      set_compression(&http_response, accept_encoding, tmp_body_buffer);
-  // Update content length
-  set_content_length(&http_response, compressed_size);
+  if (http_response.status_code != HTTP_NOT_MODIFIED) {
+    // Set compression
+    size_t compressed_size =
+        set_compression(&http_response, accept_encoding, tmp_body_buffer);
+    // Update content length
+    set_content_length(&http_response, compressed_size);
+  }
 
   return_value = to_string(&http_response, response, REQUEST_RESPONSE_MAX_SIZE);
 
@@ -93,6 +111,55 @@ int set_content_type(http_response_t *http_response, char *uri) {
   return 0;
 }
 
+size_t set_last_modified(http_response_t *http_response, char *uri) {
+  if (http_response->status_code != HTTP_OK) {
+    strcpy(http_response->last_modified, "");
+    return 0;
+  } else {
+    char *file_name = uri_to_file_name(uri);
+    time_t last_modified_gm_time = get_last_modified(file_name);
+
+    struct tm *time_info = gmtime(&last_modified_gm_time);
+    return strftime(http_response->last_modified, HTTP_HEADER_SMALL_SIZE,
+                    "%a, %d %b %Y %H:%M:%S GMT", time_info);
+  }
+}
+
+size_t set_date(http_response_t *http_response) {
+  time_t current_time = time(NULL);
+  struct tm *time_info = gmtime(&current_time);
+  return strftime(http_response->date, HTTP_HEADER_SMALL_SIZE,
+                  "%a, %d %b %Y %H:%M:%S GMT", time_info);
+}
+
+size_t set_etag(http_response_t *http_response, char *tmp_body,
+                size_t tmp_body_size) {
+  if (http_response->status_code != HTTP_OK) {
+    strcpy(http_response->etag, "");
+    return 0;
+  } else {
+    return sha256_hash_hex(tmp_body, tmp_body_size, http_response->etag);
+  }
+}
+
+void handle_if_none_match(http_response_t *http_response, char *if_none_match) {
+  if (strlen(if_none_match) == 0) {
+    return;
+  }
+
+  if (strcmp(if_none_match, http_response->etag) == 0) {
+    http_response->status_code = HTTP_NOT_MODIFIED;
+    http_response->content_length = 0;
+    strcpy(http_response->content_type, "");
+    strcpy(http_response->content_language, "");
+    strcpy(http_response->content_encoding, "");
+    strcpy(http_response->last_modified, "");
+    strcpy(http_response->date, "");
+    strcpy(http_response->etag, "");
+    strcpy(http_response->body, "");
+  }
+}
+
 size_t set_compression(http_response_t *http_response, char *accept_encoding,
                        char *tmp_buffer) {
   size_t return_value = http_response->content_length;
@@ -114,6 +181,7 @@ size_t set_compression(http_response_t *http_response, char *accept_encoding,
     return_value = compress_deflate(tmp_buffer, http_response->content_length,
                                     http_response->body);
   } else {
+    strcpy(http_response->content_encoding, "");
     memcpy(http_response->body, tmp_buffer, http_response->content_length);
   }
 
@@ -151,6 +219,17 @@ size_t to_string(http_response_t *http_response, char *response_str,
       snprintf(response_str + offset, response_str_size - offset,
                "Content-Language: %s\r\n", http_response->content_language);
 
+  offset += snprintf(response_str + offset, response_str_size - offset,
+                     "Date: %s\r\n", http_response->date);
+
+  offset += snprintf(response_str + offset, response_str_size - offset,
+                     "ETag: %s\r\n", http_response->etag);
+
+  if (strlen(http_response->last_modified) > 0) {
+    offset += snprintf(response_str + offset, response_str_size - offset,
+                       "Last-Modified: %s\r\n", http_response->last_modified);
+  }
+
   if (strlen(http_response->content_encoding) > 0) {
     offset +=
         snprintf(response_str + offset, response_str_size - offset,
@@ -174,10 +253,12 @@ size_t to_string(http_response_t *http_response, char *response_str,
 void log_response(http_response_t *http_response, char *tmp_body) {
   log_info("Responding:\n Status Code: %d\n Content Type: %s\n "
            "Content Length: %ld\n Content Language: %s\n "
-           "Content Encoding: %s\n Body: %s",
+           "Content Encoding: %s\n Last Modified: %s\n Date: %s\n "
+           "ETag: %s\n Body: %s",
            http_response->status_code, http_response->content_type,
            http_response->content_length, http_response->content_language,
-           http_response->content_encoding, tmp_body);
+           http_response->content_encoding, http_response->last_modified,
+           http_response->date, http_response->etag, tmp_body);
 }
 
 char *http_status_code_to_str(http_status_code status_code) {

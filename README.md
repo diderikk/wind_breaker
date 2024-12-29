@@ -14,7 +14,8 @@
 * C compiler
 * zlib
 * Threads
-* BearSSL (for SSL/TLS)
+* BearSSL (for SSL/TLS) 
+* OpenSSL (for ETag) (to be replaced by BearSSL)
 
 ## Testing
 * Simulation testing (based on the [Tiger Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md))

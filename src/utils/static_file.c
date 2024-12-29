@@ -1,6 +1,8 @@
 #include "static_file.h"
 #include "assert2.h"
 #include "logger.h"
+#include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define STATIC_PATH "static/"
@@ -43,4 +45,15 @@ int write_static_file(char *file_name, char *buffer, size_t buffer_size) {
   assert_log(write_size > 0, "Failed to write to file: %s", full_path);
   log_trace("Wrote %ld bytes to file: %s", write_size, full_path);
   return write_size;
+}
+
+int get_last_modified(char *file_path) {
+  char full_path[512 + sizeof(STATIC_PATH)];
+  snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_path);
+
+  struct stat file_stat;
+  assert_log(stat(full_path, &file_stat) == 0, "Failed to get file stat: %s",
+             full_path);
+
+  return file_stat.st_mtime;
 }

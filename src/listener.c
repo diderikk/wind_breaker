@@ -243,12 +243,13 @@ void *worker_function(void *_arg) {
     parse_request(http_request, data->data);
     response_code = validate_request_headers(http_request);
 
-    response_size = construct_response(response_code, http_request->uri,
-                                       http_request->accept_encoding,
-                                       data->data, tmp_response_buffer);
+    response_size = construct_response(
+        response_code, http_request->uri, http_request->accept_encoding,
+        http_request->if_none_match, data->data, tmp_response_buffer);
 
     send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
+    // TODO: Can cause the session_count to be decremented twice...
     if (http_request->connection == CLOSE) {
       del_from_session_sync(data->fd);
     }

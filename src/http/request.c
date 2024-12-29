@@ -15,7 +15,7 @@ char *uri_to_file_name(char *uri);
 http_method method_str_to_enum(char *raw_method);
 
 int parse_request(http_request_t *http_request, char *raw_request) {
-  log_trace("Raw Request:\n %s", raw_request);
+  log_trace("Raw Request:\n%s", raw_request);
   int return_value;
   return_value = parse_http_request(http_request, raw_request);
 
@@ -208,6 +208,10 @@ int parse_header_field(http_request_t *http_request, char *raw_header_field) {
       http_request->connection = KEEP_ALIVE;
     else if (strncmp(raw_header_field + matches[2].rm_so, "close", 5) == 0)
       http_request->connection = CLOSE;
+  } else if (strcmp(header_name, "If-None-Match") == 0) {
+    strncpy(http_request->if_none_match, raw_header_field + matches[2].rm_so,
+            matches[2].rm_eo - matches[2].rm_so);
+    http_request->if_none_match[matches[2].rm_eo - matches[2].rm_so] = '\0';
   }
 
   return 0;

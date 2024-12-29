@@ -75,36 +75,36 @@ void add_thread_to_session(int related_fd) {
   int found = 0;
   for (int i = 0; i < session_count; i++) {
     if (session_array[i].related_fd == related_fd) {
-      found++;
+      found = 1;
       session_array[i].thread_id = pthread_self();
       break;
     }
   }
   pthread_mutex_unlock(&session_mutex);
-  if (!found) {
-    // This should never happen
-    // If it does, it means we have a session that was not added to the session
-    // array This is a bug
-    add_thread_to_session(related_fd);
-  }
+  assert(found == 1);
 }
 
 void del_from_session_sync(int related_fd) {
   assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
 
+  int found = 0;
   int i = 0;
   for (; i < session_count; i++) {
     if (session_array[i].related_fd == related_fd) {
+      found = 1;
       break;
     }
   }
 
-  for (; i < session_count - 1; i++) {
-    session_array[i] = session_array[i + 1];
-  }
+  if (found == 1) {
+    for (; i < session_count - 1; i++) {
+      session_array[i] = session_array[i + 1];
+    }
 
-  session_count--;
+    if (session_count > 0)
+      session_count--;
+  }
 
   pthread_mutex_unlock(&session_mutex);
 }

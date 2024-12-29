@@ -1,12 +1,13 @@
 #ifndef HTTP_STATIC_H
 #define HTTP_STATIC_H
 
-#define HTTP_HEADER_SIZE 1024
+#define HTTP_HEADER_SIZE 256
 #define HTTP_URI_SIZE 512
 #define HTTP_VERSION_SIZE 16
-#define HTTP_METHOD_SIZE 16
+#define HTTP_METHOD_SIZE 8
 #define HTTP_BODY_SIZE 16192
 #define HTTP_HEADER_SMALL_SIZE 128
+#define HTTP_HEADER_ETAG_SIZE 65
 #define HTTP_VERSION "1.1"
 
 #include "../static.h"
@@ -36,6 +37,7 @@ typedef enum { KEEP_ALIVE, CLOSE } http_connection;
 
 typedef enum {
   HTTP_OK = 200,
+  HTTP_NOT_MODIFIED = 304,
   HTTP_BAD_REQUEST = 400,
   HTTP_NOT_FOUND = 404,
   HTTP_METHOD_NOT_ALLOWED = 405,
@@ -51,6 +53,9 @@ typedef struct {
   long content_length;
   char content_language[HTTP_HEADER_SMALL_SIZE];
   char content_encoding[HTTP_HEADER_SMALL_SIZE];
+  char last_modified[HTTP_HEADER_SMALL_SIZE];
+  char date[HTTP_HEADER_SMALL_SIZE];
+  char etag[HTTP_HEADER_ETAG_SIZE];
   char body[HTTP_BODY_SIZE];
 } http_response_t;
 
@@ -63,6 +68,7 @@ typedef struct {
   char accept[HTTP_HEADER_SIZE];
   char accept_language[HTTP_HEADER_SIZE];
   char accept_encoding[HTTP_HEADER_SIZE];
+  char if_none_match[HTTP_HEADER_ETAG_SIZE];
   http_connection connection;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;

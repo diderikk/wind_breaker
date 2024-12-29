@@ -2,11 +2,12 @@
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
 #include "connection_cases.h"
+#include "http_cases.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-static const int case_count = 4;
+static const int case_count = 1;
 static pthread_t *cases = NULL;
 
 int start_case(void *(*func)(void *), struct connection_data *arg, int case_id);
@@ -19,11 +20,13 @@ void run_cases(char *ip, char *port) {
   assert(test_connection(ip, port) == 0);
 
   struct connection_data arg = {ip, port, seed};
-  start_case(start_connection_delay_before_close, &arg, 0);
-  start_case(start_connection_send_recv_ten_times, &arg, 1);
-  start_case(start_connection_close, &arg, 2);
-  sleep(1);
-  start_case(start_connections_simultaneously, &arg, 3);
+  // start_case(start_connection_delay_before_close, &arg, 0);
+  //  start_case(start_connection_send_recv_ten_times, &arg, 1);
+  // start_case(start_connection_close, &arg, 2);
+  // sleep(1);
+  // start_case(start_connections_simultaneously, &arg, 3);
+  // sleep(1);
+  start_case(start_http_get_request, &arg, 0);
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);
