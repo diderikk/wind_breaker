@@ -14,7 +14,7 @@ static FILE *log_file = NULL;
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 FILE *logger_init(LOG_LEVEL level, LOG_DESTINATION destination,
-                  char *file_path) {
+                  const char *file_path) {
   log_level = level;
   log_destination = destination;
 
@@ -123,7 +123,7 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
       }
       vfprintf(log_file, message, args_f);
       if (level == ERROR && errno != 0) {
-        fprintf(log_file, ": %s\n", strerror(errno));
+        fprintf(log_file, ": %d %s\n", errno, strerror(errno));
       } else {
         fprintf(log_file, "\n");
       }
@@ -141,7 +141,7 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
     }
     vfprintf(stdout, message, args_c);
     if (level == ERROR && errno != 0) {
-      fprintf(stdout, ": %s\n", strerror(errno));
+      fprintf(stdout, ": %d %s\n", errno, strerror(errno));
     } else {
       fprintf(stdout, "\n");
     }

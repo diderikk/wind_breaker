@@ -26,9 +26,9 @@ int workers_init(int worker_size, void *(*worker_func)(void *),
   return 0;
 }
 
-int workers_close(int *worker_size) {
+int workers_close(int worker_size) {
   int closed_threads = 0;
-  for (int i = 0; i < *worker_size; i++) {
+  for (int i = 0; i < worker_size; i++) {
     // Request thread cancellation
     //    if (pthread_cancel(*threads[i]) != 0) {
     //        perror("Failed to cancel thread");

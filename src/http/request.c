@@ -6,27 +6,22 @@
 #include <stdio.h>
 #include <string.h>
 
-int parse_control_data(http_request_t *http_request, char *char_data);
-int parse_header_field(http_request_t *http_request, char *char_data);
-char *uri_to_file_name(char *uri);
+int parse_control_data(http_request_t *http_request, const char *char_data);
+int parse_header_field(http_request_t *http_request, const char *char_data);
 // int parse_trailer_fields(http_request_t* http_request, char * char_data);
 // int extract_body(http_request_t* http_request, char * char_data, long
 // content_size);
-http_method method_str_to_enum(char *raw_method);
+http_method method_str_to_enum(const char *raw_method);
 
-int parse_request(http_request_t *http_request, char *raw_request) {
+int parse_http_request(http_request_t *http_request, const char *raw_request) {
+  int return_value;
+  char raw_request_copy[REQUEST_RESPONSE_MAX_SIZE];
+  char *saveptr, *line;
+
   log_trace("Raw Request:\n%s", raw_request);
-  int return_value;
-  return_value = parse_http_request(http_request, raw_request);
 
-  if (return_value != 0)
-    return return_value;
-
-  return 0;
-}
-int parse_http_request(http_request_t *http_request, char *raw_request) {
-  int return_value;
-  char *line = strtok(raw_request, "\r\n");
+  memcpy(raw_request_copy, raw_request, REQUEST_RESPONSE_MAX_SIZE);
+  line = strtok_r(raw_request_copy, "\r\n", &saveptr);
   return_value = parse_control_data(http_request, line);
 
   if (return_value != 0)
@@ -35,7 +30,7 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
   log_info("extracted control data => method: %d, uri: %s, version: %s",
            http_request->method, http_request->uri, http_request->version);
 
-  while ((line = strtok(NULL, "\r\n")) != NULL) {
+  while ((line = strtok_r(NULL, "\r\n", &saveptr)) != NULL) {
     return_value = parse_header_field(http_request, line);
     if (return_value != 0)
       return return_value;
@@ -47,11 +42,12 @@ int parse_http_request(http_request_t *http_request, char *raw_request) {
            http_request->accept_language, http_request->accept_encoding,
            http_request->connection);
 
-  return 0;
+  return return_value;
 }
 
-int validate_request_headers(http_request_t *http_request) {
+int validate_request_headers(const http_request_t *http_request) {
   if (http_request->method != HTTP_GET) {
+    log_error("Method Not Allowed: %d", http_request->method);
     return HTTP_METHOD_NOT_ALLOWED;
   }
 
@@ -59,20 +55,30 @@ int validate_request_headers(http_request_t *http_request) {
   // Accept encoding can also fallback to plain text if not supported.
 
   // Validate Accept-Language header.
-  if (strcasestr(http_request->accept_language, "en-US") == NULL)
+  if (strcasestr(http_request->accept_language, "en-US") == NULL &&
+      strcasestr(http_request->accept_language, "en") == NULL &&
+      strcasestr(http_request->accept_language, "*") == NULL &&
+      strcmp(http_request->accept_language, "") != 0) {
+    log_error("Language Not Supported: %s", http_request->accept_language);
     return HTTP_NOT_ACCEPTABLE;
+  }
 
   // Validate URI to file path.
-  char *file_name = uri_to_file_name(http_request->uri);
+  const char *file_name = uri_to_file_name(http_request->uri);
   if (strcmp(http_request->uri, "/") == 0) {
-    if (file_name == NULL || !find_static_file(file_name))
+    if (file_name == NULL || !find_static_file(file_name)) {
+      log_error("File Not Found: %s", file_name);
       return HTTP_NOT_FOUND;
+    }
 
   } else if (strcmp(http_request->uri, "/favicon") == 0) {
-    if (file_name == NULL || !find_static_file(file_name))
+    if (file_name == NULL || !find_static_file(file_name)) {
+      log_error("File Not Found: %s", file_name);
       return HTTP_NOT_FOUND;
+    }
 
   } else {
+    log_error("Path Not Found: %s", http_request->uri);
     return HTTP_NOT_FOUND;
   }
 
@@ -80,32 +86,44 @@ int validate_request_headers(http_request_t *http_request) {
   if (strcasestr(file_name, ".html") != NULL) {
     if (strcasestr(http_request->accept, "text/html") == NULL &&
         strcasestr(http_request->accept, "text/*") == NULL &&
-        strcasestr(http_request->accept, "*/*") == NULL) {
+        strcasestr(http_request->accept, "*/*") == NULL &&
+        strcmp(http_request->accept, "") != 0) {
+      log_error("Accept Not Supported: %s", http_request->accept);
       return HTTP_NOT_ACCEPTABLE;
     }
   } else if (strcasestr(file_name, ".png") != NULL) {
     if (strcasestr(http_request->accept, "*/*") == NULL &&
         strcasestr(http_request->accept, "image/*") == NULL &&
-        strcasestr(http_request->accept, "image/png") == NULL)
+        strcasestr(http_request->accept, "image/png") == NULL &&
+        strcmp(http_request->accept, "") != 0) {
+      log_error("Accept Not Supported: %s", http_request->accept);
       return HTTP_NOT_ACCEPTABLE;
+    }
   } else if (strcasestr(file_name, ".css") != NULL) {
     if (strcasestr(http_request->accept, "text/css") == NULL &&
         strcasestr(http_request->accept, "text/*") == NULL &&
-        strcasestr(http_request->accept, "*/*") == NULL)
+        strcasestr(http_request->accept, "*/*") == NULL &&
+        strcmp(http_request->accept, "") != 0) {
+      log_error("Accept Not Supported: %s", http_request->accept);
       return HTTP_NOT_ACCEPTABLE;
+    }
   } else if (strcasestr(file_name, ".js") != NULL) {
     if (strcasestr(http_request->accept, "application/javascript") == NULL &&
         strcasestr(http_request->accept, "application/*") == NULL &&
-        strcasestr(http_request->accept, "*/*") == NULL)
+        strcasestr(http_request->accept, "*/*") == NULL &&
+        strcmp(http_request->accept, "") != 0) {
+      log_error("Accept Not Supported: %s", http_request->accept);
       return HTTP_NOT_ACCEPTABLE;
+    }
   } else {
+    log_error("File Type Not Supported: %s", file_name);
     return HTTP_NOT_ACCEPTABLE;
   }
 
   return HTTP_OK;
 }
 
-char *uri_to_file_name(char *uri) {
+char *uri_to_file_name(const char *uri) {
   if (strcmp(uri, "/") == 0) {
     return "index.html";
   } else if (strcmp(uri, "/favicon") == 0) {
@@ -115,7 +133,8 @@ char *uri_to_file_name(char *uri) {
   }
 }
 
-int parse_control_data(http_request_t *http_request, char *raw_control_data) {
+int parse_control_data(http_request_t *http_request,
+                       const char *raw_control_data) {
   http_method method;
   const char *pattern = "^([A-Z]{2,12}) ([^ ]+) (HTTP/[0-9.]{3})$";
   regmatch_t matches[4]; // Method, URI, Version
@@ -159,7 +178,8 @@ int parse_control_data(http_request_t *http_request, char *raw_control_data) {
 
 // Extracts the header field from the raw data and stores it in the http_request
 // Only one header field is extracted at a time.
-int parse_header_field(http_request_t *http_request, char *raw_header_field) {
+int parse_header_field(http_request_t *http_request,
+                       const char *raw_header_field) {
   const char *pattern = "^([A-Za-z0-9-]+):\\s(.*)$";
   regmatch_t matches[3]; // Header Name, Header Value
   char header_name[100];
@@ -175,7 +195,7 @@ int parse_header_field(http_request_t *http_request, char *raw_header_field) {
   }
 
   if (matches[2].rm_eo - matches[2].rm_so >= HTTP_HEADER_SIZE) {
-    log_error("Header value Too Big");
+    log_error("HTTP Header value Too Big");
     return -1;
   }
 
@@ -217,7 +237,7 @@ int parse_header_field(http_request_t *http_request, char *raw_header_field) {
   return 0;
 }
 
-http_method method_str_to_enum(char *raw_method) {
+http_method method_str_to_enum(const char *raw_method) {
   if (strncmp(raw_method, "POST", 4) == 0)
     return HTTP_POST;
   else if (strncmp(raw_method, "GET", 3) == 0)

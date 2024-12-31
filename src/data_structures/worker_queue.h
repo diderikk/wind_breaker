@@ -17,7 +17,7 @@ typedef struct {
 
 int init_queue();
 int destory_queue();
-void queue_push(int fd, char *data);
+void queue_push(int fd, const char *data);
 worker_data *queue_pop();
 
 #endif // QUEUE_H

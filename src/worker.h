@@ -9,6 +9,6 @@ typedef struct {
 
 int workers_init(int worker_size, void *(*worker_func)(void *),
                  void *worker_func_arg);
-int workers_close(int *worker_size);
+int workers_close(int worker_size);
 
 #endif // WORKER_H

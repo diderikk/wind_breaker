@@ -3,7 +3,7 @@
 #include "logger.h"
 #include <errno.h>
 
-int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
+int compress_gzip(const char *buffer, size_t buffer_size, char *to_buffer) {
   // Create a temporary file to store the gzip output
   FILE *tmp_file = tmpfile();
 
@@ -59,7 +59,52 @@ int compress_gzip(char *buffer, size_t buffer_size, char *to_buffer) {
   return compressed_size;
 }
 
-int compress_deflate(char *buffer, size_t buffer_size, char *to_buffer) {
+int decompress_gzip(const char *buffer, size_t buffer_size, char *to_buffer,
+                    size_t to_buffer_size) {
+  FILE *tmp_file = tmpfile();
+  if (!tmp_file) {
+    log_error("Failed to create temporary file");
+    return -1;
+  }
+  log_trace("tmp_file: %p", tmp_file);
+
+  if (fwrite(buffer, 1, buffer_size, tmp_file) != buffer_size) {
+    log_error("Failed to write compressed data to temporary file");
+    fclose(tmp_file);
+    return -1;
+  }
+  rewind(tmp_file);
+
+  gzFile gzfile = gzdopen(dup(fileno(tmp_file)), "rb");
+  if (!gzfile) {
+    log_error("Failed to open gzip file");
+    fclose(tmp_file);
+    return -1;
+  }
+  log_trace("gzfile: %p", gzfile);
+
+  int bytes_read = gzread(gzfile, to_buffer, to_buffer_size);
+  if (bytes_read < 0) {
+    int err;
+    const char *error_string = gzerror(gzfile, &err);
+    log_error("Failed to read from gzip file: %s", error_string);
+    gzclose(gzfile);
+    fclose(tmp_file);
+    return -1;
+  }
+  log_trace("bytes_read: %d", bytes_read);
+
+  if (gzclose(gzfile) != Z_OK) {
+    log_error("Failed to close gzip file");
+    fclose(tmp_file);
+    return -1;
+  }
+  fclose(tmp_file);
+
+  return bytes_read;
+}
+
+int compress_deflate(const char *buffer, size_t buffer_size, char *to_buffer) {
   uLong compressed_len = compressBound(buffer_size);
 
   z_stream defstream;
@@ -76,8 +121,30 @@ int compress_deflate(char *buffer, size_t buffer_size, char *to_buffer) {
   deflate(&defstream, Z_FINISH);
   deflateEnd(&defstream);
 
-  log_trace("Original size: %lu, Compressed size: %lu", buffer_size,
+  log_trace("Original size: %lu, Deflate Compressed size: %lu", buffer_size,
             defstream.total_out);
 
   return defstream.total_out;
+}
+
+int decompress_deflate(const char *buffer, size_t buffer_size, char *to_buffer,
+                       size_t to_buffer_size) {
+  z_stream infstream;
+  infstream.zalloc = Z_NULL;
+  infstream.zfree = Z_NULL;
+  infstream.opaque = Z_NULL;
+
+  infstream.avail_in = (uInt)buffer_size;
+  infstream.next_in = (Bytef *)buffer;
+  infstream.avail_out = (uInt)to_buffer_size;
+  infstream.next_out = (Bytef *)to_buffer;
+
+  inflateInit(&infstream);
+  inflate(&infstream, Z_FINISH);
+  inflateEnd(&infstream);
+
+  log_trace("Compressed size: %lu, Decompressed size: %lu", buffer_size,
+            infstream.total_out);
+
+  return infstream.total_out;
 }

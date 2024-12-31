@@ -7,7 +7,7 @@
 
 #define STATIC_PATH "static/"
 
-int find_static_file(char *uri) {
+int find_static_file(const char *uri) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, uri);
 
@@ -17,7 +17,7 @@ int find_static_file(char *uri) {
   return 1;
 }
 
-int read_static_file(char *file_path, char *buffer, size_t buffer_size) {
+int read_static_file(const char *file_path, char *buffer, size_t buffer_size) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_path);
 
@@ -32,7 +32,7 @@ int read_static_file(char *file_path, char *buffer, size_t buffer_size) {
   return read_size;
 }
 
-int write_static_file(char *file_name, char *buffer, size_t buffer_size) {
+int write_static_file(const char *file_name, char *buffer, size_t buffer_size) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_name);
 
@@ -47,7 +47,7 @@ int write_static_file(char *file_name, char *buffer, size_t buffer_size) {
   return write_size;
 }
 
-int get_last_modified(char *file_path) {
+int get_last_modified(const char *file_path) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_path);
 

@@ -8,6 +8,8 @@
 * Add simulator for testing.
 * Add more parsing for more HTTP headers.
 * Config file
+* Logging with color
+* Const correctness
 
 ## Requirements
 * CMake

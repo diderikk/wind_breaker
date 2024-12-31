@@ -7,15 +7,16 @@
 #include <netinet/ip.h>
 #include <sys/socket.h>
 
-int open_socket(struct addrinfo *server_info);
-int bind_socket(int socket_fd, struct addrinfo *server_info);
+int open_socket(const struct addrinfo *server_info);
+int bind_socket(int socket_fd, const struct addrinfo *server_info);
 int listen_socket(int socket_fd, int backlog_size);
 int accept_socket(int socket_fd, struct sockaddr *in_addr);
-int connect_socket(int socket_fd, struct sockaddr *in_addr, size_t addr_length);
-int send_socket(int socket_fd, char *buffer, size_t buffer_size);
+int connect_socket(int socket_fd, const struct sockaddr *in_addr,
+                   size_t addr_length);
+int send_socket(int socket_fd, const char *buffer, size_t buffer_size);
 int recv_socket(int socket_fd, char *buffer, size_t buffer_size);
-void *get_in_addr(struct sockaddr *sa);
-int get_in_addr_port(struct sockaddr *sa);
-void get_in_addr_str(struct sockaddr *sa, char *buffer, size_t length);
+void *get_in_addr(const struct sockaddr *sa);
+int get_in_addr_port(const struct sockaddr *sa);
+void get_in_addr_str(const struct sockaddr *sa, char *buffer, size_t length);
 
 #endif // SOCKET_H

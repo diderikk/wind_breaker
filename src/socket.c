@@ -8,7 +8,7 @@
 
 void disable_socket_blocking(int socket_fd);
 
-int open_socket(struct addrinfo *server_info) {
+int open_socket(const struct addrinfo *server_info) {
   int socket_fd;
   assert(server_info != NULL);
   assert(server_info->ai_family > 0);
@@ -22,7 +22,7 @@ int open_socket(struct addrinfo *server_info) {
   return socket_fd;
 }
 
-int bind_socket(int socket_fd, struct addrinfo *server_info) {
+int bind_socket(int socket_fd, const struct addrinfo *server_info) {
   int bind_result;
   assert(socket_fd > 0);
   assert(server_info != NULL);
@@ -62,7 +62,7 @@ int accept_socket(int socket_fd, struct sockaddr *in_addr) {
   return client_socket_fd;
 }
 
-int connect_socket(int socket_fd, struct sockaddr *in_addr,
+int connect_socket(int socket_fd, const struct sockaddr *in_addr,
                    size_t addr_length) {
   int connect_return;
   assert(socket_fd > 0);
@@ -75,7 +75,7 @@ int connect_socket(int socket_fd, struct sockaddr *in_addr,
   return connect_return;
 }
 
-int send_socket(int socket_fd, char *buffer, size_t buffer_size) {
+int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
   int send_return;
   assert(socket_fd > 0);
   assert(buffer != NULL);
@@ -83,7 +83,10 @@ int send_socket(int socket_fd, char *buffer, size_t buffer_size) {
 
   send_return = send(socket_fd, buffer, buffer_size, 0);
 
-  assert(send_return != -1);
+  if (send_return == -1) {
+    log_error("send error");
+    return -1;
+  }
   return send_return;
 }
 
@@ -108,7 +111,7 @@ int recv_socket(int socket_fd, char *buffer, size_t buffer_size) {
 // TODO: Move to separate file
 // https://beej.us/guide/bgnet/html/split/client-server-background.html
 // get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa) {
+void *get_in_addr(const struct sockaddr *sa) {
   assert(sa != NULL);
 
   if (sa->sa_family == AF_INET) {
@@ -118,7 +121,7 @@ void *get_in_addr(struct sockaddr *sa) {
   return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-int get_in_addr_port(struct sockaddr *sa) {
+int get_in_addr_port(const struct sockaddr *sa) {
   assert(sa != NULL);
 
   if (sa->sa_family == AF_INET) {
@@ -128,7 +131,7 @@ int get_in_addr_port(struct sockaddr *sa) {
   return ntohs(((struct sockaddr_in6 *)sa)->sin6_port);
 }
 
-void get_in_addr_str(struct sockaddr *sa, char *buffer, size_t length) {
+void get_in_addr_str(const struct sockaddr *sa, char *buffer, size_t length) {
   assert(sa != NULL);
 
   inet_ntop(sa->sa_family, get_in_addr(sa), buffer, length);

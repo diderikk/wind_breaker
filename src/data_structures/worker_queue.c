@@ -39,7 +39,7 @@ int destroy_queue() {
   return 0;
 }
 
-void queue_push(int fd, char *data) {
+void queue_push(int fd, const char *data) {
   assert(q != NULL);
   assert(data != NULL);
   pthread_mutex_lock(&q->mutex);

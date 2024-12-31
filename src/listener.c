@@ -13,13 +13,10 @@
 
 #define WORKER_COUNT 3
 
-void _listen(int listener, void (*request_handler)(int, char *));
-void handle_request_async(int fd, char *raw_request);
+void _listen(int listener, void (*request_handler)(int, const char *));
+void handle_request_async(int fd, const char *raw_request);
 void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
-void add_to_pfds_sync(struct pollfd *pfds[], int newfd, int *fd_count,
-                      int *fd_size);
-void del_from_pfds_sync(struct pollfd pfds[], int *i, int *fd_count);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
@@ -32,7 +29,7 @@ void listen_async(int listener) {
   _listen(listener, handle_request_async);
 }
 
-int get_listener_socket(char *port) {
+int get_listener_socket(const char *port) {
   assert(port != NULL);
 
   struct addrinfo hints, *servinfo, *p;
@@ -82,7 +79,7 @@ int get_listener_socket(char *port) {
   return socket_fd;
 }
 
-void _listen(int listener, void (*request_handler)(int, char *)) {
+void _listen(int listener, void (*request_handler)(int, const char *)) {
   assert(listener > 0);
   assert(request_handler != NULL);
 
@@ -216,14 +213,13 @@ void _listen(int listener, void (*request_handler)(int, char *)) {
   }
 }
 
-void handle_request_async(int fd, char *raw_request) {
+void handle_request_async(int fd, const char *raw_request) {
   queue_push(fd, raw_request);
 }
 
 void *worker_function(void *_arg) {
   // worker_arg *arg = (worker_arg *)_arg;
-  int response_code = 500;
-  unsigned long response_size;
+  int send_return, response_code, response_size;
   worker_data *data;
   http_request_t *http_request = malloc(sizeof(http_request_t));
   char *tmp_response_buffer = malloc(REQUEST_RESPONSE_MAX_SIZE);
@@ -233,6 +229,7 @@ void *worker_function(void *_arg) {
 
   memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
   memset(http_request, 0, sizeof(http_request_t));
+  response_code = 500;
 
   while (1) {
     data = queue_pop();
@@ -240,17 +237,17 @@ void *worker_function(void *_arg) {
 
     add_thread_to_session(data->fd);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
-    parse_request(http_request, data->data);
+    parse_http_request(http_request, data->data);
     response_code = validate_request_headers(http_request);
 
     response_size = construct_response(
         response_code, http_request->uri, http_request->accept_encoding,
         http_request->if_none_match, data->data, tmp_response_buffer);
 
-    send_socket(data->fd, data->data, response_size);
+    send_return = send_socket(data->fd, data->data, response_size);
     remove_thread_from_session();
     // TODO: Can cause the session_count to be decremented twice...
-    if (http_request->connection == CLOSE) {
+    if (http_request->connection == CLOSE || send_return == -1) {
       del_from_session_sync(data->fd);
     }
 

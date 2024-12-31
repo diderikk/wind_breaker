@@ -33,7 +33,7 @@ target_compile_options(main PRIVATE -Wall -Wextra -Werror -g -O3)
 target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 
 add_executable(client src/simulator/client.c)
-target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 target_compile_options(client PRIVATE -Wall -Wextra -Werror)
 
 # Add custom target to copy the static folder
