@@ -34,6 +34,8 @@ void run_cases(char *ip, char *port) {
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);
   }
+
+  log_info("Completed %d/%d cases", case_count, case_count);
 }
 
 int start_case(void *(*func)(void *), struct connection_data *arg,

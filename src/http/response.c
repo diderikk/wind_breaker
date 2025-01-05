@@ -138,7 +138,8 @@ size_t set_date(http_response_t *http_response) {
 
 size_t set_etag(http_response_t *http_response, const char *tmp_body,
                 size_t tmp_body_size) {
-  if (http_response->status_code != HTTP_OK) {
+  if (http_response->status_code != HTTP_OK ||
+      http_response->status_code == HTTP_NOT_MODIFIED) {
     strcpy(http_response->etag, "");
     return 0;
   } else {
@@ -158,9 +159,6 @@ void handle_if_none_match(http_response_t *http_response,
     strcpy(http_response->content_type, "");
     strcpy(http_response->content_language, "");
     strcpy(http_response->content_encoding, "");
-    strcpy(http_response->last_modified, "");
-    strcpy(http_response->date, "");
-    strcpy(http_response->etag, "");
     strcpy(http_response->body, "");
   }
 }
@@ -213,18 +211,30 @@ size_t to_string(const http_response_t *http_response, char *response_str) {
                      "HTTP/%s %d %s\r\n", HTTP_VERSION,
                      http_response->status_code, status_code_str);
 
-  offset += snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
-                     "Content-Type: %s\r\n", http_response->content_type);
+  if (strlen(http_response->content_type) > 0) {
+    offset +=
+        snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+                 "Content-Type: %s\r\n", http_response->content_type);
+  }
 
-  offset += snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
-                     "Content-Length: %ld\r\n", http_response->content_length);
+  if (http_response->content_length > 0) {
+    offset +=
+        snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+                 "Content-Length: %ld\r\n", http_response->content_length);
+  }
 
-  offset +=
-      snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
-               "Content-Language: %s\r\n", http_response->content_language);
+  if (strlen(http_response->content_language) > 0) {
+    offset +=
+        snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+                 "Content-Language: %s\r\n", http_response->content_language);
+  }
 
-  offset += snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
-                     "Date: %s\r\n", http_response->date);
+  if (strlen(http_response->date) > 0) {
+    offset +=
+        snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+                 "Date: %s\r\n", http_response->date);
+  }
+
   if (strlen(http_response->etag) > 0) {
     offset +=
         snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
@@ -243,17 +253,19 @@ size_t to_string(const http_response_t *http_response, char *response_str) {
                  "Content-Encoding: %s\r\n", http_response->content_encoding);
   }
 
-  offset += snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
-                     "\r\n");
+  if (http_response->content_length > 0) {
+    offset += snprintf(response_str + offset,
+                       REQUEST_RESPONSE_MAX_SIZE - offset, "\r\n");
 
-  if (offset + http_response->content_length >= REQUEST_RESPONSE_MAX_SIZE) {
-    log_error("Response Buffer Overflow");
-    return -1;
+    if (offset + http_response->content_length >= REQUEST_RESPONSE_MAX_SIZE) {
+      log_error("Response Buffer Overflow");
+      return -1;
+    }
+
+    memcpy(response_str + offset, http_response->body,
+           http_response->content_length);
+    offset += http_response->content_length;
   }
-
-  memcpy(response_str + offset, http_response->body,
-         http_response->content_length);
-  offset += http_response->content_length;
 
   return offset;
 }
@@ -273,6 +285,8 @@ char *http_status_code_to_str(http_status_code status_code) {
   switch (status_code) {
   case HTTP_OK:
     return "OK";
+  case HTTP_NOT_MODIFIED:
+    return "Not Modified";
   case HTTP_BAD_REQUEST:
     return "Bad Request";
   case HTTP_NOT_FOUND:

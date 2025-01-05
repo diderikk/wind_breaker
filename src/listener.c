@@ -11,8 +11,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define WORKER_COUNT 3
-
 void _listen(int listener, void (*request_handler)(int, const char *));
 void handle_request_async(int fd, const char *raw_request);
 void *worker_function(void *_arg);
@@ -20,16 +18,9 @@ POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
-void listen_async(int listener) {
-  assert(init_queue() == 0);
-  init_session_cache();
+void listen_async(int listener) { _listen(listener, handle_request_async); }
 
-  assert(workers_init(WORKER_COUNT, worker_function, NULL) == 0);
-
-  _listen(listener, handle_request_async);
-}
-
-int get_listener_socket(const char *port) {
+int get_listener_socket(const char *port, int backlog) {
   assert(port != NULL);
 
   struct addrinfo hints, *servinfo, *p;
@@ -66,7 +57,7 @@ int get_listener_socket(const char *port) {
   assert(p != NULL);
 
   // Begins listening, BACKLOG is the max amount of waiting connections
-  listen_socket(socket_fd, LISTEN_BACKLOG);
+  listen_socket(socket_fd, backlog);
 
   get_in_addr_str(p->ai_addr, ip_str, sizeof(ip_str));
   log_info("Listening for connections on: Address: %s, Port %d", ip_str,
@@ -217,7 +208,7 @@ void handle_request_async(int fd, const char *raw_request) {
   queue_push(fd, raw_request);
 }
 
-void *worker_function(void *_arg) {
+void *listener_worker_function(void *_arg) {
   // worker_arg *arg = (worker_arg *)_arg;
   int send_return, response_code, response_size;
   worker_data *data;

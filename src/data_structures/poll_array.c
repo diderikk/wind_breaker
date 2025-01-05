@@ -1,10 +1,9 @@
 #include "poll_array.h"
+#include "../properties.h"
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
 #include <stdlib.h>
 #include <unistd.h>
-
-#define POLL_ARRAY_SIZE 64
 
 static struct pollfd *poll_array = NULL;
 static int poll_array_size = 0;
@@ -15,9 +14,9 @@ void init_poll_array(int listen_fd) {
   assert(listen_fd > 0);
   assert(poll_array == NULL);
 
-  poll_array = calloc(POLL_ARRAY_SIZE, sizeof *poll_array);
+  poll_array = calloc(get_poll_array_max_size(), sizeof *poll_array);
 
-  log_info("Initialized poll array with size %d", POLL_ARRAY_SIZE);
+  log_info("Initialized poll array with size %d", get_poll_array_max_size());
   poll_array[0].fd = listen_fd;
   poll_array[0].events = POLLIN; // Report ready to read on incoming connection
   poll_array_size = 1;
@@ -47,7 +46,7 @@ void add_poll_fd_sync(int fd) {
   log_trace("Poller: Adding fd %d", fd);
 
   // If we don't have room, reset the array size
-  if (poll_array_size == POLL_ARRAY_SIZE) {
+  if (poll_array_size == get_poll_array_max_size()) {
     poll_array_size = 1;
   }
 
@@ -56,7 +55,7 @@ void add_poll_fd_sync(int fd) {
 
   poll_array_size++;
 
-  assert(poll_array_size <= POLL_ARRAY_SIZE);
+  assert(poll_array_size <= get_poll_array_max_size());
   assert(poll_array_size > 0);
   log_trace("Added new socket %d", fd);
 }

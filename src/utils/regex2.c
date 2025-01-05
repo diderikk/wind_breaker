@@ -13,27 +13,17 @@ int match_regex(const char *pattern, const char *text, int match_count,
   // Execute the regular expression
   ret = regexec(&regex, text, match_count, matches, flags);
   if (!ret) {
-    // printf("Match found:\n");
-
-    // Print the entire match
-    //        for (int i = 0; i < match_count; i++) {
-    //            if (matches[i].rm_so != -1) {
-    //                printf("Match %d: %.*s\n", i, matches[i].rm_eo -
-    //                matches[i].rm_so, text + matches[i].rm_so);
-    //            }
-    //        }
+    regfree(&regex);
+    return match_count;
   } else if (ret == REG_NOMATCH) {
     log_warn("No match for regex: %s on %s", pattern, text);
+    regfree(&regex);
     return -1;
   } else {
     char errbuf[100];
     regerror(ret, &regex, errbuf, sizeof(errbuf));
     log_error("Regex match failed: %s", errbuf);
+    regfree(&regex);
     return -1;
   }
-
-  // Free the compiled regular expression
-  regfree(&regex);
-
-  return match_count;
 }

@@ -33,10 +33,10 @@ void *start_connection_delay_before_close(void *arg) {
 
   int err;
   socklen_t len = sizeof(err);
-  int sleep_time = data->seed % 301;
+  int sleep_time = data->seed % 60;
 
   log_trace("Sleeping for %d seconds", sleep_time);
-  // Sleep for a random amount of time. Max 300 seconds
+  // Sleep for a random amount of time. Max 60 seconds
   sleep(sleep_time);
   assert(getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &err, &len) != -1);
 
@@ -62,6 +62,8 @@ void *start_connections_simultaneously(void *arg) {
   for (int i = 0; i < amount_of_connections; i++) {
     pthread_join(threads[i], NULL);
   }
+
+  free(threads);
 
   return 0;
 }

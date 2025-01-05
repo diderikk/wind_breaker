@@ -3,18 +3,20 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#define INITIAL_SESSION_SIZE 500
-
 static struct session *session_array = NULL;
+static int max_size = 0;
 static int session_count = 0;
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-void init_session_cache() {
+int init_session_cache(int _max_size) {
   if (session_array != NULL) {
-    return;
+    return -1;
   }
   // Static array of sessions, should not be resized... Tiger style
-  session_array = calloc(INITIAL_SESSION_SIZE, sizeof(*session_array));
+  session_array = calloc(_max_size, sizeof(*session_array));
+  assert(session_array != NULL);
+  max_size = _max_size;
+  return 0;
 }
 
 // Add a new session to the set
@@ -22,7 +24,7 @@ void add_to_session_sync(int related_fd) {
   assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   // Ring buffer... could also used modular arithmetic
-  if (session_count == INITIAL_SESSION_SIZE) {
+  if (session_count == max_size) {
     session_count = 0;
   }
 

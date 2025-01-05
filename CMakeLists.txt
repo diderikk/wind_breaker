@@ -10,9 +10,15 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+function(enable_address_sanitizer target)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3) #-fsanitize=address -static-libasan)
+    #target_link_options(${target} PRIVATE -fsanitize=address -static-libasan)
+endfunction()
+
 add_library(socket_lib STATIC src/socket.c)
 add_library(listener_lib STATIC src/listener.c)
 add_library(worker_lib STATIC src/worker.c)
+add_library(properties_lib STATIC src/properties.c)
 add_library(worker_queue_lib STATIC src/data_structures/worker_queue.c)
 add_library(poll_array_lib STATIC src/data_structures/poll_array.c)
 add_library(http_request_lib STATIC src/http/request.c)
@@ -29,13 +35,12 @@ add_library(simulator_connection_lib STATIC src/simulator/connection_cases.c)
 add_library(simulator_http_lib STATIC src/simulator/http_cases.c)
 
 add_executable(main src/main.c)
-target_compile_options(main PRIVATE -Wall -Wextra -Werror -g -O3)
-target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+enable_address_sanitizer(main)
 
 add_executable(client src/simulator/client.c)
 target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
-target_compile_options(client PRIVATE -Wall -Wextra -Werror)
-
+enable_address_sanitizer(client)
 # Add custom target to copy the static folder
 add_custom_target(copy_static ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory

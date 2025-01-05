@@ -7,7 +7,7 @@ struct session {
   unsigned long thread_id;
 };
 
-void init_session_cache();
+int init_session_cache(int _max_size);
 void add_thread_to_session(int related_fd);
 void remove_thread_from_session();
 void add_to_session_sync(int related_fd);

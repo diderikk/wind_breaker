@@ -1,4 +1,5 @@
 #include "worker_queue.h"
+#include "../properties.h"
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
 #include <stdlib.h>
@@ -7,12 +8,12 @@
 static queue_t *q = NULL;
 
 int init_queue() {
-  assert(QUEUE_MAX_SIZE > 0);
+  assert(get_queue_max_size() > 0);
   assert(q == NULL);
 
   q = (queue_t *)malloc(sizeof(queue_t));
-  q->data = (worker_data **)calloc(QUEUE_MAX_SIZE, sizeof(worker_data));
-  for (int i = 0; i < QUEUE_MAX_SIZE; i++) {
+  q->data = (worker_data **)calloc(get_queue_max_size(), sizeof(worker_data));
+  for (int i = 0; i < get_queue_max_size(); i++) {
     q->data[i] = (worker_data *)calloc(1, sizeof(worker_data));
   }
 
@@ -23,7 +24,7 @@ int init_queue() {
   assert(pthread_mutex_init(&q->mutex, NULL) == 0);
   assert(pthread_cond_init(&q->cond, NULL) == 0);
 
-  log_info("Initialized queue with size %d", QUEUE_MAX_SIZE);
+  log_info("Initialized queue with size %d", get_queue_max_size());
   return 0;
 }
 
@@ -44,14 +45,14 @@ void queue_push(int fd, const char *data) {
   assert(data != NULL);
   pthread_mutex_lock(&q->mutex);
 
-  while (q->count == QUEUE_MAX_SIZE) {
+  while (q->count == get_queue_max_size()) {
     // Wait until there is space in the queue
     pthread_cond_wait(&q->cond, &q->mutex);
   }
 
   q->data[q->rear]->fd = fd;
   memcpy(q->data[q->rear]->data, data, REQUEST_RESPONSE_MAX_SIZE);
-  q->rear = (q->rear + 1) % QUEUE_MAX_SIZE;
+  q->rear = (q->rear + 1) % get_queue_max_size();
   q->count++;
 
   pthread_cond_signal(&q->cond);
@@ -70,7 +71,7 @@ worker_data *queue_pop() {
   }
 
   void *data = q->data[q->front];
-  q->front = (q->front + 1) % QUEUE_MAX_SIZE;
+  q->front = (q->front + 1) % get_queue_max_size();
   q->count--;
 
   pthread_cond_signal(&q->cond);

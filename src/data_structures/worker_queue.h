@@ -1,8 +1,6 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#define QUEUE_MAX_SIZE 1024
-
 #include "../static.h"
 #include "pthread.h"
 
