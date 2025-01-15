@@ -5,6 +5,7 @@
 #include "listener.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
+#include "worker.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>

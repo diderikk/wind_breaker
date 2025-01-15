@@ -12,6 +12,7 @@ static int queue_max_size = 1024;
 static int worker_thread_max_size = 4;
 static int listen_backlog_max_size = 50;
 static char http_port[5] = "8080";
+static char https_port[5] = "8443";
 static char env[4] = "dev";
 static char log_file[200] = "/var/log/wind_breaker/app.log";
 static LOG_LEVEL log_level = TRACE;
@@ -221,6 +222,8 @@ int get_worker_thread_max_size() { return worker_thread_max_size; }
 int get_listen_backlog_max_size() { return listen_backlog_max_size; }
 
 const char *get_http_port() { return http_port; }
+
+const char *get_https_port() { return https_port; }
 
 const char *get_env() { return env; }
 

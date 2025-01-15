@@ -10,6 +10,7 @@ int get_queue_max_size();
 int get_worker_thread_max_size();
 int get_listen_backlog_max_size();
 const char *get_http_port();
+const char *get_https_port();
 const char *get_env();
 const char *get_log_file();
 LOG_LEVEL get_log_level();
