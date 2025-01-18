@@ -82,6 +82,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
   sigset_t sigmask;
   struct sockaddr_storage client_addr;
   struct pollfd *poll;
+  poll_array *poll_fd_array = NULL;
   POLL_ERROR_CLASS error_class;
 
   loop_counter = 0;
@@ -89,21 +90,21 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
   memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
   memset(ip_str, 0, INET6_ADDRSTRLEN);
   sigemptyset(&sigmask);
-  init_poll_array(listener);
+  init_poll_array(&poll_fd_array, listener);
 
   // Continously listen for new connections
   while (!stop()) {
     loop_counter++;
     assert(loop_counter <= 51);
-    assert(get_poll_array_size() > 0);
+    assert(poll_fd_array->count > 0);
     log_info("Number of active sockets (including listener): %d",
-             get_poll_array_size());
+             poll_fd_array->count);
 
     // https://man7.org/linux/man-pages/man2/poll.2.html
     // NULL causes the poll system call to poll until a revents
     // is updated by the kernel
     event_count =
-        ppoll(get_poll_array(), get_poll_array_size(), NULL, &sigmask);
+        ppoll(poll_fd_array->fds, poll_fd_array->count, NULL, &sigmask);
 
     if (event_count < 0) {
       error_class = classify_poll_error(errno);
@@ -113,15 +114,15 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
     }
 
     // Iterate through all the file descriptors and check for events
-    for (int i = 0; i < get_poll_array_size(); i++) {
-      poll = get_poll_fd_by_index(i);
+    for (int i = 0; i < poll_fd_array->count; i++) {
+      poll = &poll_fd_array->fds[i];
       assert(poll != NULL);
 
       // On every 50th event, validate the existing sockets:
       if (loop_counter >= 50) {
         if (check_for_socket_error(poll->fd) == -1) {
           del_from_session_sync(poll->fd);
-          remove_poll_fd_by_index_sync(&i);
+          remove_poll_fd_by_index_sync(poll_fd_array, &i);
         }
         loop_counter = 0;
         continue;
@@ -133,7 +134,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
           del_from_session_sync(poll->fd);
-          remove_poll_fd_by_index_sync(&i);
+          remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
       }
@@ -141,7 +142,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
         log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
           del_from_session_sync(poll->fd);
-          remove_poll_fd_by_index_sync(&i);
+          remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
       }
@@ -162,7 +163,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
           log_info("Client connect %s:%d", ip_str,
                    get_in_addr_port((struct sockaddr *)&client_addr));
           add_to_session_sync(client_socket_fd);
-          add_poll_fd_sync(client_socket_fd);
+          add_poll_fd_sync(poll_fd_array, client_socket_fd);
           continue;
         } else {
           log_debug("Polling for existing client to send data...");
@@ -183,7 +184,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
             }
 
             del_from_session_sync(poll->fd);
-            remove_poll_fd_by_index_sync(&i);
+            remove_poll_fd_by_index_sync(poll_fd_array, &i);
             continue;
           }
         }
@@ -193,17 +194,18 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
       if (poll->revents & POLLHUP) {
         log_warn("%s", get_poll_event_description(POLLHUP));
         del_from_session_sync(poll->fd);
-        remove_poll_fd_by_index_sync(&i);
+        remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
       if (poll->revents & POLLRDHUP) {
         log_warn("%s", get_poll_event_description(POLLRDHUP));
         del_from_session_sync(poll->fd);
-        remove_poll_fd_by_index_sync(&i);
+        remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
     }
   }
+  destroy_poll_array(poll_fd_array);
 }
 
 void handle_request_async(int fd, const char *raw_request) {
@@ -246,8 +248,9 @@ void *listener_worker_function(void *_arg) {
       del_from_session_sync(data->fd);
     }
 
-    // Free worker queue data
-    free(data);
+    // Reset worker queue data
+    memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);
+    data->fd = 0;
 
     // Reset buffers
     memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
@@ -259,9 +262,11 @@ void *listener_worker_function(void *_arg) {
   free(tmp_response_buffer);
   free(http_request);
   free(data);
+  free(_arg);
   tmp_response_buffer = NULL;
   http_request = NULL;
   data = NULL;
+  _arg = NULL;
   return NULL;
 }
 

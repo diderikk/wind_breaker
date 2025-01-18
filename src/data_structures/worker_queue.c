@@ -33,9 +33,13 @@ void destroy_queue() {
   assert(q != NULL);
 
   for (int i = 0; i < get_queue_max_size(); i++) {
-    free(q->data[i]);
+    if(q->data[i] != NULL) {
+      free(q->data[i]);
+      q->data[i] = NULL;
+    }
   }
   free(q->data);
+  q->data = NULL;
 
   assert(pthread_mutex_destroy(&q->mutex) == 0);
   assert(pthread_cond_destroy(&q->cond) == 0);
@@ -45,6 +49,7 @@ void destroy_queue() {
 
   log_info("Destroyed queue\n");
 }
+
 void broadcast_queue() {
   assert(q != NULL);
   pthread_mutex_lock(&q->mutex);

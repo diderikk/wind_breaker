@@ -5,76 +5,87 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-static struct pollfd *poll_array = NULL;
-static int poll_array_size = 0;
+static int max_count = 0;
 
 // Initialize the poll array with the listen_fd
-// This should be called once, when the server starts
-void init_poll_array(int listen_fd) {
+// This should be called once, when the server fronts
+void init_poll_array(poll_array **pa, int listen_fd) {
   assert(listen_fd > 0);
-  assert(poll_array == NULL);
+  assert(*pa == NULL);
+  max_count = get_poll_array_max_size();
 
-  poll_array = calloc(get_poll_array_max_size(), sizeof *poll_array);
+  *pa = calloc(1, sizeof(**pa));
+  assert(*pa != NULL);
 
-  log_info("Initialized poll array with size %d", get_poll_array_max_size());
-  poll_array[0].fd = listen_fd;
-  poll_array[0].events = POLLIN; // Report ready to read on incoming connection
-  poll_array_size = 1;
+  (*pa)->fds = calloc(max_count, sizeof(struct pollfd));
+  assert((*pa)->fds != NULL);
+
+  log_info("Initialized poll array with count %d", max_count);
+  (*pa)->fds[0].fd = listen_fd;
+  (*pa)->fds[0].events = POLLIN; // Report ready to read on incoming connection
+  (*pa)->count = 1;
+  (*pa)->last_in_index = 1;
 }
 
-struct pollfd *get_poll_array() {
-  assert(poll_array != NULL);
-  return poll_array;
+void destroy_poll_array(poll_array *pa) {
+  assert(pa != NULL);
+  free(pa->fds);
+  pa->fds = NULL;
+  free(pa);
+  pa = NULL;
 }
 
-struct pollfd *get_poll_fd_by_index(int index) {
-  assert(index >= 0);
-  assert(index < poll_array_size);
-  assert(poll_array != NULL);
 
-  return &poll_array[index];
+void add_poll_fd_sync(poll_array *pa, int fd) {
+    assert(fd > 0);
+    assert(pa != NULL);
+    log_trace("Poller: Adding fd %d\n", fd);
+
+    int next = pa->count < max_count ? pa->count : pa->last_in_index;
+    // Dont overwrite the listen_fd
+    if(next == 0)
+      next++;
+
+    pa->fds[next].fd = fd;
+    pa->fds[next].events = POLLIN; // Check ready-to-read
+    pa->fds[next].revents = 0;
+
+    if(pa->count < max_count)
+      pa->count++;
+    else {
+      pa->last_in_index = (pa->last_in_index + 1) % max_count;
+      // Dont overwrite the listen_fd
+      if(pa->last_in_index == 0)
+        pa->last_in_index++;
+    }
+
+
+    log_trace("Added new socket %d\n", fd);
+    assert(pa->count <= max_count);
+    assert(pa->last_in_index < max_count);
 }
 
-int get_poll_array_size() {
-  assert(poll_array_size > 0);
-  return poll_array_size;
-}
+void remove_poll_fd_by_index_sync(poll_array *pa, int *i) {
+    assert(*i > 0);
+    assert(pa != NULL);
+    assert(*i < pa->count);
 
-void add_poll_fd_sync(int fd) {
-  assert(fd > 0);
-  assert(poll_array != NULL);
-  log_trace("Poller: Adding fd %d", fd);
+    log_trace("Removing fd %d\n", pa->fds[*i].fd);
 
-  // If we don't have room, reset the array size
-  if (poll_array_size == get_poll_array_max_size()) {
-    poll_array_size = 1;
-  }
+    close(pa->fds[*i].fd);
 
-  poll_array[poll_array_size].fd = fd;
-  poll_array[poll_array_size].events = POLLIN; // Check ready-to-read
+    for (int j = *i; j < pa->count - 1; j++) {
+        pa->fds[j].fd = pa->fds[(j + 1)].fd;
+        pa->fds[j].events = pa->fds[(j + 1)].events;
+        pa->fds[j].revents = pa->fds[(j + 1)].revents;
+    }
 
-  poll_array_size++;
+    pa->count--;
+    if(*i < pa->last_in_index)
+      pa->last_in_index--;
+    (*i)--;
 
-  assert(poll_array_size <= get_poll_array_max_size());
-  assert(poll_array_size > 0);
-  log_trace("Added new socket %d", fd);
-}
-
-void remove_poll_fd_by_index_sync(int *i) {
-  assert(*i >= 0);
-  assert(*i < poll_array_size);
-  assert(poll_array != NULL);
-
-  log_trace("Removing fd %d", poll_array[*i].fd);
-
-  close(poll_array[*i].fd);
-  // Copy the one from the end over this one
-  for (int j = *i; j < poll_array_size - 1; j++) {
-    poll_array[j] = poll_array[j + 1];
-  }
-
-  poll_array_size--;
-  (*i)--;
-
-  assert(poll_array_size > 0);
+    log_trace("Removed fd, new count is %d\n", pa->count);
+    assert(pa->count > 0);
+    assert(pa->last_in_index > 0);
 }

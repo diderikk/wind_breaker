@@ -1,5 +1,7 @@
 #include "signal2.h"
 #include "../data_structures/worker_queue.h"
+#include "../data_structures/session.h"
+#include "../data_structures/poll_array.h"
 #include "../properties.h"
 #include "../utils/logger.h"
 #include "../worker.h"
@@ -37,6 +39,7 @@ void handle_signal(int signum) {
   if (socket_fd2 != -1) {
     close(socket_fd2);
   }
+  destroy_session_cache();
   close_workers(get_worker_thread_max_size());
 
   if (log_file != NULL) {

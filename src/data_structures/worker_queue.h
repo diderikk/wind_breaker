@@ -6,9 +6,7 @@
 
 typedef struct {
   worker_data **data;
-  int front;
-  int rear;
-  int count;
+  int count, front, rear;
   pthread_mutex_t mutex;
   pthread_cond_t cond;
 } queue_t;

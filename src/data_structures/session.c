@@ -6,6 +6,7 @@
 static struct session *session_array = NULL;
 static int max_size = 0;
 static int session_count = 0;
+static int session_last_in_index = 0;
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int init_session_cache(int _max_size) {
@@ -19,22 +20,26 @@ int init_session_cache(int _max_size) {
   return 0;
 }
 
-// Add a new session to the set
+void destroy_session_cache() {
+  assert(session_array != NULL);
+  free(session_array);
+  session_array = NULL;
+}
+
 void add_to_session_sync(int related_fd) {
   assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   // Ring buffer... could also used modular arithmetic
-  if (session_count == max_size) {
-    session_count = 0;
+  int next = session_count < max_size ? session_count : session_last_in_index;
+
+  session_array[next].id = rand();
+  session_array[next].related_fd = related_fd;
+
+  if (session_count < max_size) {
+    session_count++;
+  } else {
+    session_last_in_index = (session_last_in_index + 1) % max_size;
   }
-
-  session_array[session_count].id = rand();
-  session_array[session_count].related_fd = related_fd;
-  // Should only be called from the main thread (thread that polls for new
-  // connections)
-  // session_array[session_count].thread_id = pthread_self();
-
-  session_count++;
   pthread_mutex_unlock(&session_mutex);
 }
 
@@ -101,11 +106,19 @@ void del_from_session_sync(int related_fd) {
 
   if (found == 1) {
     for (; i < session_count - 1; i++) {
-      session_array[i] = session_array[i + 1];
+      session_array[i].related_fd = session_array[i + 1].related_fd;
+      session_array[i].id = session_array[i + 1].id;
+      session_array[i].thread_id = session_array[i + 1].thread_id;
+      session_array[i + 1].thread_id = 0;
+      session_array[i + 1].related_fd = 0;
+      session_array[i + 1].id = 0;
     }
 
     if (session_count > 0)
       session_count--;
+
+    if (i < session_last_in_index)
+      session_last_in_index--;
   }
 
   pthread_mutex_unlock(&session_mutex);
