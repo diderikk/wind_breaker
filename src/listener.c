@@ -1,8 +1,9 @@
-#include "static.h"
 #define _GNU_SOURCE
+#include "listener.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
-#include "listener.h"
+#include "shutdown/stop.h"
+#include "static.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
 #include "worker.h"
@@ -91,7 +92,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
   init_poll_array(listener);
 
   // Continously listen for new connections
-  while (1) {
+  while (!stop()) {
     loop_counter++;
     assert(loop_counter <= 51);
     assert(get_poll_array_size() > 0);
@@ -223,9 +224,11 @@ void *listener_worker_function(void *_arg) {
   memset(http_request, 0, sizeof(http_request_t));
   response_code = 500;
 
-  while (1) {
+  while (!stop()) {
     data = queue_pop();
-    assert(data != NULL);
+    if (data == NULL) {
+      continue;
+    }
 
     add_thread_to_session(data->fd);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());

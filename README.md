@@ -5,11 +5,14 @@
 * Caching
 * SQLite
 * Images referencing
-* Add simulator for testing.
 * Add more parsing for more HTTP headers.
 * Logging with color
-* Const correctness
 * IPv6?
+
+## Try to remember
+* Clean up includes
+* Use `const` where possible
+* Use `static` where possible
 
 ## Requirements
 * CMake

@@ -1,5 +1,6 @@
 #include "worker_queue.h"
 #include "../properties.h"
+#include "../shutdown/stop.h"
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
 #include <stdlib.h>
@@ -28,16 +29,27 @@ int init_queue() {
   return 0;
 }
 
-int destroy_queue() {
+void destroy_queue() {
   assert(q != NULL);
+
+  for (int i = 0; i < get_queue_max_size(); i++) {
+    free(q->data[i]);
+  }
+  free(q->data);
+
   assert(pthread_mutex_destroy(&q->mutex) == 0);
   assert(pthread_cond_destroy(&q->cond) == 0);
 
   free(q);
   q = NULL;
 
-  log_info("Destroyed queue");
-  return 0;
+  log_info("Destroyed queue\n");
+}
+void broadcast_queue() {
+  assert(q != NULL);
+  pthread_mutex_lock(&q->mutex);
+  pthread_cond_broadcast(&q->cond);
+  pthread_mutex_unlock(&q->mutex);
 }
 
 void queue_push(int fd, const char *data) {
@@ -65,9 +77,14 @@ worker_data *queue_pop() {
   assert(q != NULL);
   pthread_mutex_lock(&q->mutex);
 
-  while (q->count == 0) {
+  while (q->count == 0 && !stop()) {
     // Wait until there is data in the queue
     pthread_cond_wait(&q->cond, &q->mutex);
+  }
+
+  if (stop()) {
+    pthread_mutex_unlock(&q->mutex);
+    return NULL;
   }
 
   void *data = q->data[q->front];

@@ -1,9 +1,9 @@
 #include "data_structures/session.h"
 #include "listener.h"
 #include "properties.h"
+#include "shutdown/signal2.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
-#include "utils/signal2.h"
 #include "worker.h"
 
 void handle_signal(int signum);

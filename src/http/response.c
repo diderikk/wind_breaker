@@ -25,7 +25,6 @@ size_t set_compression(http_response_t *http_response,
                        const char *accept_encoding, char *tmp_buffer);
 void handle_if_none_match(http_response_t *http_response,
                           const char *if_none_match);
-void log_response(const http_response_t *http_response, const char *tmp_body);
 
 size_t construct_response(int response_code, const char *uri,
                           const char *accept_encoding,
@@ -66,8 +65,7 @@ size_t construct_response(int response_code, const char *uri,
 
   return_value = to_string(&http_response, response);
 
-  // Contains the uncompressed data
-  log_response(&http_response, tmp_body_buffer);
+  log_info("Responding:\n%s", response);
 
   return return_value;
 }
@@ -253,10 +251,10 @@ size_t to_string(const http_response_t *http_response, char *response_str) {
                  "Content-Encoding: %s\r\n", http_response->content_encoding);
   }
 
-  if (http_response->content_length > 0) {
-    offset += snprintf(response_str + offset,
-                       REQUEST_RESPONSE_MAX_SIZE - offset, "\r\n");
+  offset += snprintf(response_str + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+                     "\r\n");
 
+  if (http_response->content_length > 0) {
     if (offset + http_response->content_length >= REQUEST_RESPONSE_MAX_SIZE) {
       log_error("Response Buffer Overflow");
       return -1;
@@ -268,17 +266,6 @@ size_t to_string(const http_response_t *http_response, char *response_str) {
   }
 
   return offset;
-}
-
-void log_response(const http_response_t *http_response, const char *tmp_body) {
-  log_info("Responding:\n Status Code: %d\n Content Type: %s\n "
-           "Content Length: %ld\n Content Language: %s\n "
-           "Content Encoding: %s\n Last Modified: %s\n Date: %s\n "
-           "ETag: %s\n Body: %s",
-           http_response->status_code, http_response->content_type,
-           http_response->content_length, http_response->content_language,
-           http_response->content_encoding, http_response->last_modified,
-           http_response->date, http_response->etag, tmp_body);
 }
 
 char *http_status_code_to_str(http_status_code status_code) {

@@ -4,7 +4,6 @@
 #include <signal.h>
 #include <stdio.h>
 
-sig_atomic_t stop();
-void handle_signals(int socket_fd1, int socket_fd2, FILE *log_file);
+void handle_signals(int socket_fd1, int socket_fd2, const FILE *log_file);
 
 #endif // SIGNAL2_H
