@@ -33,7 +33,7 @@ void destroy_queue() {
   assert(q != NULL);
 
   for (int i = 0; i < get_queue_max_size(); i++) {
-    if(q->data[i] != NULL) {
+    if (q->data[i] != NULL) {
       free(q->data[i]);
       q->data[i] = NULL;
     }

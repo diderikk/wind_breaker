@@ -10,9 +10,8 @@ static int session_last_in_index = 0;
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int init_session_cache(int _max_size) {
-  if (session_array != NULL) {
-    return -1;
-  }
+  assert(_max_size > 0);
+  assert(session_array == NULL);
   // Static array of sessions, should not be resized... Tiger style
   session_array = calloc(_max_size, sizeof(*session_array));
   assert(session_array != NULL);
@@ -28,9 +27,11 @@ void destroy_session_cache() {
 
 void add_to_session_sync(int related_fd) {
   assert(session_array != NULL);
+  assert(related_fd > 0);
   pthread_mutex_lock(&session_mutex);
   // Ring buffer... could also used modular arithmetic
   int next = session_count < max_size ? session_count : session_last_in_index;
+  assert(next < max_size);
 
   session_array[next].id = rand();
   session_array[next].related_fd = related_fd;
@@ -93,6 +94,8 @@ void add_thread_to_session(int related_fd) {
 
 void del_from_session_sync(int related_fd) {
   assert(session_array != NULL);
+  assert(related_fd > 0);
+  assert(related_fd < 16384);
   pthread_mutex_lock(&session_mutex);
 
   int found = 0;

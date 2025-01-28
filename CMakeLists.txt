@@ -11,8 +11,8 @@ find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 function(enable_address_sanitizer target)
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3) #-fsanitize=address -static-libasan)
-    #target_link_options(${target} PRIVATE -fsanitize=address -static-libasan)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3) #-fsanitize=address,undefined -static-libasan)
+    #target_link_options(${target} PRIVATE -fsanitize=address,undefined)
 endfunction()
 
 add_library(socket_lib STATIC src/socket.c)
@@ -32,17 +32,27 @@ add_library(regex_utils_lib STATIC src/utils/regex2.c)
 add_library(signal_wrapper_lib STATIC src/shutdown/signal2.c)
 add_library(stop_lib STATIC src/shutdown/stop.c)
 add_library(session_lib STATIC src/data_structures/session.c)
-add_library(simulator_cases_lib STATIC src/simulator/cases.c)
-add_library(simulator_connection_lib STATIC src/simulator/connection_cases.c)
-add_library(simulator_http_lib STATIC src/simulator/http_cases.c)
+
+# Simulator libraries
+add_library(simulator_cases_lib STATIC test/simulator/cases.c)
+add_library(simulator_connection_lib STATIC test/simulator/connection_cases.c)
+add_library(simulator_http_lib STATIC test/simulator/http_cases.c)
+
+#Unit test libraries
+
 
 add_executable(main src/main.c)
 target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_address_sanitizer(main)
 
-add_executable(client src/simulator/client.c)
+add_executable(client test/simulator/client.c)
 target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_address_sanitizer(client)
+
+
+add_executable(unit_test test/unit_tests/all_tests.c)
+target_link_libraries(unit_test PRIVATE worker_queue_lib poll_array_lib properties_lib assert_utils_lib logger_utils_lib session_lib Threads::Threads)
+enable_address_sanitizer(unit_test)
 # Add custom target to copy the static folder
 add_custom_target(copy_static ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory

@@ -1,7 +1,7 @@
 #include "connection_cases.h"
-#include "../socket.h"
-#include "../utils/assert2.h"
-#include "../utils/logger.h"
+#include "../../src/socket.h"
+#include "../../src/utils/assert2.h"
+#include "../../src/utils/logger.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +20,7 @@ int test_connection(char *ip, char *port) {
     log_error("Failed to connect to server at %s:%s", ip, port);
     return -1;
   }
-  log_info("Connection test successful");
+  // log_info("Connection test successful");
   close(socket_fd);
   return 0;
 }
@@ -35,7 +35,6 @@ void *start_connection_delay_before_close(void *arg) {
   socklen_t len = sizeof(err);
   int sleep_time = data->seed % 60;
 
-  log_trace("Sleeping for %d seconds", sleep_time);
   // Sleep for a random amount of time. Max 60 seconds
   sleep(sleep_time);
   assert(getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &err, &len) != -1);
@@ -52,7 +51,6 @@ void *start_connections_simultaneously(void *arg) {
       (pthread_t *)malloc(sizeof(pthread_t) * amount_of_connections);
   assert(threads != NULL);
 
-  log_info("Starting %d connections simultaneously", amount_of_connections);
   for (int i = 0; i < amount_of_connections; i++) {
     assert(pthread_create(&threads[i], NULL, start_write_recv_close_connection,
                           data) == 0);
@@ -78,15 +76,13 @@ void *start_connection_send_recv_ten_times(void *arg) {
 
   set_recv_timeout(socket_fd, 1000);
   for (int i = 0; i < 10; i++) {
-    log_trace("Sending message %d", i);
     char *message = "Hello, server!";
     send = send_socket(socket_fd, message, strlen(message));
     assert(send > 0);
 
-    log_trace("Receiving message %d", i);
     size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
     assert(size > 0);
-    log_trace("Server response: %s", buffer);
+    // log_trace("Server response: %s", buffer);
   }
 
   close(socket_fd);
@@ -100,7 +96,6 @@ void *start_connection_close(void *arg) {
   assert(socket_fd > 0);
 
   close(socket_fd);
-  log_trace("Connection closed manually");
   return 0;
 }
 
@@ -163,8 +158,8 @@ int connect_to_server(const char *ip, const char *port) {
     return -1;
   }
 
-  log_trace("Connected to server at %s:%s. Opened socket: %d", ip, port,
-            socket_fd);
+  // log_trace("Connected to server at %s:%s. Opened socket: %d", ip, port,
+  //            socket_fd);
 
   // Send message to server
   // char *message = "Hello, server!";

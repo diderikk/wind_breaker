@@ -1,5 +1,5 @@
-#include "../socket.h"
-#include "../utils/logger.h"
+#include "../../src/socket.h"
+#include "../../src/utils/logger.h"
 #include "cases.h"
 #include "signal.h"
 #include "string.h"

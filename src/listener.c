@@ -205,7 +205,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
       }
     }
   }
-  destroy_poll_array(poll_fd_array);
+  destroy_poll_array(&poll_fd_array);
 }
 
 void handle_request_async(int fd, const char *raw_request) {

@@ -100,6 +100,9 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
   char time_str[20];
   pthread_t thread_id = pthread_self();
   struct session *session = get_session_for_thread();
+  char *relative_file_path = (strstr(file, "src/") != NULL)
+                                 ? strstr(file, "src/") + 4
+                                 : strstr(file, "test/") + 5;
 
   // Get the current time
   time(&rawtime);
@@ -113,13 +116,12 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
   if (log_destination == FILE_ONLY || log_destination == CONSOLE_FILE) {
     if (log_file != NULL) {
       if (session != NULL) {
-        fprintf(log_file, "%s %s (%s) [%lu-%d]: ", time_str,
-                strstr(file, "src/") + 4, log_level_to_string(level),
-                (unsigned long)thread_id, session->id);
+        fprintf(log_file, "%s %s (%s) [%lu-%d]: ", time_str, relative_file_path,
+                log_level_to_string(level), (unsigned long)thread_id,
+                session->id);
       } else {
-        fprintf(log_file, "%s %s (%s) [%lu]: ", time_str,
-                strstr(file, "src/") + 4, log_level_to_string(level),
-                (unsigned long)thread_id);
+        fprintf(log_file, "%s %s (%s) [%lu]: ", time_str, relative_file_path,
+                log_level_to_string(level), (unsigned long)thread_id);
       }
       vfprintf(log_file, message, args_f);
       if (level == ERROR && errno != 0) {
@@ -132,11 +134,11 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
   }
   if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
     if (session != NULL) {
-      fprintf(stdout, "%s %s (%s) [%lu-%d]: ", time_str,
-              strstr(file, "src/") + 4, log_level_to_string(level),
-              (unsigned long)thread_id, session->id);
+      fprintf(stdout, "%s %s (%s) [%lu-%d]: ", time_str, relative_file_path,
+              log_level_to_string(level), (unsigned long)thread_id,
+              session->id);
     } else {
-      fprintf(stdout, "%s %s (%s) [%lu]: ", time_str, strstr(file, "src/") + 4,
+      fprintf(stdout, "%s %s (%s) [%lu]: ", time_str, relative_file_path,
               log_level_to_string(level), (unsigned long)thread_id);
     }
     vfprintf(stdout, message, args_c);

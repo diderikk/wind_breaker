@@ -212,6 +212,7 @@ void init_properties(int argc, char *argv[]) {
 }
 
 int get_poll_array_max_size() { return poll_array_max_size; }
+void set_poll_array_max_size(int size) { poll_array_max_size = size; }
 
 int get_session_max_size() { return session_max_size; }
 

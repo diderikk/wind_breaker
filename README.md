@@ -6,7 +6,7 @@
 * SQLite
 * Images referencing
 * Add more parsing for more HTTP headers.
-* Logging with color
+* Logging with color and fixed sizes, add LINE and func directives.
 * IPv6?
 
 ## Try to remember
