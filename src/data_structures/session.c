@@ -1,6 +1,6 @@
 #include "session.h"
-#include <assert.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 static struct session *session_array = NULL;
@@ -8,6 +8,14 @@ static int max_size = 0;
 static int session_count = 0;
 static int session_last_in_index = 0;
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void assert_(const char *file, int line, const char *func,
+                    const char *msg) {
+  fprintf(stdout, "Assertion failed: %s:%d: %s: %s\n", file, line, func, msg);
+  exit(EXIT_FAILURE);
+}
+#define assert(expr)                                                           \
+  ((void)((expr) || (assert_(__FILE__, __LINE__, __func__, #expr), 0)))
 
 int init_session_cache(int _max_size) {
   assert(_max_size > 0);
@@ -22,6 +30,8 @@ int init_session_cache(int _max_size) {
 void destroy_session_cache() {
   assert(session_array != NULL);
   free(session_array);
+  session_count = 0;
+  session_last_in_index = 0;
   session_array = NULL;
 }
 
@@ -82,10 +92,10 @@ void add_thread_to_session(int related_fd) {
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
+    assert(session_array[i].thread_id != pthread_self());
     if (session_array[i].related_fd == related_fd) {
       found = 1;
       session_array[i].thread_id = pthread_self();
-      break;
     }
   }
   pthread_mutex_unlock(&session_mutex);

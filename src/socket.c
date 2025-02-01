@@ -1,6 +1,7 @@
 #include "socket.h"
 #include "string.h"
 #include "utils/assert2.h"
+#include "utils/logger.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>

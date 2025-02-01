@@ -1,12 +1,12 @@
-#include "../../src/utils/assert2.h"
-#include "../../src/utils/logger.h"
-#include "../../src/data_structures/poll_array.h"
-#include "../../src/properties.h"
+#include "../../../src/utils/assert2.h"
+#include "../../../src/utils/logger.h"
+#include "../../../src/data_structures/poll_array.h"
+#include "../../../src/properties.h"
 #include <pthread.h>
 #include <stdlib.h>
 
 static int poll_array_test_count = 0;
-static pthread_t *poll_array_test_threads = NULL;
+static pthread_t poll_array_test_threads[100];
 
 static int poll_array_start_case(void *(*func)(void *), const char *name);
 
@@ -207,7 +207,6 @@ void *add_poll_fd_sync_overflow_minus_even() {
 
 int poll_array_test() {
 
-  poll_array_test_threads = (pthread_t *)malloc(sizeof(pthread_t) * 100);
   poll_array_start_case(init_poll_array_test, "init_poll_array_test");
   poll_array_start_case(destroy_poll_array_test, "destroy_poll_array_test");
   poll_array_start_case(add_poll_fd_sync_test, "add_poll_fd_sync_test");
@@ -223,9 +222,6 @@ int poll_array_test() {
   }
 
   log_info("Completed %d/%d poll_array tests", poll_array_test_count, poll_array_test_count);
-  free(poll_array_test_threads);
-  poll_array_test_threads = NULL;
-
   return poll_array_test_count;
 }
 

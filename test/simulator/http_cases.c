@@ -2,6 +2,7 @@
 #include "../../src/http/static.h"
 #include "../../src/socket.h"
 #include "../../src/utils/assert2.h"
+#include "../../src/utils/logger.h"
 #include "../../src/utils/compression.h"
 #include "connection_cases.h"
 #include <string.h>

@@ -46,7 +46,8 @@ void init_properties(int argc, char *argv[]) {
                 strcasecmp(argv[i], "--environment") == 0) &&
                i + 1 <= argc) {
       assert(strcasecmp(argv[i + 1], "dev") == 0 ||
-             strcasecmp(argv[i + 1], "prod") == 0);
+             strcasecmp(argv[i + 1], "prod") == 0 ||
+             strcasecmp(argv[i + 1], "test") == 0);
       strcpy(env, argv[i + 1]);
       log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                     LOG_BUFFER_SIZE - log_buffer_offset,
@@ -146,7 +147,8 @@ void init_properties(int argc, char *argv[]) {
                                       "HTTP port: %s\n", http_port);
       } else if (strncasecmp(line, "env", 3) == 0) {
         assert(strncasecmp(line + 4, "dev", 3) == 0 ||
-               strncasecmp(line + 4, "prod", 4) == 0);
+               strncasecmp(line + 4, "prod", 4) == 0 ||
+               strncasecmp(line + 4, "test", 4) == 0);
         strcpy(env, line + 4);
         log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                       LOG_BUFFER_SIZE - log_buffer_offset,
@@ -218,6 +220,8 @@ int get_session_max_size() { return session_max_size; }
 
 int get_queue_max_size() { return queue_max_size; }
 
+void set_queue_max_size(int size) { queue_max_size = size; }
+
 int get_worker_thread_max_size() { return worker_thread_max_size; }
 
 int get_listen_backlog_max_size() { return listen_backlog_max_size; }
@@ -227,6 +231,13 @@ const char *get_http_port() { return http_port; }
 const char *get_https_port() { return https_port; }
 
 const char *get_env() { return env; }
+
+void set_env(char *env) {
+  assert(strncasecmp(env, "dev", 3) == 0 || strncasecmp(env, "prod", 4) == 0 ||
+         strncasecmp(env, "test", 4) == 0);
+
+  strcpy(env, env);
+}
 
 const char *get_log_file() { return log_file; }
 

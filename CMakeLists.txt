@@ -51,7 +51,7 @@ enable_address_sanitizer(client)
 
 
 add_executable(unit_test test/unit_tests/all_tests.c)
-target_link_libraries(unit_test PRIVATE worker_queue_lib poll_array_lib properties_lib assert_utils_lib logger_utils_lib session_lib Threads::Threads)
+target_link_libraries(unit_test PRIVATE http_request_lib http_response_lib worker_queue_lib file_utils_lib regex_utils_lib poll_array_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib Threads::Threads)
 enable_address_sanitizer(unit_test)
 # Add custom target to copy the static folder
 add_custom_target(copy_static ALL

@@ -1,4 +1,5 @@
 #include "assert2.h"
+#include "logger.h"
 #include <stdarg.h>
 #include <stdlib.h>
 
