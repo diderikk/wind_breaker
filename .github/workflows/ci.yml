@@ -25,7 +25,6 @@ jobs:
             make \
             libssl-dev \
             zlib1g-dev \
-            musl-dev
 
       - name: Create build directory
         run: mkdir -p build
@@ -38,3 +37,11 @@ jobs:
 
       - name: Run unit tests
         run: ./build/unit_test
+
+      - name: Run simulations
+        run: |
+          (./build/main &> /dev/null) & echo "MAIN_PID=$!" >> $GITHUB_ENV
+          ./build/client
+
+      - name: Stop server
+        run: kill $MAIN_PID
