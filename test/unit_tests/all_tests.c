@@ -4,6 +4,9 @@
 #include "data_structures/session_test.c"
 #include "data_structures/worker_queue_test.c"
 #include "http/request_test.c"
+#include "http/response_test.c"
+#include "utils/compression_test.c"
+#include "utils/hash_test.c"
 
 
 int main() {
@@ -13,7 +16,10 @@ int main() {
   number_of_tests += poll_array_test();
   number_of_tests += session_test();
   number_of_tests += worker_queue_test();
+  number_of_tests += compression_test();
+  number_of_tests += hash_test();
   number_of_tests += request_test();
+  number_of_tests += response_test();
   
   printf("\n");
   log_info("Number of tests passed: %d", number_of_tests);

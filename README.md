@@ -8,7 +8,8 @@
 * Add more parsing for more HTTP headers.
 * Logging with color and fixed sizes, add LINE and func directives.
 * IPv6?
-* Memory optimization (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
+* Memory optimization, data-oriented design (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
+* Performance optimization (assembly understanding, cache optimization?)
 
 ## Try to remember
 * Clean up includes

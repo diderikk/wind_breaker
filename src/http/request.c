@@ -4,6 +4,7 @@
 #include "../utils/regex2.h"
 #include "../utils/static_file.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int parse_control_data(http_request_t *http_request, const char *char_data);
@@ -120,6 +121,14 @@ int validate_request_headers(const http_request_t *http_request) {
     return HTTP_NOT_ACCEPTABLE;
   }
 
+  if (strcasestr(http_request->accept_encoding, "gzip") == NULL &&
+      strcasestr(http_request->accept_encoding, "deflate") == NULL &&
+      strcmp(http_request->accept_encoding, "") != 0) {
+    log_error("Accept Encoding Not Supported: %s",
+              http_request->accept_encoding);
+    return HTTP_NOT_ACCEPTABLE;
+  }
+
   return HTTP_OK;
 }
 
@@ -232,6 +241,13 @@ int parse_header_field(http_request_t *http_request,
     strncpy(http_request->if_none_match, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->if_none_match[matches[2].rm_eo - matches[2].rm_so] = '\0';
+  } else if (strcmp(header_name, "Content-Type") == 0) {
+    strncpy(http_request->content_type, raw_header_field + matches[2].rm_so,
+            matches[2].rm_eo - matches[2].rm_so);
+    http_request->content_type[matches[2].rm_eo - matches[2].rm_so] = '\0';
+  } else if (strcmp(header_name, "Content-Length") == 0) {
+    http_request->content_length =
+        strtol(raw_header_field + matches[2].rm_so, NULL, 10);
   }
 
   return 0;
