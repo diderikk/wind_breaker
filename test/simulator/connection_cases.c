@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define BUFFER_SIZE 8192
@@ -177,6 +178,7 @@ int connect_to_server(const char *ip, const char *port) {
 int set_recv_timeout(int socket, int milliseconds) {
   struct timeval timeout;
   timeout.tv_sec = milliseconds / 1000;
+  timeout.tv_usec = (milliseconds % 1000) * 1000;
 
   return setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout,
                     sizeof(timeout));

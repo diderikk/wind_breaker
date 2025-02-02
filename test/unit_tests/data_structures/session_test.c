@@ -37,7 +37,7 @@ void* get_session_for_thread_test() {
     struct session *sess = get_session_for_thread();
     assert(sess != NULL);
     assert(sess->related_fd == 1);
-    assert(sess->thread_id == pthread_self());
+    assert(sess->thread_id == (unsigned long) pthread_self());
     assert(sess->id != 0);
     destroy_session_cache();
 
@@ -94,7 +94,7 @@ void* add_to_session_sync_overflow_test() {
         struct session *sess = get_session_for_thread();
         assert(sess != NULL);
         assert(sess->related_fd == fd);
-        assert(sess->thread_id == pthread_self());
+        assert(sess->thread_id == (unsigned long) pthread_self());
         assert(sess->id != 0);
         remove_thread_from_session();
         count++;
@@ -133,7 +133,7 @@ void *get_session_for_thread_func(void* i) {
     struct session *sess = get_session_for_thread();
     assert(sess != NULL);
     assert(sess->related_fd == *fd);
-    assert(sess->thread_id == pthread_self());
+    assert(sess->thread_id == (unsigned long) pthread_self());
     assert(sess->id != 0);
 
     return NULL;

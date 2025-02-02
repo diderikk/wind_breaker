@@ -60,7 +60,7 @@ struct session *get_session_for_thread() {
     return NULL;
   }
   pthread_mutex_lock(&session_mutex);
-  unsigned long thread_id = pthread_self();
+  unsigned long thread_id = (unsigned long)pthread_self();
   for (int i = 0; i < session_count; i++) {
     if (session_array[i].thread_id == thread_id) {
       pthread_mutex_unlock(&session_mutex);
@@ -76,7 +76,7 @@ void remove_thread_from_session() {
   assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   for (int i = 0; i < session_count; i++) {
-    if (session_array[i].thread_id == pthread_self()) {
+    if (session_array[i].thread_id == (unsigned long)pthread_self()) {
       session_array[i].thread_id = 0;
       break;
     }
@@ -92,10 +92,10 @@ void add_thread_to_session(int related_fd) {
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
-    assert(session_array[i].thread_id != pthread_self());
+    assert(session_array[i].thread_id != (unsigned long) pthread_self());
     if (session_array[i].related_fd == related_fd) {
       found = 1;
-      session_array[i].thread_id = pthread_self();
+      session_array[i].thread_id = (unsigned long) pthread_self();
     }
   }
   pthread_mutex_unlock(&session_mutex);
