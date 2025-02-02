@@ -1,5 +1,5 @@
 # HTTP server implemented in C
-
+![CI](https://github.com/diderikk/wind_breaker/actions/workflows/ci.yml/badge.svg)
 ## TODO
 * SSL/TLS
 * Caching
