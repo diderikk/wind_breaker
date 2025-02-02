@@ -41,6 +41,7 @@ jobs:
       - name: Run simulations
         run: |
           (./build/main &> /dev/null) & echo "MAIN_PID=$!" >> $GITHUB_ENV
+          sleep 5
           ./build/client
 
       - name: Stop server
