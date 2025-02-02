@@ -4,6 +4,15 @@
 #include <stdarg.h>
 #include <string.h>
 
+#define RED "\x1B[31m"
+#define GRN "\x1B[32m"
+#define YEL "\x1B[33m"
+#define BLU "\x1B[34m"
+#define MAG "\x1B[35m"
+#define CYN "\x1B[36m"
+#define WHT "\x1B[37m"
+#define RESET "\x1B[0m"
+
 char *log_level_to_string(LOG_LEVEL level);
 void log_message(LOG_LEVEL level, const char *file, const char *message,
                  va_list args_f, va_list args_c);
@@ -93,8 +102,30 @@ void log_error_(const char *file, const char *message, ...) {
   va_end(args_f);
 }
 
-void log_message(LOG_LEVEL level, const char *file, const char *message,
-                 va_list args_f, va_list args_c) {
+// Maybe remove coloring for "optimization"...
+void log_to_destination(int log_destination, FILE *log_file,
+                        const char *time_str, const char *relative_file_path,
+                        const char *log_level, unsigned long thread_id,
+                        struct session *session, const char *message,
+                        va_list args_f, va_list args_c, int level) {
+  fprintf(log_file, YEL "%-17s %-30s (%-5s) " RESET, time_str,
+          relative_file_path, log_level_to_string(level));
+  if (session != NULL) {
+    fprintf(log_file, CYN "[%lu-%d]: " RESET, (unsigned long)thread_id,
+            session->id);
+  } else {
+    fprintf(log_file, CYN "[%lu]: " RESET, (unsigned long)thread_id);
+  }
+  vfprintf(log_file, message, args_c);
+  if (level == ERROR && errno != 0) {
+    fprintf(log_file, RED ": %d %s\n" RESET, errno, strerror(errno));
+  } else {
+    fprintf(log_file, "\n");
+  }
+}
+
+inline void log_message(LOG_LEVEL level, const char *file, const char *message,
+                        va_list args_f, va_list args_c) {
   time_t rawtime;
   struct tm *timeinfo;
   char time_str[20];
@@ -115,38 +146,17 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
 
   if (log_destination == FILE_ONLY || log_destination == CONSOLE_FILE) {
     if (log_file != NULL) {
-      if (session != NULL) {
-        fprintf(log_file, "%s %s (%s) [%lu-%d]: ", time_str, relative_file_path,
-                log_level_to_string(level), (unsigned long)thread_id,
-                session->id);
-      } else {
-        fprintf(log_file, "%s %s (%s) [%lu]: ", time_str, relative_file_path,
-                log_level_to_string(level), (unsigned long)thread_id);
-      }
-      vfprintf(log_file, message, args_f);
-      if (level == ERROR && errno != 0) {
-        fprintf(log_file, ": %d %s\n", errno, strerror(errno));
-      } else {
-        fprintf(log_file, "\n");
-      }
+      log_to_destination(log_destination, log_file, time_str,
+                         relative_file_path, log_level_to_string(level),
+                         (unsigned long)thread_id, session, message, args_f,
+                         args_c, level);
       fflush(log_file);
     }
   }
   if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
-    if (session != NULL) {
-      fprintf(stdout, "%s %s (%s) [%lu-%d]: ", time_str, relative_file_path,
-              log_level_to_string(level), (unsigned long)thread_id,
-              session->id);
-    } else {
-      fprintf(stdout, "%s %s (%s) [%lu]: ", time_str, relative_file_path,
-              log_level_to_string(level), (unsigned long)thread_id);
-    }
-    vfprintf(stdout, message, args_c);
-    if (level == ERROR && errno != 0) {
-      fprintf(stdout, ": %d %s\n", errno, strerror(errno));
-    } else {
-      fprintf(stdout, "\n");
-    }
+    log_to_destination(log_destination, stdout, time_str, relative_file_path,
+                       log_level_to_string(level), (unsigned long)thread_id,
+                       session, message, args_f, args_c, level);
   }
 
   pthread_mutex_unlock(&log_mutex);
@@ -154,17 +164,18 @@ void log_message(LOG_LEVEL level, const char *file, const char *message,
 
 // https://www.asciiart.eu/text-to-ascii-art
 void log_logo() {
-  fprintf(stdout,
+  fprintf(stdout, RED
           "__        ___           _   ____                 _             \n");
   fprintf(
       stdout,
       "\\ \\      / (_)_ __   __| | | __ ) _ __ ___  __ _| | _____ _ __ \n");
-  fprintf(stdout, " \\ \\ /\\ / /| | '_ \\ / _` | |  _ \\| '__/ _ \\/ _` | |/ "
-                  "/ _ \\ '__|\n");
+  fprintf(stdout,
+          GRN " \\ \\ /\\ / /| | '_ \\ / _` | |  _ \\| '__/ _ \\/ _` | |/ "
+              "/ _ \\ '__|\n");
   fprintf(stdout,
           "  \\ V  V / | | | | | (_| | | |_) | | |  __/ (_| |   <  __/ |   \n");
-  fprintf(stdout, "   \\_/\\_/  |_|_| |_|\\__,_| |____/|_|  "
-                  "\\___|\\__,_|_|\\_\\___|_|   \n");
+  fprintf(stdout, BLU "   \\_/\\_/  |_|_| |_|\\__,_| |____/|_|  "
+                      "\\___|\\__,_|_|\\_\\___|_|   \n" RESET);
 }
 
 char *log_level_to_string(LOG_LEVEL level) {

@@ -46,8 +46,6 @@ void destroy_queue() {
 
   free(q);
   q = NULL;
-
-  log_info("Destroyed queue\n");
 }
 
 void broadcast_queue() {
