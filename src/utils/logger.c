@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "../data_structures/session.h"
 #include <errno.h>
+#include <openssl/err.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -117,8 +118,12 @@ void log_to_destination(int log_destination, FILE *log_file,
     fprintf(log_file, CYN "[%lu]: " RESET, (unsigned long)thread_id);
   }
   vfprintf(log_file, message, args_c);
-  if (level == ERROR && errno != 0) {
-    fprintf(log_file, RED ": %d %s\n" RESET, errno, strerror(errno));
+  if (level == ERROR && (errno != 0 || ERR_peek_error() != 0)) {
+    if (errno != 0)
+      fprintf(log_file, RED ": %d %s\n" RESET, errno, strerror(errno));
+    if (ERR_peek_error() != 0)
+      fprintf(log_file, RED ": %s\n" RESET,
+              ERR_error_string(ERR_get_error(), NULL));
   } else {
     fprintf(log_file, "\n");
   }

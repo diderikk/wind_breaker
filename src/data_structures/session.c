@@ -92,10 +92,10 @@ void add_thread_to_session(int related_fd) {
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
-    assert(session_array[i].thread_id != (unsigned long) pthread_self());
+    assert(session_array[i].thread_id != (unsigned long)pthread_self());
     if (session_array[i].related_fd == related_fd) {
       found = 1;
-      session_array[i].thread_id = (unsigned long) pthread_self();
+      session_array[i].thread_id = (unsigned long)pthread_self();
     }
   }
   pthread_mutex_unlock(&session_mutex);

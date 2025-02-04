@@ -18,6 +18,8 @@ static char log_file[200] = "/var/log/wind_breaker/app.log";
 static LOG_LEVEL log_level = TRACE;
 static LOG_DESTINATION log_type = CONSOLE_ONLY;
 static char properties_file[200] = "/etc/wind_breaker/properties.conf";
+static char cert_chain_file[200] = "/etc/wind_breaker/cert.pem";
+static char private_key_file[200] = "/etc/wind_breaker/key.pem";
 
 void init_properties(int argc, char *argv[]) {
   char log_buffer[LOG_BUFFER_SIZE + 1];
@@ -244,3 +246,7 @@ const char *get_log_file() { return log_file; }
 LOG_LEVEL get_log_level() { return log_level; }
 
 LOG_DESTINATION get_log_type() { return log_type; }
+
+char *get_cert_file() { return cert_chain_file; }
+
+char *get_key_file() { return private_key_file; }
