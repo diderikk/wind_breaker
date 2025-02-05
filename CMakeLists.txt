@@ -17,6 +17,7 @@ endfunction()
 
 add_library(socket_lib STATIC src/socket.c)
 add_library(listener_lib STATIC src/listener.c)
+add_library(listener_ssl_lib STATIC src/listener_ssl.c)
 add_library(worker_lib STATIC src/worker.c)
 add_library(properties_lib STATIC src/properties.c)
 add_library(worker_queue_lib STATIC src/data_structures/worker_queue.c)
@@ -42,7 +43,7 @@ add_library(simulator_http_lib STATIC test/simulator/http_cases.c)
 
 
 add_executable(main src/main.c)
-target_link_libraries(main PRIVATE listener_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(main PRIVATE listener_ssl_lib listener_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_address_sanitizer(main)
 
 add_executable(client test/simulator/client.c)

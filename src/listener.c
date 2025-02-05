@@ -13,14 +13,37 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-void _listen(int listener, void (*request_handler)(int, const char *));
-void handle_request_async(int fd, const char *raw_request);
+void _listen(int listener, void (*new_connection_handler)(int, int),
+             void (*close_connection_handler)(int),
+             int (*request_handler)(int, char *));
 void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
-void listen_async(int listener) { _listen(listener, handle_request_async); }
+void new_connection_handler(int fd, int index) {}
+void close_connection_handler(int fd) {}
+int handle_request_async(int fd, char *buffer) {
+  int recv_return = recv_socket(fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  if (recv_return > 0) {
+    queue_push(fd, buffer);
+    return 0;
+  } else if (recv_return == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    return 0;
+  } else {
+    // Got error or connection closed by client
+    if (recv_return == 0) {
+      // Connection closed
+      log_trace("Socket %d hung up", fd);
+    }
+  }
+  return -1;
+}
+
+void listen_async(int listener) {
+  _listen(listener, new_connection_handler, close_connection_handler,
+          handle_request_async);
+}
 
 int get_listener_socket(const char *port, int backlog) {
   assert(port != NULL);
@@ -72,13 +95,15 @@ int get_listener_socket(const char *port, int backlog) {
   return socket_fd;
 }
 
-void _listen(int listener, void (*request_handler)(int, const char *)) {
+void _listen(int listener, void (*new_connection_handler)(int, int),
+             void (*close_connection_handler)(int),
+             int (*request_handler)(int, char *)) {
   assert(listener > 0);
   assert(request_handler != NULL);
 
   char ip_str[INET6_ADDRSTRLEN], data[REQUEST_RESPONSE_MAX_SIZE];
   char loop_counter, event_count;
-  int client_socket_fd, recv_return;
+  int client_socket_fd;
   sigset_t sigmask;
   struct sockaddr_storage client_addr;
   struct pollfd *poll;
@@ -91,6 +116,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
   memset(ip_str, 0, INET6_ADDRSTRLEN);
   sigemptyset(&sigmask);
   init_poll_array(&poll_fd_array, listener);
+  assert(poll_fd_array != NULL);
 
   // Continously listen for new connections
   while (!stop()) {
@@ -122,6 +148,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
       if (loop_counter >= 50) {
         if (check_for_socket_error(poll->fd) == -1) {
           del_from_session_sync(poll->fd);
+          close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
         }
         loop_counter = 0;
@@ -134,6 +161,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
           del_from_session_sync(poll->fd);
+          close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
@@ -142,6 +170,7 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
         log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
           del_from_session_sync(poll->fd);
+          close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
@@ -163,30 +192,21 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
           log_info("Client connect %s:%d", ip_str,
                    get_in_addr_port((struct sockaddr *)&client_addr));
           add_to_session_sync(client_socket_fd);
-          add_poll_fd_sync(poll_fd_array, client_socket_fd);
+          int index = add_poll_fd_sync(poll_fd_array, client_socket_fd);
+          new_connection_handler(client_socket_fd, index);
           continue;
         } else {
           log_debug("Polling for existing client to send data...");
           // Existing socket wants to send a request
-          recv_return = recv_socket(poll->fd, data, REQUEST_RESPONSE_MAX_SIZE);
-          if (recv_return > 0) {
-
-            request_handler(poll->fd, data);
-            continue;
-          } else if (recv_return == -1 &&
-                     (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            continue;
-          } else {
-            // Got error or connection closed by client
-            if (recv_return == 0) {
-              // Connection closed
-              log_trace("Socket %d hung up", poll->fd);
-            }
-
-            del_from_session_sync(poll->fd);
-            remove_poll_fd_by_index_sync(poll_fd_array, &i);
+          if (request_handler(poll->fd, data) != -1) {
+            memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
             continue;
           }
+
+          del_from_session_sync(poll->fd);
+          close_connection_handler(i);
+          remove_poll_fd_by_index_sync(poll_fd_array, &i);
+          continue;
         }
       }
       // Already should have read the final data => can now close the close
@@ -194,22 +214,20 @@ void _listen(int listener, void (*request_handler)(int, const char *)) {
       if (poll->revents & POLLHUP) {
         log_warn("%s", get_poll_event_description(POLLHUP));
         del_from_session_sync(poll->fd);
+        close_connection_handler(i);
         remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
       if (poll->revents & POLLRDHUP) {
         log_warn("%s", get_poll_event_description(POLLRDHUP));
         del_from_session_sync(poll->fd);
+        close_connection_handler(i);
         remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
     }
   }
   destroy_poll_array(&poll_fd_array);
-}
-
-void handle_request_async(int fd, const char *raw_request) {
-  queue_push(fd, raw_request);
 }
 
 void *listener_worker_function(void *_arg) {

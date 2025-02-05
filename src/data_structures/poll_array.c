@@ -40,7 +40,7 @@ void destroy_poll_array(poll_array **pa) {
   assert(*pa == NULL);
 }
 
-void add_poll_fd_sync(poll_array *pa, int fd) {
+int add_poll_fd_sync(poll_array *pa, int fd) {
   assert(fd > 0);
   assert(fd < 16384);
   assert(pa != NULL);
@@ -70,6 +70,7 @@ void add_poll_fd_sync(poll_array *pa, int fd) {
   assert(pa->count > 1);
   assert(pa->last_in_index < max_count);
   assert(pa->last_in_index > 0);
+  return next;
 }
 
 void remove_poll_fd_by_index_sync(poll_array *pa, int *i) {

@@ -10,7 +10,7 @@ sig_atomic_t stop() { return server_stop; }
 void _stop_server(const char *file) {
   assert(file != NULL);
 
-  if (strstr(file, "signal2.c") == NULL) {
+  if (strstr(file, "main.c") == NULL) {
     return;
   }
 

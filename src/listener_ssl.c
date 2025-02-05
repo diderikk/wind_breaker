@@ -106,10 +106,9 @@ void init_ssl_listener() {
   }
 }
 
-int handle_accept(int client_fd) {
-  BIO_new_socket(client_fd, BIO_NOCLOSE);
-  SSL *ssl = ssl_array[client_fd];
-  BIO *bio = bio_array[client_fd];
+int handle_accept(int client_fd, int index) {
+  SSL *ssl = ssl_array[index];
+  BIO *bio = bio_array[index];
   BIO_set_fd(bio, client_fd, BIO_NOCLOSE);
   SSL_set_bio(ssl, bio, bio);
 
@@ -122,6 +121,9 @@ int handle_accept(int client_fd) {
 }
 
 void destroy_ssl_listener() {
+  assert(ctx != NULL);
+  assert(ssl_array != NULL);
+  assert(bio_array != NULL);
   for (int i = 0; i < get_poll_array_max_size(); i++) {
     SSL_free(ssl_array[i]);
     BIO_free(bio_array[i]);
@@ -137,5 +139,4 @@ void listen_async_ssl(int socket_fd) {
   assert(ctx != NULL);
   assert(ssl_array != NULL);
   assert(bio_array != NULL);
-  log_info("Listening on SSL port %d", get_https_port());
 }
