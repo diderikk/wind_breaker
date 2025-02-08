@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-void _listen(int listener, void (*new_connection_handler)(int, int),
+void _listen(int listener, int (*new_connection_handler)(int, int),
              void (*close_connection_handler)(int),
              int (*request_handler)(int, char *));
 void *worker_function(void *_arg);
@@ -21,7 +21,7 @@ POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
-void new_connection_handler(int fd, int index) {}
+int new_connection_handler(int fd, int index) { return 0; }
 void close_connection_handler(int fd) {}
 int handle_request_async(int fd, char *buffer) {
   int recv_return = recv_socket(fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
@@ -95,7 +95,7 @@ int get_listener_socket(const char *port, int backlog) {
   return socket_fd;
 }
 
-void _listen(int listener, void (*new_connection_handler)(int, int),
+void _listen(int listener, int (*new_connection_handler)(int, int),
              void (*close_connection_handler)(int),
              int (*request_handler)(int, char *)) {
   assert(listener > 0);
@@ -103,7 +103,7 @@ void _listen(int listener, void (*new_connection_handler)(int, int),
 
   char ip_str[INET6_ADDRSTRLEN], data[REQUEST_RESPONSE_MAX_SIZE];
   char loop_counter, event_count;
-  int client_socket_fd;
+  int client_socket_fd, new_conn_ret;
   sigset_t sigmask;
   struct sockaddr_storage client_addr;
   struct pollfd *poll;
@@ -166,8 +166,13 @@ void _listen(int listener, void (*new_connection_handler)(int, int),
           continue;
         }
       }
-      if (poll->revents & POLLNVAL) {
-        log_debug("%s", get_poll_event_description(POLLNVAL));
+      if (poll->revents & (POLLNVAL | POLLHUP | POLLRDHUP)) {
+        if (poll->revents & POLLHUP)
+          log_debug("%s", get_poll_event_description(POLLHUP));
+        else if (poll->revents & POLLRDHUP)
+          log_debug("%s", get_poll_event_description(POLLRDHUP));
+        else if (poll->revents & POLLNVAL)
+          log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
           del_from_session_sync(poll->fd);
           close_connection_handler(i);
@@ -193,7 +198,11 @@ void _listen(int listener, void (*new_connection_handler)(int, int),
                    get_in_addr_port((struct sockaddr *)&client_addr));
           add_to_session_sync(client_socket_fd);
           int index = add_poll_fd_sync(poll_fd_array, client_socket_fd);
-          new_connection_handler(client_socket_fd, index);
+          new_conn_ret = new_connection_handler(client_socket_fd, index);
+          if (new_conn_ret == -1) {
+            del_from_session_sync(client_socket_fd);
+            remove_poll_fd_by_index_sync(poll_fd_array, &index);
+          }
           continue;
         } else {
           log_debug("Polling for existing client to send data...");
@@ -208,22 +217,6 @@ void _listen(int listener, void (*new_connection_handler)(int, int),
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
-      }
-      // Already should have read the final data => can now close the close
-      // the channel This should already have happend when recv_return == 0.
-      if (poll->revents & POLLHUP) {
-        log_warn("%s", get_poll_event_description(POLLHUP));
-        del_from_session_sync(poll->fd);
-        close_connection_handler(i);
-        remove_poll_fd_by_index_sync(poll_fd_array, &i);
-        continue;
-      }
-      if (poll->revents & POLLRDHUP) {
-        log_warn("%s", get_poll_event_description(POLLRDHUP));
-        del_from_session_sync(poll->fd);
-        close_connection_handler(i);
-        remove_poll_fd_by_index_sync(poll_fd_array, &i);
-        continue;
       }
     }
   }

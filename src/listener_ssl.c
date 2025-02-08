@@ -1,3 +1,5 @@
+#include "data_structures/ssl_array.h"
+#include "listener.h"
 #include "properties.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
@@ -9,8 +11,6 @@
 
 static SSL_CTX *ctx = NULL;
 static const unsigned char cache_id[] = "wind_breaker_server";
-static SSL **ssl_array = NULL;
-static BIO **bio_array = NULL;
 
 void init_ssl_listener() {
   long opts;
@@ -63,80 +63,101 @@ void init_ssl_listener() {
   SSL_CTX_set_timeout(ctx, 1800);
   SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
-  ssl_array = malloc(get_poll_array_max_size() * sizeof(SSL *));
-  if (ssl_array == NULL) {
-    SSL_CTX_free(ctx);
-    assert(ssl_array != NULL);
-  }
-
-  bio_array = malloc(get_poll_array_max_size() * sizeof(BIO *));
-  if (bio_array == NULL) {
-    free(ssl_array);
-    SSL_CTX_free(ctx);
-    assert(bio_array != NULL);
-  }
-
-  for (int i = 0; i < get_poll_array_max_size(); i++) {
-    bio_array[i] = BIO_new(BIO_s_socket());
-    if (bio_array[i] == NULL) {
-      for (int j = 0; j < i; j++) {
-        BIO_free(bio_array[j]);
-      }
-      free(bio_array);
-      free(ssl_array);
-      SSL_CTX_free(ctx);
-      assert(bio_array[i] != NULL);
-    }
-  }
-
-  for (int i = 0; i < get_poll_array_max_size(); i++) {
-    ssl_array[i] = SSL_new(ctx);
-    if (ssl_array[i] == NULL) {
-      for (int j = 0; j < i; j++) {
-        SSL_free(ssl_array[j]);
-      }
-      for (int j = 0; j < get_poll_array_max_size(); j++) {
-        BIO_free(bio_array[j]);
-      }
-      free(bio_array);
-      free(ssl_array);
-      SSL_CTX_free(ctx);
-      assert(ssl_array[i] != NULL);
-    }
-  }
+  init_ssl_array(ctx, get_poll_array_max_size() - 1);
 }
 
 int handle_accept(int client_fd, int index) {
-  SSL *ssl = ssl_array[index];
-  BIO *bio = bio_array[index];
+  SSL *ssl = get_ssl_by_index(index);
+  BIO *bio = get_bio_by_index(index);
+
+  if (SSL_in_init(ssl)) {
+    log_trace("Shutting down ongoing SSL connection %d", index - 1);
+
+    int ret = SSL_shutdown(ssl);
+    if (ret == 0) {
+      // Shutdown is not yet complete, call SSL_shutdown() again
+      ret = SSL_shutdown(ssl);
+    }
+
+    if (ret != 1) {
+      log_error("SSL_shutdown failed");
+      return -1; // TODO: Maybe remove?
+    }
+
+    // Does not handle SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
+    // Forcing a reset of the SSL object. File descriptor is closed by _listen.
+    // poll_array implementation will try to find a fd that is not POLLIN or
+    // POLLOUT Reset the SSL and BIO objects for reuse
+    ret = SSL_clear(ssl);
+    if (ret != 1) {
+      log_error("SSL_clear failed");
+      return -1;
+    }
+    ret = BIO_reset(bio);
+    if (ret != 1) {
+      log_error("BIO_reset failed");
+      return -1;
+    }
+  }
+
   BIO_set_fd(bio, client_fd, BIO_NOCLOSE);
   SSL_set_bio(ssl, bio, bio);
+  add_ssl_by_index(index);
 
-  if (SSL_accept(ssl) <= 0) {
+  int ret = SSL_accept(ssl);
+  if (ret <= 0 || ret == 2) {
     log_error("SSL_accept failed");
-    return -1;
+    if (ret <= 0)
+      return -1;
   }
 
   return 0;
 }
 
+void handle_close(int index) {
+  SSL *ssl = get_ssl_by_index(index);
+  BIO *bio = get_bio_by_index(index);
+
+  if (SSL_in_init(ssl)) {
+    log_trace("Shutting down ongoing SSL connection %d", index - 1);
+
+    int ret = SSL_shutdown(ssl);
+    if (ret == 0) {
+      // Shutdown is not yet complete, call SSL_shutdown() again
+      ret = SSL_shutdown(ssl);
+    }
+
+    if (ret != 1) {
+      log_error("SSL_shutdown failed");
+    }
+
+    // Does not handle SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
+    // Forcing a reset of the SSL object. File descriptor is closed by _listen.
+    // poll_array implementation will try to find a fd that is not POLLIN or
+    // POLLOUT Reset the SSL and BIO objects for reuse
+    ret = SSL_clear(ssl);
+    if (ret != 1) {
+      log_error("SSL_clear failed");
+    }
+    ret = BIO_reset(bio);
+    if (ret != 1) {
+      log_error("BIO_reset failed");
+    }
+  }
+  remove_ssl_by_index(index);
+}
+
+int handle_ssl_request_async(int index, char *buffer) { return 0; }
+
 void destroy_ssl_listener() {
   assert(ctx != NULL);
-  assert(ssl_array != NULL);
-  assert(bio_array != NULL);
-  for (int i = 0; i < get_poll_array_max_size(); i++) {
-    SSL_free(ssl_array[i]);
-    BIO_free(bio_array[i]);
-  }
-  free(ssl_array);
-  free(bio_array);
+  destroy_ssl_array();
   SSL_CTX_free(ctx);
+  ctx = NULL;
 }
 
 void listen_async_ssl(int socket_fd) {
   assert(socket_fd > 0);
   init_ssl_listener();
   assert(ctx != NULL);
-  assert(ssl_array != NULL);
-  assert(bio_array != NULL);
 }

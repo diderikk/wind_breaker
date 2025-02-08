@@ -40,13 +40,31 @@ void destroy_poll_array(poll_array **pa) {
   assert(*pa == NULL);
 }
 
+static inline int peek_next(poll_array *pa) {
+  assert(pa != NULL);
+
+  if (pa->count < max_count)
+    return pa->count;
+  else {
+    // If none available, find a socket not expecting any events
+    for (int i = pa->last_in_index; i < max_count; i++) {
+      if (!(pa->fds[i].fd & (POLLIN | POLLOUT))) {
+        struct pollfd *temp = &pa->fds[i];
+        pa->fds[i] = pa->fds[pa->last_in_index];
+        pa->fds[pa->last_in_index] = *temp;
+      }
+    }
+  }
+  return pa->last_in_index;
+}
+
 int add_poll_fd_sync(poll_array *pa, int fd) {
   assert(fd > 0);
   assert(fd < 16384);
   assert(pa != NULL);
   log_trace("Poller: Adding fd %d", fd);
 
-  int next = pa->count < max_count ? pa->count : pa->last_in_index;
+  int next = peek_next(pa);
   assert(next < max_count);
   // Dont overwrite the listen_fd
   if (next == 0)
