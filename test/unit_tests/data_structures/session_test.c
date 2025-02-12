@@ -77,7 +77,7 @@ void* del_from_session_sync_test() {
 
     assert(get_session_for_thread().session == NULL);
     assert(get_session_for_thread().bio == NULL);
-    
+
     destroy_session_cache();
     
     return NULL;

@@ -90,7 +90,7 @@ struct session_full_return add_to_session_sync(int related_fd) {
   session_array[next].related_fd = related_fd;
   session_array[next].thread_id = 0;
   int ret = BIO_reset(bio_array[next]);
-  if (ret != -1) {
+  if (ret == -1) {
     printf("BIO_reset failed: %s\n", ERR_error_string(ERR_get_error(), NULL));
     assert(ret != -1);
   }
@@ -183,12 +183,12 @@ void del_from_session_sync(int related_fd) {
 
   if (found == 1) {
     SSL *ssl = (ssl_array != NULL) ? ssl_array[i] : NULL;
-    assert(ssl == NULL || ssl != NULL);
+    assert(ssl == NULL && ssl_array == NULL);
     BIO *bio = bio_array[i];
     int ret = BIO_reset(bio);
-    if (ret != 1) {
-      ERR_print_errors_fp(stderr);
-      assert(ret == 1);
+    if (ret == -1) {
+      printf("BIO_reset failed: %s\n", ERR_error_string(ERR_get_error(), NULL));
+      assert(ret != -1);
     }
 
     for (; i < session_count - 1; i++) {
@@ -201,10 +201,10 @@ void del_from_session_sync(int related_fd) {
       session_array[i + 1].thread_id = 0;
       session_array[i + 1].related_fd = 0;
       session_array[i + 1].id = 0;
+      if (ssl_array != NULL)
+        ssl_array[i + 1] = ssl;
+      bio_array[i + 1] = bio;
     }
-    if (ssl_array != NULL)
-      ssl_array[i + 1] = ssl;
-    bio_array[i + 1] = bio;
 
     if (session_count > 0)
       session_count--;
