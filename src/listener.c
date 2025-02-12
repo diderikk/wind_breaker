@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-void _listen(int listener, int (*new_connection_handler)(int, int),
+void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
              void (*close_connection_handler)(int),
              int (*request_handler)(int, char *));
 void *worker_function(void *_arg);
@@ -21,7 +21,7 @@ POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
-int new_connection_handler(int fd, int index) { return 0; }
+int new_connection_handler(SSL *ssl, BIO *bio) { return 0; }
 void close_connection_handler(int fd) {}
 int handle_request_async(int fd, char *buffer) {
   int recv_return = recv_socket(fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
@@ -95,7 +95,7 @@ int get_listener_socket(const char *port, int backlog) {
   return socket_fd;
 }
 
-void _listen(int listener, int (*new_connection_handler)(int, int),
+void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
              void (*close_connection_handler)(int),
              int (*request_handler)(int, char *)) {
   assert(listener > 0);
@@ -196,12 +196,15 @@ void _listen(int listener, int (*new_connection_handler)(int, int),
                           sizeof(ip_str));
           log_info("Client connect %s:%d", ip_str,
                    get_in_addr_port((struct sockaddr *)&client_addr));
-          add_to_session_sync(client_socket_fd);
-          int index = add_poll_fd_sync(poll_fd_array, client_socket_fd);
-          new_conn_ret = new_connection_handler(client_socket_fd, index);
+          struct session_full_return full_session =
+              add_to_session_sync(client_socket_fd);
+          int poll_array_index =
+              add_poll_fd_sync(poll_fd_array, client_socket_fd);
+          new_conn_ret =
+              new_connection_handler(full_session.ssl, full_session.bio);
           if (new_conn_ret == -1) {
             del_from_session_sync(client_socket_fd);
-            remove_poll_fd_by_index_sync(poll_fd_array, &index);
+            remove_poll_fd_by_index_sync(poll_fd_array, &poll_array_index);
           }
           continue;
         } else {

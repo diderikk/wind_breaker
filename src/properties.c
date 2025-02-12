@@ -6,8 +6,7 @@
 
 #define LOG_BUFFER_SIZE 4096
 
-static int poll_array_max_size = 128;
-static int session_max_size = 500;
+static int session_max_size = 128;
 static int queue_max_size = 1024;
 static int worker_thread_max_size = 4;
 static int listen_backlog_max_size = 50;
@@ -111,13 +110,7 @@ void init_properties(int argc, char *argv[]) {
 
     while ((read_size = getline(&line, &read_len, f)) != -1) {
       line[read_size - 1] = '\0';
-      if (strncasecmp(line, "poll_array_max_size", 19) == 0) {
-        assert(atoi(line + 20) > 0 && atoi(line + 20) < 65536);
-        poll_array_max_size = atoi(line + 20);
-        log_buffer_offset += snprintf(
-            log_buffer + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset,
-            "Poll array max size: %d\n", poll_array_max_size);
-      } else if (strncasecmp(line, "session_max_size", 16) == 0) {
+      if (strncasecmp(line, "session_max_size", 16) == 0) {
         assert(atoi(line + 17) > 0 && atoi(line + 17) < 65536);
         session_max_size = atoi(line + 17);
         log_buffer_offset += snprintf(
@@ -215,10 +208,9 @@ void init_properties(int argc, char *argv[]) {
   }
 }
 
-int get_poll_array_max_size() { return poll_array_max_size; }
-void set_poll_array_max_size(int size) { poll_array_max_size = size; }
-
 int get_session_max_size() { return session_max_size; }
+
+void set_session_max_size(int size) { session_max_size = size; }
 
 int get_queue_max_size() { return queue_max_size; }
 

@@ -1,4 +1,3 @@
-#include "data_structures/ssl_array.h"
 #include "listener.h"
 #include "properties.h"
 #include "utils/assert2.h"
@@ -62,13 +61,9 @@ void init_ssl_listener() {
   SSL_CTX_sess_set_cache_size(ctx, get_session_max_size());
   SSL_CTX_set_timeout(ctx, 1800);
   SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-
-  init_ssl_array(ctx, get_poll_array_max_size() - 1);
 }
 
-int handle_accept(int client_fd, int index) {
-  SSL *ssl = get_ssl_by_index(index);
-  BIO *bio = get_bio_by_index(index);
+int handle_accept(SSL *ssl, BIO *bio) {
 
   if (SSL_in_init(ssl)) {
     log_trace("Shutting down ongoing SSL connection %d", index - 1);
@@ -93,16 +88,9 @@ int handle_accept(int client_fd, int index) {
       log_error("SSL_clear failed");
       return -1;
     }
-    ret = BIO_reset(bio);
-    if (ret != 1) {
-      log_error("BIO_reset failed");
-      return -1;
-    }
   }
 
-  BIO_set_fd(bio, client_fd, BIO_NOCLOSE);
   SSL_set_bio(ssl, bio, bio);
-  add_ssl_by_index(index);
 
   int ret = SSL_accept(ssl);
   if (ret <= 0 || ret == 2) {
@@ -114,10 +102,7 @@ int handle_accept(int client_fd, int index) {
   return 0;
 }
 
-void handle_close(int index) {
-  SSL *ssl = get_ssl_by_index(index);
-  BIO *bio = get_bio_by_index(index);
-
+void handle_close(SSL *ssl, BIO *bio) {
   if (SSL_in_init(ssl)) {
     log_trace("Shutting down ongoing SSL connection %d", index - 1);
 
@@ -139,19 +124,13 @@ void handle_close(int index) {
     if (ret != 1) {
       log_error("SSL_clear failed");
     }
-    ret = BIO_reset(bio);
-    if (ret != 1) {
-      log_error("BIO_reset failed");
-    }
   }
-  remove_ssl_by_index(index);
 }
 
 int handle_ssl_request_async(int index, char *buffer) { return 0; }
 
 void destroy_ssl_listener() {
   assert(ctx != NULL);
-  destroy_ssl_array();
   SSL_CTX_free(ctx);
   ctx = NULL;
 }

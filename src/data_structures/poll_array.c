@@ -13,7 +13,7 @@ void init_poll_array(poll_array **pa, int listen_fd) {
   assert(listen_fd > 0);
   assert(listen_fd < 16384);
   assert(*pa == NULL);
-  max_count = get_poll_array_max_size();
+  max_count = get_session_max_size();
 
   assert(max_count > 0);
   assert(max_count < 16384);

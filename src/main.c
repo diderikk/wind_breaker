@@ -33,7 +33,6 @@ int main(int argc, char *argv[]) {
 
   log_logo();
   init_properties(argc, argv);
-  init_session_cache(get_session_max_size());
   log_file = logger_init(get_log_level(), get_log_type(), get_log_file());
   // Log file is opened if LOG_TYPE is FILE_ONLY or CONSOLE_FILE
   assert(get_log_type() == CONSOLE_ONLY || log_file != NULL);
@@ -48,6 +47,11 @@ int main(int argc, char *argv[]) {
 
   https_socket_fd =
       get_listener_socket(get_https_port(), get_listen_backlog_max_size());
+
+  if (https_socket_fd >= 0)
+    init_session_cache(get_session_max_size(), NULL);
+  else
+    init_session_cache(get_session_max_size(), NULL);
 
   assert(init_queue() == 0);
   assert(init_workers(get_worker_thread_max_size(), listener_worker_function,

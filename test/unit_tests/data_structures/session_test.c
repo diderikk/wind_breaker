@@ -11,7 +11,7 @@ static int session_test_count = 0;
 static int session_start_case(void *(*func)(void *), const char *name);
 
 void *init_session_test() {
-  init_session_cache(3);
+  init_session_cache(3, NULL);
 
   return NULL;
 }
@@ -23,7 +23,7 @@ void *destroy_session_test() {
 }
 
 void* add_to_session_sync_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     add_to_session_sync(1);
     destroy_session_cache();
 
@@ -31,33 +31,36 @@ void* add_to_session_sync_test() {
 }
 
 void* get_session_for_thread_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     add_to_session_sync(1);
     add_thread_to_session(1);
-    struct session *sess = get_session_for_thread();
-    assert(sess != NULL);
-    assert(sess->related_fd == 1);
-    assert(sess->thread_id == (unsigned long) pthread_self());
-    assert(sess->id != 0);
+    struct session_full_return sess = get_session_for_thread();
+    assert(sess.session != NULL);
+    assert(sess.session->related_fd == 1);
+    assert(sess.session->thread_id == (unsigned long) pthread_self());
+    assert(sess.session->id != 0);
+    assert(sess.bio != NULL);
+    assert(sess.ssl == NULL);
     destroy_session_cache();
 
     return NULL;
 }
 
 void* remove_thread_from_session_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     add_to_session_sync(1);
     add_thread_to_session(1);
     remove_thread_from_session();
-    struct session *sess = get_session_for_thread();
-    assert(sess == NULL);
+    struct session_full_return sess = get_session_for_thread();
+    assert(sess.session == NULL);
+    assert(sess.bio == NULL);
     destroy_session_cache();
 
     return NULL;
 }
 
 void* add_thread_to_session_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     add_to_session_sync(1);
     add_thread_to_session(1);
 
@@ -67,12 +70,13 @@ void* add_thread_to_session_test() {
 }
 
 void* del_from_session_sync_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     add_to_session_sync(1);
     add_thread_to_session(1);
     del_from_session_sync(1);
 
-    assert(get_session_for_thread() == NULL);
+    assert(get_session_for_thread().session == NULL);
+    assert(get_session_for_thread().bio == NULL);
     
     destroy_session_cache();
     
@@ -80,7 +84,7 @@ void* del_from_session_sync_test() {
 }
 
 void* add_to_session_sync_overflow_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     int sessions = TEST_MAX_SIZE + 3;
     //pthread_t threads[session_test_count];
 
@@ -91,11 +95,13 @@ void* add_to_session_sync_overflow_test() {
     int count = 0;
     for(int fd = sessions - TEST_MAX_SIZE + 1; fd < sessions + 1; fd++) {
         add_thread_to_session(fd);
-        struct session *sess = get_session_for_thread();
-        assert(sess != NULL);
-        assert(sess->related_fd == fd);
-        assert(sess->thread_id == (unsigned long) pthread_self());
-        assert(sess->id != 0);
+        struct session_full_return sess = get_session_for_thread();
+        assert(sess.session != NULL);
+        assert(sess.session->related_fd == fd);
+        assert(sess.session->thread_id == (unsigned long) pthread_self());
+        assert(sess.session->id != 0);
+        assert(sess.bio != NULL);
+        assert(sess.ssl == NULL);
         remove_thread_from_session();
         count++;
     } 
@@ -108,7 +114,7 @@ void* add_to_session_sync_overflow_test() {
 }
 
 void* add_and_remove_all_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
 
     for (int fd = 1; fd < TEST_MAX_SIZE + 1; fd++) {
         add_to_session_sync(fd);
@@ -120,7 +126,8 @@ void* add_and_remove_all_test() {
         del_from_session_sync(fd);
     }
 
-    assert(get_session_for_thread() == NULL);
+    assert(get_session_for_thread().session == NULL);
+    assert(get_session_for_thread().bio == NULL);
 
     destroy_session_cache();
 
@@ -130,17 +137,17 @@ void* add_and_remove_all_test() {
 void *get_session_for_thread_func(void* i) {
   int *fd = (int *)i;
   add_thread_to_session(*fd);
-    struct session *sess = get_session_for_thread();
-    assert(sess != NULL);
-    assert(sess->related_fd == *fd);
-    assert(sess->thread_id == (unsigned long) pthread_self());
-    assert(sess->id != 0);
+    struct session_full_return sess = get_session_for_thread();
+    assert(sess.session != NULL);
+    assert(sess.session->related_fd == *fd);
+    assert(sess.session->thread_id == (unsigned long) pthread_self());
+    assert(sess.session->id != 0);
 
     return NULL;
 }
 
 void* add_and_get_all_test() {
-    init_session_cache(TEST_MAX_SIZE);
+    init_session_cache(TEST_MAX_SIZE, NULL);
     pthread_t threads[TEST_MAX_SIZE];
     int fd[TEST_MAX_SIZE];
 

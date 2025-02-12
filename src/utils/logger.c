@@ -135,7 +135,7 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
   struct tm *timeinfo;
   char time_str[20];
   pthread_t thread_id = pthread_self();
-  struct session *session = get_session_for_thread();
+  struct session *session = get_session_for_thread().session;
   char *relative_file_path = (strstr(file, "src/") != NULL)
                                  ? strstr(file, "src/") + 4
                                  : strstr(file, "test/") + 5;

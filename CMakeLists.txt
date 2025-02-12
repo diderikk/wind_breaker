@@ -22,7 +22,6 @@ add_library(worker_lib STATIC src/worker.c)
 add_library(properties_lib STATIC src/properties.c)
 add_library(worker_queue_lib STATIC src/data_structures/worker_queue.c)
 add_library(poll_array_lib STATIC src/data_structures/poll_array.c)
-add_library(ssl_array_lib STATIC src/data_structures/ssl_array.c)
 add_library(http_request_lib STATIC src/http/request.c)
 add_library(http_response_lib STATIC src/http/response.c)
 add_library(file_utils_lib STATIC src/utils/static_file.c)
@@ -44,7 +43,7 @@ add_library(simulator_http_lib STATIC test/simulator/http_cases.c)
 
 
 add_executable(main src/main.c)
-target_link_libraries(main PRIVATE listener_ssl_lib listener_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib worker_lib worker_queue_lib ssl_array_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(main PRIVATE listener_ssl_lib listener_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib worker_lib worker_queue_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_address_sanitizer(main)
 
 add_executable(client test/simulator/client.c)
@@ -53,7 +52,7 @@ enable_address_sanitizer(client)
 
 
 add_executable(unit_test test/unit_tests/all_tests.c)
-target_link_libraries(unit_test PRIVATE http_request_lib http_response_lib worker_queue_lib file_utils_lib regex_utils_lib ssl_array_lib poll_array_lib compression_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(unit_test PRIVATE http_request_lib http_response_lib worker_queue_lib file_utils_lib regex_utils_lib poll_array_lib compression_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_address_sanitizer(unit_test)
 # Add custom target to copy the static folder
 add_custom_target(copy_static ALL

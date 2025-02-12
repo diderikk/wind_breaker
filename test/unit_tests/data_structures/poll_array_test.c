@@ -77,7 +77,7 @@ void *remove_poll_fd_by_index_sync_test() {
 
 // Edge case: Test adding more file descriptors than max_count
 void *add_poll_fd_sync_overflow_test() {
-    set_poll_array_max_size(10);
+    set_session_max_size(10);
     poll_array *pa = NULL;
     
     init_poll_array(&pa, 1);
@@ -100,7 +100,7 @@ void *add_poll_fd_sync_overflow_test() {
 // Edge case: Test adding more file descriptors than max_count
 // and removing a file descriptor after last_in_index
 void *add_poll_fd_sync_overflow_minus_one_after_last_test() {
-    set_poll_array_max_size(10);
+    set_session_max_size(10);
     poll_array *pa = NULL;
     
     init_poll_array(&pa, 1);
@@ -124,7 +124,7 @@ void *add_poll_fd_sync_overflow_minus_one_after_last_test() {
 // Edge case: Test adding more file descriptors than max_count
 // and removing a file descriptor before last_in_index
 void *add_poll_fd_sync_overflow_minus_one_before_last_test() {
-    set_poll_array_max_size(10);
+    set_session_max_size(10);
     poll_array *pa = NULL;
     
     init_poll_array(&pa, 1);
@@ -147,7 +147,7 @@ void *add_poll_fd_sync_overflow_minus_one_before_last_test() {
 // Edge case: Test adding more file descriptors than max_count
 // and removing a file descriptor before last_in_index
 void *add_poll_fd_sync_overflow_minus_all() {
-    set_poll_array_max_size(10);
+    set_session_max_size(10);
     poll_array *pa = NULL;
     
     init_poll_array(&pa, 1);
@@ -176,7 +176,7 @@ void *add_poll_fd_sync_overflow_minus_all() {
 // Edge case: Test adding more file descriptors than max_count
 // and removing a file descriptor before last_in_index
 void *add_poll_fd_sync_overflow_minus_even() {
-    set_poll_array_max_size(10);
+    set_session_max_size(10);
     poll_array *pa = NULL;
     
     init_poll_array(&pa, 1);
