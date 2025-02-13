@@ -45,7 +45,9 @@ jobs:
           sleep 5
           ./build/client
 
+      - name: Print logs
+        if: always()
+        run: cat /tmp/logs
+
       - name: Stop server
-        run: | 
-          kill $MAIN_PID
-          cat /tmp/logs
+        run: kill $MAIN_PID
