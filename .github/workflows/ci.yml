@@ -38,6 +38,9 @@ jobs:
       - name: Run unit tests
         run: ./build/unit_test
 
+      - name: Generate self-signed certificate
+        run: openssl req -x509 -newkey rsa:4096 -keyout /etc/wind_breaker/key.pem -out /etc/wind_breaker/cert.pem -sha256 -days 365 -nodes -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost"
+
       - name: Run simulations
         run: |
           touch /tmp/logs
