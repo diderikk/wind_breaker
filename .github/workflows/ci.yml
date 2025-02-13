@@ -40,9 +40,12 @@ jobs:
 
       - name: Run simulations
         run: |
-          (./build/main &> /dev/null) & echo "MAIN_PID=$!" >> $GITHUB_ENV
+          touch /tmp/logs
+          (./build/main &> /tmp/logs) & echo "MAIN_PID=$!" >> $GITHUB_ENV
           sleep 5
           ./build/client
 
       - name: Stop server
-        run: kill $MAIN_PID
+        run: | 
+          kill $MAIN_PID
+          cat /tmp/logs
