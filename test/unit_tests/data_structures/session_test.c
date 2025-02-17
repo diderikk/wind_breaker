@@ -46,6 +46,25 @@ void* get_session_for_thread_test() {
     return NULL;
 }
 
+void* get_session_for_thread_with_ssl_test() {
+    SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+    assert(ctx != NULL);
+    
+    init_session_cache(TEST_MAX_SIZE, ctx);
+    add_to_session_sync(1);
+    add_thread_to_session(1);
+    struct session_full_return sess = get_session_for_thread();
+    assert(sess.session != NULL);
+    assert(sess.session->related_fd == 1);
+    assert(sess.session->thread_id == (unsigned long) pthread_self());
+    assert(sess.session->id != 0);
+    assert(sess.bio != NULL);
+    assert(sess.ssl != NULL);
+    destroy_session_cache();
+
+    return NULL;
+}
+
 void* remove_thread_from_session_test() {
     init_session_cache(TEST_MAX_SIZE, NULL);
     add_to_session_sync(1);
@@ -175,6 +194,7 @@ int session_test() {
   session_start_case(destroy_session_test, "destroy_session_test");
   session_start_case(add_to_session_sync_test, "add_to_session_sync_test");
   session_start_case(get_session_for_thread_test, "get_session_for_thread_test");
+  session_start_case(get_session_for_thread_with_ssl_test, "get_session_for_thread_with_ssl_test");
   session_start_case(remove_thread_from_session_test, "remove_thread_from_session_test");
   session_start_case(add_thread_to_session_test, "add_thread_to_session_test");
   session_start_case(del_from_session_sync_test, "del_from_session_sync_test");

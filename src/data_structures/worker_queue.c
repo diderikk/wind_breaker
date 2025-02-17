@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define SECOND_MOST_SIGNIFICANT_BIT 1 << 30
+
 static queue_t *q = NULL;
 
 int init_queue() {
@@ -55,7 +57,23 @@ void broadcast_queue() {
   pthread_mutex_unlock(&q->mutex);
 }
 
-void queue_push(int fd, const char *data) {
+inline static int peek_next_work() {
+  int index = -1;
+
+  if (q->count > 0) {
+    for (int i = 0; i < q->count; i++) {
+      int fd = q->data[(q->front + i) % get_queue_max_size()]->fd;
+      if ((fd & SECOND_MOST_SIGNIFICANT_BIT) == 0) {
+        index = (q->front + i) % get_queue_max_size();
+        break;
+      }
+    }
+  }
+
+  return index;
+}
+
+void queue_push(int fd, const char *data, int size) {
   assert(q != NULL);
   assert(data != NULL);
   pthread_mutex_lock(&q->mutex);
@@ -66,6 +84,7 @@ void queue_push(int fd, const char *data) {
   }
 
   q->data[q->rear]->fd = fd;
+  q->data[q->rear]->size = size;
   memcpy(q->data[q->rear]->data, data, REQUEST_RESPONSE_MAX_SIZE);
   q->rear = (q->rear + 1) % get_queue_max_size();
   q->count++;
@@ -80,7 +99,8 @@ worker_data *queue_pop() {
   assert(q != NULL);
   pthread_mutex_lock(&q->mutex);
 
-  while (q->count == 0 && !stop()) {
+  int next_work = -1;
+  while ((next_work = peek_next_work()) == -1 && !stop()) {
     // Wait until there is data in the queue
     pthread_cond_wait(&q->cond, &q->mutex);
   }
@@ -100,4 +120,24 @@ worker_data *queue_pop() {
   assert(data != NULL);
   log_trace("Popped data from queue, count: %d", q->count);
   return data;
+}
+
+void set_work_ready(int fd) {
+  assert(q != NULL);
+  pthread_mutex_lock(&q->mutex);
+
+  int found = 0;
+  for (int i = 0; i < q->count; i++) {
+    int _fd = q->data[(q->front + i) % get_queue_max_size()]->fd;
+    if (fd == _fd) {
+      q->data[(q->front + i) % get_queue_max_size()]->fd &=
+          ~(SECOND_MOST_SIGNIFICANT_BIT);
+      found = 1;
+      break;
+    }
+  }
+
+  pthread_cond_signal(&q->cond);
+  pthread_mutex_unlock(&q->mutex);
+  assert(found == 1);
 }

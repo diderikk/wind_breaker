@@ -150,7 +150,8 @@ void remove_thread_from_session() {
 // Assign a thread to a session.
 // Caused by having a worker queue, and we need to know which session a worker
 // is handling
-void add_thread_to_session(int related_fd) {
+struct session_full_return add_thread_to_session(int related_fd) {
+  struct session_full_return result = {NULL, NULL, NULL};
   assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
   int found = 0;
@@ -159,10 +160,16 @@ void add_thread_to_session(int related_fd) {
     if (session_array[i].related_fd == related_fd) {
       found = 1;
       session_array[i].thread_id = (unsigned long)pthread_self();
+      result.session = &session_array[i];
+      result.bio = bio_array[i];
+      if (ssl_array != NULL) {
+        result.ssl = ssl_array[i];
+      }
     }
   }
   pthread_mutex_unlock(&session_mutex);
   assert(found == 1);
+  return result;
 }
 
 void del_from_session_sync(int related_fd) {

@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define INT_MOST_SIGNIFICANT_BIT 1 << 31
+#define INT_SECOND_MOST_SIGNIFICANT_BIT 1 << 30
+
 void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
              void (*close_connection_handler)(int),
              int (*request_handler)(int, char *));
@@ -26,7 +29,7 @@ void close_connection_handler(int fd) {}
 int handle_request_async(int fd, char *buffer) {
   int recv_return = recv_socket(fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
-    queue_push(fd, buffer);
+    queue_push(fd, buffer, recv_return);
     return 0;
   } else if (recv_return == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
     return 0;
@@ -180,6 +183,12 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
           continue;
         }
       }
+      if (poll->revents & POLLOUT) {
+        log_debug("Socket %d is ready for writing", poll->fd);
+        set_work_ready(poll->fd | INT_SECOND_MOST_SIGNIFICANT_BIT |
+                       INT_MOST_SIGNIFICANT_BIT);
+        continue;
+      }
       // HANDLES NEW SOCKET EVENTS
       if (poll->revents & POLLIN) {
         // New connection wants to connect from the accept.
@@ -228,7 +237,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
 
 void *listener_worker_function(void *_arg) {
   // worker_arg *arg = (worker_arg *)_arg;
-  int send_return, response_code, response_size;
+  int send_return, response_code, response_size, original_fd;
   worker_data *data;
   http_request_t *http_request = malloc(sizeof(http_request_t));
   char *tmp_response_buffer = malloc(REQUEST_RESPONSE_MAX_SIZE);
@@ -239,38 +248,49 @@ void *listener_worker_function(void *_arg) {
   memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
   memset(http_request, 0, sizeof(http_request_t));
   response_code = 500;
+  original_fd = 0;
 
   while (!stop()) {
     data = queue_pop();
     if (data == NULL) {
       continue;
     }
+    if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0)
+      original_fd = data->fd;
+    else
+      original_fd = data->fd & ~(INT_MOST_SIGNIFICANT_BIT);
 
-    add_thread_to_session(data->fd);
+    add_thread_to_session(original_fd);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
-    parse_http_request(http_request, data->data);
-    response_code = validate_request_headers(http_request);
+    if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0) {
+      parse_http_request(http_request, data->data);
+      response_code = validate_request_headers(http_request);
 
-    response_size = construct_response(
-        response_code, http_request->uri, http_request->accept_encoding,
-        http_request->if_none_match, data->data, tmp_response_buffer);
+      response_size = construct_response(
+          response_code, http_request->uri, http_request->accept_encoding,
+          http_request->if_none_match, data->data, tmp_response_buffer);
+    } else {
+      response_size = data->size;
+    }
 
-    send_return = send_socket(data->fd, data->data, response_size);
+    send_return = send_socket(original_fd, data->data, response_size);
     remove_thread_from_session();
     // TODO: Can cause the session_count to be decremented twice...
     if (http_request->connection == CLOSE || send_return == -1) {
-      del_from_session_sync(data->fd);
+      del_from_session_sync(original_fd);
     }
 
     // Reset worker queue data
     memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);
     data->fd = 0;
+    data->size = 0;
 
     // Reset buffers
     memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
     memset(http_request, 0, sizeof(http_request_t));
     response_code = 500;
     response_size = 0;
+    original_fd = 0;
   }
 
   free(tmp_response_buffer);

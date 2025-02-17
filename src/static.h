@@ -5,6 +5,7 @@
 
 typedef struct {
   int fd;
+  int size;
   char data[REQUEST_RESPONSE_MAX_SIZE];
 } worker_data;
 
