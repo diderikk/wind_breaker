@@ -1,10 +1,7 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
-#include <arpa/inet.h>
 #include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
 #include <openssl/bio.h>
 #include <sys/socket.h>
 

@@ -1,14 +1,6 @@
 #include "signal2.h"
-#include "../data_structures/poll_array.h"
-#include "../data_structures/session.h"
-#include "../data_structures/worker_queue.h"
-#include "../properties.h"
-#include "../utils/logger.h"
-#include "../worker.h"
 #include "stop.h"
 #include <stddef.h>
-#include <stdlib.h>
-#include <unistd.h>
 
 void handle_signals(void (*handle_exit)(int)) {
   handle_exit = handle_exit;

@@ -1,12 +1,117 @@
 #ifndef STATIC_H
 #define STATIC_H
 
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <poll.h>
+#include <pthread.h>
+
 #define REQUEST_RESPONSE_MAX_SIZE 32768
+#define HTTP_HEADER_SIZE 256
+#define HTTP_URI_SIZE 512
+#define HTTP_VERSION_SIZE 16
+#define HTTP_METHOD_SIZE 8
+#define HTTP_BODY_SIZE 16192
+#define HTTP_HEADER_SMALL_SIZE 128
+#define HTTP_HEADER_ETAG_SIZE 65
+#define HTTP_VERSION "1.1"
+
+typedef enum { RESET, REMOVE_FD, CONTINUE } POLL_ERROR_CLASS;
+
+typedef enum {
+  HTTP_POST,
+  HTTP_GET,
+  HTTP_PATCH,
+  HTTP_PUT,
+  HTTP_HEAD,
+  HTTP_DELETE,
+  HTTP_CONNECT,
+  HTTP_OPTIONS,
+  HTTP_TRACE,
+  HTTP_BAD_METHOD
+} http_method;
+
+typedef enum { KEEP_ALIVE, CLOSE } http_connection;
+
+typedef enum {
+  HTTP_OK = 200,
+  HTTP_NOT_MODIFIED = 304,
+  HTTP_BAD_REQUEST = 400,
+  HTTP_NOT_FOUND = 404,
+  HTTP_METHOD_NOT_ALLOWED = 405,
+  HTTP_NOT_ACCEPTABLE = 406,
+  HTTP_INTERNAL_SERVER_ERROR = 500,
+  HTTP_NOT_IMPLEMENTED = 501,
+  HTTP_SERVICE_UNAVAILABLE = 503
+} http_status_code;
 
 typedef struct {
   int fd;
   int size;
   char data[REQUEST_RESPONSE_MAX_SIZE];
 } worker_data;
+
+typedef struct {
+  void *arg;
+} worker_arg;
+
+// TODO:
+// Upgrade-Insecure-Requests: 1
+// Sec-Fetch-Dest: document
+// Sec-Fetch-Mode: navigate
+// Sec-Fetch-Site: none
+// Sec-Fetch-User: ?1
+// Priority: u=0, i
+
+typedef struct {
+  http_status_code status_code;
+  char content_type[HTTP_HEADER_SIZE];
+  long content_length;
+  char content_language[HTTP_HEADER_SMALL_SIZE];
+  char content_encoding[HTTP_HEADER_SMALL_SIZE];
+  char last_modified[HTTP_HEADER_SMALL_SIZE];
+  char date[HTTP_HEADER_SMALL_SIZE];
+  char etag[HTTP_HEADER_ETAG_SIZE];
+  char body[HTTP_BODY_SIZE];
+} http_response_t;
+
+typedef struct {
+  char uri[HTTP_URI_SIZE];
+  http_method method;
+  char version[HTTP_VERSION_SIZE];
+  char host[HTTP_HEADER_SIZE];
+  char user_agent[HTTP_HEADER_SIZE];
+  char accept[HTTP_HEADER_SIZE];
+  char accept_language[HTTP_HEADER_SIZE];
+  char accept_encoding[HTTP_HEADER_SIZE];
+  char if_none_match[HTTP_HEADER_ETAG_SIZE];
+  http_connection connection;
+  char content_type[HTTP_HEADER_SIZE];
+  long content_length;
+} http_request_t;
+
+typedef struct {
+  worker_data **data;
+  int count, front, rear;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+} queue_t;
+
+struct session {
+  int id;
+  int related_fd;
+  unsigned long thread_id;
+};
+
+struct session_full_return {
+  struct session *session;
+  BIO *bio;
+  SSL *ssl;
+};
+
+typedef struct {
+  struct pollfd *fds;
+  int count, last_in_index;
+} poll_array;
 
 #endif // STATIC_H

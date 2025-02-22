@@ -2,7 +2,6 @@
 #include "assert2.h"
 #include "logger.h"
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
 
 #define STATIC_PATH "static/"
@@ -17,7 +16,8 @@ int find_static_file(const char *uri) {
   return 1;
 }
 
-int read_static_file(const char *file_path, char *buffer, size_t buffer_size) {
+int read_static_file(const char *file_path, char *buffer,
+                     unsigned int buffer_size) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_path);
 
@@ -32,7 +32,8 @@ int read_static_file(const char *file_path, char *buffer, size_t buffer_size) {
   return read_size;
 }
 
-int write_static_file(const char *file_name, char *buffer, size_t buffer_size) {
+int write_static_file(const char *file_name, char *buffer,
+                      unsigned int buffer_size) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_name);
 

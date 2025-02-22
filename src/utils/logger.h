@@ -1,9 +1,7 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <pthread.h>
 #include <stdio.h>
-#include <time.h>
 
 typedef enum { TRACE, DEBUG, INFO, WARN, ERROR } LOG_LEVEL;
 typedef enum { CONSOLE_ONLY, FILE_ONLY, CONSOLE_FILE } LOG_DESTINATION;

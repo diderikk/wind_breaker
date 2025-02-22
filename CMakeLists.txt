@@ -12,7 +12,7 @@ find_package(OpenSSL REQUIRED)
 
 function(enable_address_sanitizer target)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3) #-fsanitize=address,undefined -static-libasan)
-    #target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    target_link_options(${target} PRIVATE -fsanitize=address,undefined)
 endfunction()
 
 add_library(socket_lib STATIC src/socket.c)

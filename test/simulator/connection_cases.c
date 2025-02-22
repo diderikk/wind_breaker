@@ -117,7 +117,6 @@ void *start_write_recv_close_connection(void *arg) {
 
   size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
   assert(size > 0);
-  // log_trace("Server response: %s", buffer);
 
   // log_trace("Connection established. Closing connection immediately");
   close(socket_fd);

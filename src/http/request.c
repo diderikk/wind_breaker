@@ -3,7 +3,6 @@
 #include "../utils/logger.h"
 #include "../utils/regex2.h"
 #include "../utils/static_file.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 

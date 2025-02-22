@@ -1,9 +1,10 @@
 #include "compression.h"
 #include "assert2.h"
 #include "logger.h"
-#include <errno.h>
+#include <zlib.h>
 
-int compress_gzip(const char *buffer, size_t buffer_size, char *to_buffer) {
+int compress_gzip(const char *buffer, unsigned int buffer_size,
+                  char *to_buffer) {
   // Create a temporary file to store the gzip output
   FILE *tmp_file = tmpfile();
 
@@ -43,7 +44,7 @@ int compress_gzip(const char *buffer, size_t buffer_size, char *to_buffer) {
 
   // Get the size of the compressed data
   fseek(tmp_file, 0, SEEK_END);
-  size_t compressed_size = ftell(tmp_file);
+  unsigned int compressed_size = ftell(tmp_file);
   log_trace("compressed_size: %ld", compressed_size);
   rewind(tmp_file);
   if (compressed_size <= 0) {
@@ -59,8 +60,8 @@ int compress_gzip(const char *buffer, size_t buffer_size, char *to_buffer) {
   return compressed_size;
 }
 
-int decompress_gzip(const char *buffer, size_t buffer_size, char *to_buffer,
-                    size_t to_buffer_size) {
+int decompress_gzip(const char *buffer, unsigned int buffer_size,
+                    char *to_buffer, unsigned int to_buffer_size) {
   FILE *tmp_file = tmpfile();
   if (!tmp_file) {
     log_error("Failed to create temporary file");
@@ -104,7 +105,8 @@ int decompress_gzip(const char *buffer, size_t buffer_size, char *to_buffer,
   return bytes_read;
 }
 
-int compress_deflate(const char *buffer, size_t buffer_size, char *to_buffer) {
+int compress_deflate(const char *buffer, unsigned int buffer_size,
+                     char *to_buffer) {
   uLong compressed_len = compressBound(buffer_size);
 
   z_stream defstream;
@@ -127,8 +129,8 @@ int compress_deflate(const char *buffer, size_t buffer_size, char *to_buffer) {
   return defstream.total_out;
 }
 
-int decompress_deflate(const char *buffer, size_t buffer_size, char *to_buffer,
-                       size_t to_buffer_size) {
+int decompress_deflate(const char *buffer, unsigned int buffer_size,
+                       char *to_buffer, unsigned int to_buffer_size) {
   z_stream infstream;
   infstream.zalloc = Z_NULL;
   infstream.zfree = Z_NULL;

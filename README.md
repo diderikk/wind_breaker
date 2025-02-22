@@ -2,13 +2,14 @@
 ![CI](https://github.com/diderikk/wind_breaker/actions/workflows/ci.yml/badge.svg)
 
 ## TODO
+* Fix session to use assert and logger
+* Add insert_time in worker_data
 * SSL/TLS
 * Caching
 * SQLite
 * Images referencing
 * Add more parsing for more HTTP headers.
-* Logging with color and fixed sizes, add LINE and func directives.
-* IPv6?
+* One static header file for alle structs and enums
 * Memory optimization, data-oriented design (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
 * Performance optimization (assembly understanding, cache optimization?)
 

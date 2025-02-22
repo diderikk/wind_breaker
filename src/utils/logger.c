@@ -1,9 +1,9 @@
 #include "logger.h"
 #include "../data_structures/session.h"
+#include "../static.h"
 #include <errno.h>
 #include <openssl/err.h>
 #include <stdarg.h>
-#include <string.h>
 
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"

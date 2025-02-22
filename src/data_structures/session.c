@@ -1,8 +1,6 @@
 #include "session.h"
+#include "../static.h"
 #include <openssl/err.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 static struct session *session_array = NULL;
 static SSL **ssl_array = NULL;
@@ -33,6 +31,7 @@ int init_session_cache(int _max_size, SSL_CTX *ctx) {
 
   for (int i = 0; i < max_size; i++) {
     bio_array[i] = BIO_new(BIO_s_socket());
+    BIO_set_nbio(bio_array[i], 1);
     assert(bio_array[i] != NULL);
   }
 
@@ -112,6 +111,29 @@ struct session_full_return add_to_session_sync(int related_fd) {
   return result;
 }
 
+struct session_full_return get_session_sync(int related_fd) {
+  assert(session_array != NULL);
+  assert(bio_array != NULL);
+  assert(related_fd > 0);
+  assert(related_fd < 16384);
+
+  pthread_mutex_lock(&session_mutex);
+  struct session_full_return result = {NULL, NULL, NULL};
+  for (int i = 0; i < session_count; i++) {
+    if (session_array[i].related_fd == related_fd) {
+      result.session = &session_array[i];
+      result.bio = bio_array[i];
+      if (ssl_array != NULL) {
+        result.ssl = ssl_array[i];
+      }
+      break;
+    }
+  }
+  pthread_mutex_unlock(&session_mutex);
+  assert(result.session != NULL);
+  return result;
+}
+
 // Get the session for a given thread id
 struct session_full_return get_session_for_thread() {
   struct session_full_return result = {NULL, NULL, NULL};
@@ -132,6 +154,7 @@ struct session_full_return get_session_for_thread() {
   }
   pthread_mutex_unlock(&session_mutex);
   return result;
+  assert(result.session != NULL);
 }
 
 // After a thread is done with a session, set the thread_id to 0 (unassign it)
@@ -156,7 +179,6 @@ struct session_full_return add_thread_to_session(int related_fd) {
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
-    assert(session_array[i].thread_id != (unsigned long)pthread_self());
     if (session_array[i].related_fd == related_fd) {
       found = 1;
       session_array[i].thread_id = (unsigned long)pthread_self();

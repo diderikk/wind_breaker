@@ -1,5 +1,5 @@
 #include "http_cases.h"
-#include "../../src/http/static.h"
+#include "../../src/static.h"
 #include "../../src/socket.h"
 #include "../../src/utils/assert2.h"
 #include "../../src/utils/logger.h"

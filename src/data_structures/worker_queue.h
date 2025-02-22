@@ -2,14 +2,6 @@
 #define QUEUE_H
 
 #include "../static.h"
-#include "pthread.h"
-
-typedef struct {
-  worker_data **data;
-  int count, front, rear;
-  pthread_mutex_t mutex;
-  pthread_cond_t cond;
-} queue_t;
 
 int init_queue();
 void destroy_queue();

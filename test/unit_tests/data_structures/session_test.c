@@ -1,6 +1,7 @@
 #include "../../../src/data_structures/session.h"
 #include "../../../src/utils/assert2.h"
 #include "../../../src/utils/logger.h"
+#include "../../../src/static.h"
 #include <pthread.h>
 #include <stdlib.h>
 

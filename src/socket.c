@@ -1,13 +1,11 @@
 #include "socket.h"
-#include "string.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
-#include <errno.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
 
-void disable_socket_blocking(int socket_fd);
+static inline void disable_socket_blocking(int socket_fd);
 
 int open_socket(const struct addrinfo *server_info) {
   int socket_fd;
@@ -87,11 +85,11 @@ int send_bio(BIO *bio, const char *buffer, size_t buffer_size) {
   assert(send_return != -2);
   if (send_return == -1) {
     log_error("BIO write error");
-    return -1;
   }
   return send_return;
 }
 
+// TODO: Deprecated
 int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
   int send_return;
   assert(socket_fd > 0);
@@ -125,6 +123,7 @@ int recv_bio(BIO *bio, char *buffer, size_t buffer_size) {
   return recv_return;
 }
 
+// TODO: Deprecated
 int recv_socket(int socket_fd, char *buffer, size_t buffer_size) {
   int recv_return;
   assert(socket_fd > 0);
@@ -173,7 +172,7 @@ void get_in_addr_str(const struct sockaddr *sa, char *buffer, size_t length) {
 }
 
 // https://stackoverflow.com/questions/1543466/how-do-i-change-a-tcp-socket-to-be-non-blocking
-void disable_socket_blocking(int socket_fd) {
+static inline void disable_socket_blocking(int socket_fd) {
   int flags;
   assert(socket_fd > 0);
 

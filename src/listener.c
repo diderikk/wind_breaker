@@ -2,16 +2,16 @@
 #include "listener.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
+#include "data_structures/worker_queue.h"
+#include "http/request.h"
+#include "http/response.h"
 #include "shutdown/stop.h"
+#include "socket.h"
 #include "static.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
 #include "worker.h"
 #include <errno.h>
-#include <signal.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <unistd.h>
 
 #define INT_MOST_SIGNIFICANT_BIT 1 << 31
 #define INT_SECOND_MOST_SIGNIFICANT_BIT 1 << 30
@@ -27,7 +27,10 @@ int check_for_socket_error(int fd);
 int new_connection_handler(SSL *ssl, BIO *bio) { return 0; }
 void close_connection_handler(int fd) {}
 int handle_request_async(int fd, char *buffer) {
-  int recv_return = recv_socket(fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  struct session_full_return session = get_session_sync(fd);
+  assert(session.session != NULL);
+  assert(session.bio != NULL);
+  int recv_return = recv_bio(session.bio, buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
     queue_push(fd, buffer, recv_return);
     return 0;
@@ -39,8 +42,8 @@ int handle_request_async(int fd, char *buffer) {
       // Connection closed
       log_trace("Socket %d hung up", fd);
     }
+    return -1;
   }
-  return -1;
 }
 
 void listen_async(int listener) {
@@ -105,7 +108,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
   assert(request_handler != NULL);
 
   char ip_str[INET6_ADDRSTRLEN], data[REQUEST_RESPONSE_MAX_SIZE];
-  char loop_counter, event_count;
+  char event_count;
   int client_socket_fd, new_conn_ret;
   sigset_t sigmask;
   struct sockaddr_storage client_addr;
@@ -113,7 +116,6 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
   poll_array *poll_fd_array = NULL;
   POLL_ERROR_CLASS error_class;
 
-  loop_counter = 0;
   event_count = 0;
   memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
   memset(ip_str, 0, INET6_ADDRSTRLEN);
@@ -123,8 +125,6 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
 
   // Continously listen for new connections
   while (!stop()) {
-    loop_counter++;
-    assert(loop_counter <= 51);
     assert(poll_fd_array->count > 0);
     log_info("Number of active sockets (including listener): %d",
              poll_fd_array->count);
@@ -147,14 +147,11 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
       poll = &poll_fd_array->fds[i];
       assert(poll != NULL);
 
-      // On every 50th event, validate the existing sockets:
-      if (loop_counter >= 50) {
-        if (check_for_socket_error(poll->fd) == -1) {
-          del_from_session_sync(poll->fd);
-          close_connection_handler(i);
-          remove_poll_fd_by_index_sync(poll_fd_array, &i);
-        }
-        loop_counter = 0;
+      if (check_for_socket_error(poll->fd) == -1) {
+        log_debug("Socket %d is invalid, removing...", poll->fd);
+        del_from_session_sync(poll->fd);
+        close_connection_handler(i);
+        remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
 
@@ -163,6 +160,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
         error_class = classify_poll_error(errno);
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
+          log_debug("Socket %d error event, removing...", poll->fd);
           del_from_session_sync(poll->fd);
           close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
@@ -185,6 +183,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
       }
       if (poll->revents & POLLOUT) {
         log_debug("Socket %d is ready for writing", poll->fd);
+        // Should already be data in worker queue, set it to be ready
         set_work_ready(poll->fd | INT_SECOND_MOST_SIGNIFICANT_BIT |
                        INT_MOST_SIGNIFICANT_BIT);
         continue;
@@ -212,13 +211,15 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
           new_conn_ret =
               new_connection_handler(full_session.ssl, full_session.bio);
           if (new_conn_ret == -1) {
+            log_trace("New connection handler failed for fd %d",
+                      client_socket_fd);
             del_from_session_sync(client_socket_fd);
             remove_poll_fd_by_index_sync(poll_fd_array, &poll_array_index);
           }
           continue;
         } else {
-          log_debug("Polling for existing client to send data...");
-          // Existing socket wants to send a request
+          log_debug("Polling for existing fd %d to send data...", poll->fd);
+
           if (request_handler(poll->fd, data) != -1) {
             memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
             continue;
@@ -238,6 +239,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
 void *listener_worker_function(void *_arg) {
   // worker_arg *arg = (worker_arg *)_arg;
   int send_return, response_code, response_size, original_fd;
+  struct session_full_return session;
   worker_data *data;
   http_request_t *http_request = malloc(sizeof(http_request_t));
   char *tmp_response_buffer = malloc(REQUEST_RESPONSE_MAX_SIZE);
@@ -260,7 +262,8 @@ void *listener_worker_function(void *_arg) {
     else
       original_fd = data->fd & ~(INT_MOST_SIGNIFICANT_BIT);
 
-    add_thread_to_session(original_fd);
+    session = add_thread_to_session(original_fd);
+    assert(session.bio != NULL);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
     if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0) {
       parse_http_request(http_request, data->data);
@@ -273,12 +276,24 @@ void *listener_worker_function(void *_arg) {
       response_size = data->size;
     }
 
-    send_return = send_socket(original_fd, data->data, response_size);
-    remove_thread_from_session();
-    // TODO: Can cause the session_count to be decremented twice...
-    if (http_request->connection == CLOSE || send_return == -1) {
-      del_from_session_sync(original_fd);
+    send_return = send_bio(session.bio, data->data, response_size);
+
+    if (send_return <= 0 && BIO_should_retry(session.bio) == 1) {
+      log_debug("BIO should retry, pushing data back to queue...");
+      // Most significant = write work, Second most significant = not ready
+      queue_push(original_fd | INT_MOST_SIGNIFICANT_BIT |
+                     INT_SECOND_MOST_SIGNIFICANT_BIT,
+                 data->data, response_size);
+    } else if (send_return == -1) {
+      log_debug("Could not send data to fd %d, closing connection...",
+                original_fd);
+      close(original_fd);
+    } else if (http_request->connection == CLOSE) {
+      log_debug("Connection close requested, closing connection...");
+      close(original_fd);
     }
+
+    remove_thread_from_session();
 
     // Reset worker queue data
     memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);

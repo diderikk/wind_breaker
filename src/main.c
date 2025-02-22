@@ -1,4 +1,5 @@
 #include "data_structures/session.h"
+#include "data_structures/worker_queue.h"
 #include "listener.h"
 #include "listener_ssl.h"
 #include "properties.h"
@@ -7,6 +8,7 @@
 #include "utils/assert2.h"
 #include "utils/logger.h"
 #include "worker.h"
+#include <unistd.h>
 
 static int http_socket_fd, https_socket_fd;
 static FILE *log_file;

@@ -1,10 +1,8 @@
 #ifndef WORKER_H
 #define WORKER_H
-#include <signal.h>
 
-typedef struct {
-  void *arg;
-} worker_arg;
+#include "static.h"
+#include <signal.h>
 
 int init_workers(int worker_size, void *(*worker_func)(void *),
                  void *worker_func_arg);

@@ -2,7 +2,6 @@
 #include "../properties.h"
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
-#include <stdlib.h>
 #include <unistd.h>
 
 static int max_count = 0;
