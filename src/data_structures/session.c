@@ -19,6 +19,7 @@ static void assert_(const char *file, int line, const char *func,
   ((void)((expr) || (assert_(__FILE__, __LINE__, __func__, #expr), 0)))
 
 int init_session_cache(int _max_size, SSL_CTX *ctx) {
+  SSL_library_init();
   assert(_max_size > 0);
   assert(session_array == NULL);
   // Static array of sessions, should not be resized... Tiger style
@@ -59,10 +60,15 @@ void destroy_session_cache() {
 
   for (int i = 0; i < max_size; i++) {
     if (ssl_array != NULL) {
+      if (SSL_get_rbio(ssl_array[i]) == NULL &&
+          SSL_get_wbio(ssl_array[i]) == NULL) {
+        BIO_free(bio_array[i]);
+      }
       SSL_free(ssl_array[i]);
       ssl_array[i] = NULL;
+    } else {
+      BIO_free(bio_array[i]);
     }
-    BIO_free(bio_array[i]);
     bio_array[i] = NULL;
   }
   if (ssl_array != NULL) {
@@ -212,7 +218,7 @@ void del_from_session_sync(int related_fd) {
 
   if (found == 1) {
     SSL *ssl = (ssl_array != NULL) ? ssl_array[i] : NULL;
-    assert(ssl == NULL && ssl_array == NULL);
+    assert(ssl == NULL || ssl_array != NULL);
     BIO *bio = bio_array[i];
     int ret = BIO_reset(bio);
     if (ret == -1) {

@@ -3,7 +3,8 @@
 #include "../../../src/utils/hash.h"
 #include "../../../src/utils/static_file.h"
 #include "../../../src/http/response.h"
-
+#include "../../../src/static.h"
+#include <string.h>
 
 static int response_test_count = 0;
 static int response_start_case(void *(*func)(void *), const char *name);

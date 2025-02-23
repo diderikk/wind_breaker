@@ -2,6 +2,7 @@
 ![CI](https://github.com/diderikk/wind_breaker/actions/workflows/ci.yml/badge.svg)
 
 ## TODO
+* Stack trace
 * Fix session to use assert and logger
 * Add insert_time in worker_data
 * SSL/TLS
@@ -9,7 +10,6 @@
 * SQLite
 * Images referencing
 * Add more parsing for more HTTP headers.
-* One static header file for alle structs and enums
 * Memory optimization, data-oriented design (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
 * Performance optimization (assembly understanding, cache optimization?)
 
@@ -23,8 +23,7 @@
 * C compiler
 * zlib
 * Threads
-* BearSSL (for SSL/TLS) 
-* OpenSSL (for ETag) (to be replaced by BearSSL)
+* OpenSSL 
 
 ## Testing
 * Simulation testing (based on the [Tiger Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md))

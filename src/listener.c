@@ -7,7 +7,6 @@
 #include "http/response.h"
 #include "shutdown/stop.h"
 #include "socket.h"
-#include "static.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
 #include "worker.h"
@@ -16,9 +15,6 @@
 #define INT_MOST_SIGNIFICANT_BIT 1 << 31
 #define INT_SECOND_MOST_SIGNIFICANT_BIT 1 << 30
 
-void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
-             void (*close_connection_handler)(int),
-             int (*request_handler)(int, char *));
 void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
@@ -34,7 +30,7 @@ int handle_request_async(int fd, char *buffer) {
   if (recv_return > 0) {
     queue_push(fd, buffer, recv_return);
     return 0;
-  } else if (recv_return == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+  } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1) {
     return 0;
   } else {
     // Got error or connection closed by client
@@ -149,8 +145,8 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
 
       if (check_for_socket_error(poll->fd) == -1) {
         log_debug("Socket %d is invalid, removing...", poll->fd);
+        close_connection_handler(poll->fd);
         del_from_session_sync(poll->fd);
-        close_connection_handler(i);
         remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
@@ -161,8 +157,8 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
           log_debug("Socket %d error event, removing...", poll->fd);
+          close_connection_handler(poll->fd);
           del_from_session_sync(poll->fd);
-          close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
@@ -175,8 +171,8 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
         else if (poll->revents & POLLNVAL)
           log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
+          close_connection_handler(poll->fd);
           del_from_session_sync(poll->fd);
-          close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
@@ -225,8 +221,8 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
             continue;
           }
 
+          close_connection_handler(poll->fd);
           del_from_session_sync(poll->fd);
-          close_connection_handler(i);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }

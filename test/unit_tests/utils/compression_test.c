@@ -1,6 +1,8 @@
 #include "../../../src/utils/assert2.h"
 #include "../../../src/utils/logger.h"
 #include "../../../src/utils/compression.h"
+#include <string.h>
+#include <stdlib.h>
 
 static int compression_test_count = 0;
 static int compression_start_case(void *(*func)(void *), const char *name);
