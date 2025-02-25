@@ -43,6 +43,7 @@ int init_session_cache(int _max_size, SSL_CTX *ctx) {
     for (int i = 0; i < max_size; i++) {
       ssl_array[i] = SSL_new(ctx);
       assert(ssl_array[i] != NULL);
+      assert(SSL_is_server(ssl_array[i]));
     }
   }
 

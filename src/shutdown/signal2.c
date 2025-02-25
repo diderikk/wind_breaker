@@ -12,6 +12,8 @@ void handle_signals(void (*handle_exit)(int)) {
   sigaction(SIGINT, &sa, NULL);
   sigaction(SIGTERM, &sa, NULL);
   sigaction(SIGQUIT, &sa, NULL);
+
+  signal(SIGPIPE, SIG_IGN);
 }
 
 char *get_signal_description(int signum) {
@@ -22,6 +24,8 @@ char *get_signal_description(int signum) {
     return "Termination signal";
   case SIGQUIT:
     return "Quit from keyboard";
+  case SIGPIPE:
+    return "Broken pipe";
   default:
     return "Unknown signal";
   }

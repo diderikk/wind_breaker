@@ -71,11 +71,8 @@ SSL_CTX *init_ssl_ctx() {
 int static inline handle_ssl_except_error(SSL *ssl, int ret) {
   int err = SSL_get_error(ssl, ret);
   // According to the SSL_accept, non-blocking socket must be handled
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-    if (err == SSL_ERROR_WANT_READ)
-      log_debug("SSL_ERROR_WANT_READ");
-    else
-      log_debug("SSL_ERROR_WANT_WRITE");
+  if (err == SSL_ERROR_WANT_READ) {
+    log_debug("SSL_ERROR_WANT_READ");
     return 0;
   } else {
     log_error("SSL_accept failed");
@@ -85,7 +82,7 @@ int static inline handle_ssl_except_error(SSL *ssl, int ret) {
 
 int handle_accept(SSL *ssl, BIO *bio) {
 
-  if ((SSL_in_init(ssl) && !SSL_in_before(ssl)) || SSL_is_server(ssl)) {
+  if (SSL_in_init(ssl) && !SSL_in_before(ssl)) {
     log_trace("Shutting down ongoing SSL connection %d", index - 1);
 
     int ret = SSL_shutdown(ssl);
@@ -164,7 +161,12 @@ int handle_ssl_request_async(int fd, char *buffer) {
     }
   }
 
-  int recv_return = recv_bio(session.bio, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  // TODO: Test on a packet larger than 16 kB
+  if (SSL_pending(session.ssl) < BIO_pending(session.bio)) {
+    log_trace("Awaiting more data to be decrypted and read to SSL buffer");
+    return 0;
+  }
+  int recv_return = recv_ssl(session.ssl, buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
     queue_push(fd, buffer, recv_return);
     return 0;

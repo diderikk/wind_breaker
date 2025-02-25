@@ -261,10 +261,14 @@ void *listener_worker_function(void *_arg) {
     session = add_thread_to_session(original_fd);
     assert(session.bio != NULL);
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
+    char is_ssl =
+        (session.ssl != NULL && SSL_is_init_finished(session.ssl)) ? 1 : 0;
+
     if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0) {
       parse_http_request(http_request, data->data);
       response_code = validate_request_headers(http_request);
 
+      memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);
       response_size = construct_response(
           response_code, http_request->uri, http_request->accept_encoding,
           http_request->if_none_match, data->data, tmp_response_buffer);
@@ -272,9 +276,19 @@ void *listener_worker_function(void *_arg) {
       response_size = data->size;
     }
 
-    send_return = send_bio(session.bio, data->data, response_size);
+    send_return = (is_ssl) ? send_ssl(session.ssl, data->data, response_size)
+                           : send_bio(session.bio, data->data, response_size);
 
-    if (send_return <= 0 && BIO_should_retry(session.bio) == 1) {
+    if (is_ssl && send_return <= 0 &&
+        SSL_get_error(session.ssl, send_return) == SSL_ERROR_WANT_READ) {
+      log_debug("SSL should retry, pushing data back to queue...");
+      // Most significant = write work, Second most significant = not ready
+      queue_push(original_fd | INT_MOST_SIGNIFICANT_BIT |
+                     INT_SECOND_MOST_SIGNIFICANT_BIT,
+                 data->data, response_size);
+
+    } else if (!is_ssl && send_return <= 0 &&
+               BIO_should_retry(session.bio) == 1) {
       log_debug("BIO should retry, pushing data back to queue...");
       // Most significant = write work, Second most significant = not ready
       queue_push(original_fd | INT_MOST_SIGNIFICANT_BIT |

@@ -74,6 +74,21 @@ int connect_socket(int socket_fd, const struct sockaddr *in_addr,
   return connect_return;
 }
 
+int send_ssl(SSL *ssl, const char *buffer, size_t buffer_size) {
+  int send_return;
+  assert(ssl != NULL);
+  assert(buffer != NULL);
+  assert(buffer_size > 0);
+
+  send_return = SSL_write(ssl, buffer, buffer_size);
+
+  assert(send_return != -2);
+  if (send_return == -1) {
+    log_warn("SSL write error");
+  }
+  return send_return;
+}
+
 int send_bio(BIO *bio, const char *buffer, size_t buffer_size) {
   int send_return;
   assert(bio != NULL);
@@ -103,6 +118,24 @@ int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
     return -1;
   }
   return send_return;
+}
+
+int recv_ssl(SSL *ssl, char *buffer, size_t buffer_size) {
+  int recv_return;
+  assert(ssl != NULL);
+  assert(buffer != NULL);
+  assert(buffer_size > 0);
+
+  memset(buffer, 0, buffer_size);
+  recv_return = SSL_read(ssl, buffer, buffer_size - 1);
+
+  if (recv_return < 0) {
+    log_warn("SSL read error");
+    return -1;
+  }
+
+  buffer[buffer_size] = '\0';
+  return recv_return;
 }
 
 int recv_bio(BIO *bio, char *buffer, size_t buffer_size) {
