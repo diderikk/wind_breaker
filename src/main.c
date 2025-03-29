@@ -25,20 +25,17 @@ void handle_exit(int signum) {
   }
   destroy_session_cache();
   close_workers(get_worker_thread_max_size());
-
-  if (log_file != NULL) {
-    fclose(log_file);
+  if (ctx != NULL) {
+    destroy_ssl_ctx();
+    ctx = NULL;
   }
-  destroy_ssl_ctx();
-  ctx = NULL;
+  destroy_logger();
   exit(signum);
 }
 
 int main(int argc, char *argv[]) {
-
-  log_logo();
   init_properties(argc, argv);
-  log_file = logger_init(get_log_level(), get_log_type(), get_log_file());
+  log_file = init_logger(get_log_level(), get_log_type(), get_log_file());
   // Log file is opened if LOG_TYPE is FILE_ONLY or CONSOLE_FILE
   assert(get_log_type() == CONSOLE_ONLY || log_file != NULL);
 
@@ -53,8 +50,8 @@ int main(int argc, char *argv[]) {
   https_socket_fd =
       get_listener_socket(get_https_port(), get_listen_backlog_max_size());
 
-  if (https_socket_fd >= 0)
-    ctx = init_ssl_ctx();
+  //  if (https_socket_fd >= 0)
+  //    ctx = init_ssl_ctx();
 
   init_session_cache(get_session_max_size(), ctx);
 
@@ -64,9 +61,9 @@ int main(int argc, char *argv[]) {
 
   handle_signals(handle_exit);
 
-  if (ctx != NULL) {
-    listen_async_ssl(&https_socket_fd);
-  }
+  //  if (ctx != NULL) {
+  //    listen_async_ssl(&https_socket_fd);
+  //  }
 
   listen_async(http_socket_fd);
 

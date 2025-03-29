@@ -12,5 +12,6 @@ void *listener_worker_function(void *_arg);
 void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
              void (*close_connection_handler)(int),
              int (*request_handler)(int, char *));
+int handle_request_async(int fd, char *buffer);
 
 #endif // LISTENER_H

@@ -24,11 +24,9 @@ int parse_http_request(http_request_t *http_request, const char *raw_request) {
   line = strtok_r(raw_request_copy, "\r\n", &saveptr);
   return_value = parse_control_data(http_request, line);
 
-  if (return_value != 0)
-    return return_value;
-
-  log_info("extracted control data => method: %d, uri: %s, version: %s",
-           http_request->method, http_request->uri, http_request->version);
+  if (return_value == 0)
+    log_info("extracted control data => method: %d, uri: %s, version: %s",
+             http_request->method, http_request->uri, http_request->version);
 
   while ((line = strtok_r(NULL, "\r\n", &saveptr)) != NULL) {
     return_value = parse_header_field(http_request, line);

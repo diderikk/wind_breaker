@@ -7,6 +7,7 @@
 #include "static.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 
 // https://github.com/openssl/openssl/blob/master/demos/guide/tls-server-block.c
@@ -74,6 +75,9 @@ int static inline handle_ssl_except_error(SSL *ssl, int ret) {
   if (err == SSL_ERROR_WANT_READ) {
     log_debug("SSL_ERROR_WANT_READ");
     return 0;
+  } else if (ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST) {
+    log_debug("SSL_R_HTTP_REQUEST");
+    return 1;
   } else {
     log_error("SSL_accept failed");
     return -1;
@@ -151,15 +155,6 @@ int handle_ssl_request_async(int fd, char *buffer) {
   assert(session.session != NULL);
   assert(session.bio != NULL);
   assert(session.ssl != NULL);
-  if (!SSL_is_init_finished(session.ssl)) {
-    int ret = SSL_accept(session.ssl);
-    if (ret <= 0 || ret == 2) {
-      return handle_ssl_except_error(session.ssl, ret);
-    } else {
-      log_trace("SSL_accept success");
-      return 0;
-    }
-  }
 
   // TODO: Test on a packet larger than 16 kB
   if (SSL_pending(session.ssl) < BIO_pending(session.bio)) {
@@ -170,7 +165,10 @@ int handle_ssl_request_async(int fd, char *buffer) {
   if (recv_return > 0) {
     queue_push(fd, buffer, recv_return);
     return 0;
-  } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1) {
+  } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1 &&
+             SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ) {
+    return 0;
+  } else if (recv_return == -1 && !SSL_is_init_finished(session.ssl)) {
     return 0;
   } else {
     // Got error or connection closed by client

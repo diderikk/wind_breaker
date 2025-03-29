@@ -130,7 +130,7 @@ int recv_ssl(SSL *ssl, char *buffer, size_t buffer_size) {
   recv_return = SSL_read(ssl, buffer, buffer_size - 1);
 
   if (recv_return < 0) {
-    log_warn("SSL read error");
+    log_error("SSL read error");
     return -1;
   }
 

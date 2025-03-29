@@ -35,6 +35,7 @@ typedef enum { KEEP_ALIVE, CLOSE } http_connection;
 
 typedef enum {
   HTTP_OK = 200,
+  HTTP_MOVED_PERMANENTLY = 301,
   HTTP_NOT_MODIFIED = 304,
   HTTP_BAD_REQUEST = 400,
   HTTP_NOT_FOUND = 404,
@@ -72,6 +73,7 @@ typedef struct {
   char last_modified[HTTP_HEADER_SMALL_SIZE];
   char date[HTTP_HEADER_SMALL_SIZE];
   char etag[HTTP_HEADER_ETAG_SIZE];
+  char location[HTTP_URI_SIZE];
   char body[HTTP_BODY_SIZE];
 } http_response_t;
 

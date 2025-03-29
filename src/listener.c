@@ -263,15 +263,21 @@ void *listener_worker_function(void *_arg) {
     log_info("Handled by worker: %lu", (unsigned long)pthread_self());
     char is_ssl =
         (session.ssl != NULL && SSL_is_init_finished(session.ssl)) ? 1 : 0;
+    char should_be_ssl = (session.ssl != NULL && !is_ssl) ? 1 : 0;
 
     if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0) {
       parse_http_request(http_request, data->data);
       response_code = validate_request_headers(http_request);
 
       memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);
-      response_size = construct_response(
-          response_code, http_request->uri, http_request->accept_encoding,
-          http_request->if_none_match, data->data, tmp_response_buffer);
+      if (should_be_ssl) {
+        response_size = construct_upgrade_to_https_response(
+            http_request->uri, http_request->host, data->data);
+      } else {
+        response_size = construct_response(
+            response_code, http_request->uri, http_request->accept_encoding,
+            http_request->if_none_match, data->data, tmp_response_buffer);
+      }
     } else {
       response_size = data->size;
     }
@@ -301,6 +307,9 @@ void *listener_worker_function(void *_arg) {
     } else if (http_request->connection == CLOSE) {
       log_debug("Connection close requested, closing connection...");
       close(original_fd);
+    } else if (should_be_ssl) {
+      log_debug("Upgrading connection to SSL...");
+      // close(original_fd);
     }
 
     remove_thread_from_session();

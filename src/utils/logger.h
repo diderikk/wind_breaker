@@ -6,8 +6,9 @@
 typedef enum { TRACE, DEBUG, INFO, WARN, ERROR } LOG_LEVEL;
 typedef enum { CONSOLE_ONLY, FILE_ONLY, CONSOLE_FILE } LOG_DESTINATION;
 
-FILE *logger_init(LOG_LEVEL level, LOG_DESTINATION destination,
+FILE *init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
                   const char *file_path);
+void destroy_logger();
 void log_logo();
 void log_trace_(const char *file, const char *format, ...);
 void log_debug_(const char *file, const char *format, ...);
