@@ -2,7 +2,6 @@
 #include "../../src/static.h"
 #include "../../src/socket.h"
 #include "../../src/utils/assert2.h"
-#include "../../src/utils/logger.h"
 #include "../../src/utils/compression.h"
 #include "connection_cases.h"
 #include <string.h>
@@ -32,13 +31,11 @@ void *start_http_get_request(void *arg) {
   };
 
   request_length = http_request_to_string(&request, buffer);
-  // log_trace("Sending request: %s", buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
   memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
 
   response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
-  // log_trace("Server response: %s", buffer);
 
   close(socket_fd);
 
@@ -77,13 +74,11 @@ void *start_http_get_request_gzip(void *arg) {
   };
 
   request_length = http_request_to_string(&request, buffer);
-  // log_trace("Sending request: %s", buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
   memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
 
   response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
-  // log_trace("Server response: %s", buffer);
 
   close(socket_fd);
 
@@ -131,13 +126,11 @@ void *start_http_get_request_deflate(void *arg) {
   };
 
   request_length = http_request_to_string(&request, buffer);
-  // log_trace("Sending request: %s", buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
   memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
 
   response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
-  // log_trace("Server response: %s", buffer);
 
   close(socket_fd);
 
@@ -157,7 +150,7 @@ void *start_http_get_request_deflate(void *arg) {
 
   int decompressed_length =
       decompress_deflate(body, 68, decompressed, REQUEST_RESPONSE_MAX_SIZE);
-  log_trace("Decompressed: %s", decompressed);
+  printf("Decompressed: %s\n", decompressed);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<html>") != NULL);
 
@@ -186,13 +179,11 @@ void *start_http_get_request_not_found(void *arg) {
   };
 
   request_length = http_request_to_string(&request, buffer);
-  // log_trace("Sending request: %s", buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
   memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
 
   response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
-  // log_trace("Server response: %s", buffer);
 
   close(socket_fd);
 

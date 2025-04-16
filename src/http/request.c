@@ -18,8 +18,6 @@ int parse_http_request(http_request_t *http_request, const char *raw_request) {
   char raw_request_copy[REQUEST_RESPONSE_MAX_SIZE];
   char *saveptr, *line;
 
-  log_trace("Raw Request:\n%s", raw_request);
-
   memcpy(raw_request_copy, raw_request, REQUEST_RESPONSE_MAX_SIZE);
   line = strtok_r(raw_request_copy, "\r\n", &saveptr);
   return_value = parse_control_data(http_request, line);

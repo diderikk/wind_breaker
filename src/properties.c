@@ -8,7 +8,7 @@
 
 static int session_max_size = 128;
 static int queue_max_size = 1024;
-static int worker_thread_max_size = 4;
+static int worker_thread_max_size = 1;
 static int listen_backlog_max_size = 50;
 static char http_port[5] = "8080";
 static char https_port[5] = "8443";

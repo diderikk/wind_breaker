@@ -1,6 +1,5 @@
 #include "listener_ssl.h"
 #include "data_structures/session.h"
-#include "data_structures/worker_queue.h"
 #include "listener.h"
 #include "properties.h"
 #include "socket.h"
@@ -123,61 +122,64 @@ int handle_accept(SSL *ssl, BIO *bio) {
 }
 
 void handle_close(int fd) {
-  struct session_full_return session = get_session_sync(fd);
-  int ret;
-  assert(session.ssl != NULL);
-  if (SSL_in_init(session.ssl) || SSL_is_server(session.ssl)) {
-    log_trace("Shutting down ongoing SSL connection %d", index - 1);
-
-    ret = SSL_shutdown(session.ssl);
-    if (ret == 0) {
-      // Shutdown is not yet complete, call SSL_shutdown() again
-      ret = SSL_shutdown(session.ssl);
-    }
-
-    if (ret != 1) {
-      log_error("SSL_shutdown failed");
-    }
-  }
-
-  // Does not handle SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
-  // Forcing a reset of the SSL object. File descriptor is closed by _listen.
-  // poll_array implementation will try to find a fd that is not POLLIN or
-  // POLLOUT Reset the SSL and BIO objects for reuse
-  ret = SSL_clear(session.ssl);
-  if (ret != 1) {
-    log_error("SSL_clear failed");
-  }
+  //  struct session_full_return session = (fd);
+  //  int ret;
+  //  assert(session.ssl != NULL);
+  //  if (SSL_in_init(session.ssl) || SSL_is_server(session.ssl)) {
+  //    log_trace("Shutting down ongoing SSL connection %d", index - 1);
+  //
+  //    ret = SSL_shutdown(session.ssl);
+  //    if (ret == 0) {
+  //      // Shutdown is not yet complete, call SSL_shutdown() again
+  //      ret = SSL_shutdown(session.ssl);
+  //    }
+  //
+  //    if (ret != 1) {
+  //      log_error("SSL_shutdown failed");
+  //    }
+  //  }
+  //
+  //  // Does not handle SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
+  //  // Forcing a reset of the SSL object. File descriptor is closed by
+  //  _listen.
+  //  // poll_array implementation will try to find a fd that is not POLLIN or
+  //  // POLLOUT Reset the SSL and BIO objects for reuse
+  //  ret = SSL_clear(session.ssl);
+  //  if (ret != 1) {
+  //    log_error("SSL_clear failed");
+  //  }
 }
 
 int handle_ssl_request_async(int fd, char *buffer) {
-  struct session_full_return session = get_session_sync(fd);
-  assert(session.session != NULL);
-  assert(session.bio != NULL);
-  assert(session.ssl != NULL);
-
-  // TODO: Test on a packet larger than 16 kB
-  if (SSL_pending(session.ssl) < BIO_pending(session.bio)) {
-    log_trace("Awaiting more data to be decrypted and read to SSL buffer");
-    return 0;
-  }
-  int recv_return = recv_ssl(session.ssl, buffer, REQUEST_RESPONSE_MAX_SIZE);
-  if (recv_return > 0) {
-    queue_push(fd, buffer, recv_return);
-    return 0;
-  } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1 &&
-             SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ) {
-    return 0;
-  } else if (recv_return == -1 && !SSL_is_init_finished(session.ssl)) {
-    return 0;
-  } else {
-    // Got error or connection closed by client
-    if (recv_return == 0) {
-      // Connection closed
-      log_trace("Socket %d hung up", fd);
-    }
-    return -1;
-  }
+  //  struct session_full_return session = get_session_sync(fd);
+  //  assert(session.session != NULL);
+  //  assert(session.bio != NULL);
+  //  assert(session.ssl != NULL);
+  //
+  //  // TODO: Test on a packet larger than 16 kB
+  //  if (SSL_pending(session.ssl) < BIO_pending(session.bio)) {
+  //    log_trace("Awaiting more data to be decrypted and read to SSL buffer");
+  //    return 0;
+  //  }
+  //  int recv_return = recv_ssl(session.ssl, buffer,
+  //  REQUEST_RESPONSE_MAX_SIZE); if (recv_return > 0) {
+  //    queue_push(fd, buffer, recv_return);
+  //    return 0;
+  //  } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1 &&
+  //             SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ)
+  //             {
+  //    return 0;
+  //  } else if (recv_return == -1 && !SSL_is_init_finished(session.ssl)) {
+  //    return 0;
+  //  } else {
+  //    // Got error or connection closed by client
+  //    if (recv_return == 0) {
+  //      // Connection closed
+  //      log_trace("Socket %d hung up", fd);
+  //    }
+  //    return -1;
+  //  }
+  return 0;
 }
 
 void destroy_ssl_ctx() {
@@ -187,8 +189,9 @@ void destroy_ssl_ctx() {
 }
 
 void *listen_async_ssl(int *listener_fd) {
-  assert(*listener_fd > 0);
-  assert(ctx != NULL);
-  _listen(*listener_fd, handle_accept, handle_close, handle_ssl_request_async);
+  //  assert(*listener_fd > 0);
+  //  assert(ctx != NULL);
+  //  _listen(*listener_fd, handle_accept, handle_close,
+  //  handle_ssl_request_async);
   return NULL;
 }

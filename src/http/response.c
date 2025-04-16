@@ -1,6 +1,5 @@
 #define _GNU_SOURCE
 #include "response.h"
-#include "../static.h"
 #include "../utils/assert2.h"
 #include "../utils/compression.h"
 #include "../utils/hash.h"
@@ -13,8 +12,6 @@
 char *http_status_code_to_str(http_status_code status_code);
 unsigned int to_string(const http_response_t *http_response,
                        char *response_str);
-unsigned int set_body(http_response_t *http_response, const char *uri,
-                      char *tmp_buffer);
 unsigned int set_content_length(http_response_t *http_response,
                                 const unsigned int content_length);
 int set_content_type(http_response_t *http_response, const char *uri);
@@ -29,53 +26,47 @@ unsigned int set_compression(http_response_t *http_response,
 void handle_if_none_match(http_response_t *http_response,
                           const char *if_none_match);
 
-unsigned int construct_response(int response_code, const char *uri,
+unsigned int construct_response(http_response_t *http_response, const char *uri,
                                 const char *accept_encoding,
-                                const char *if_none_match, char *response,
-                                char *tmp_body_buffer) {
-  assert(tmp_body_buffer != NULL);
+                                const char *if_none_match, char *body_buffer,
+                                unsigned int body_size) {
+  assert(body_buffer != NULL);
 
   unsigned int return_value;
-  http_response_t http_response;
 
-  // Set status code
-  http_response.status_code = response_code;
   // Set content language
-  strcpy(http_response.content_language, "en-US");
-
+  strcpy(http_response->content_language, "en-US");
   // Set body
-  unsigned int content_size = set_body(&http_response, uri, tmp_body_buffer);
+  memcpy(http_response->body, body_buffer, body_size);
   // Set content length
-  set_content_length(&http_response, content_size);
+  set_content_length(http_response, body_size);
   // Set content type
-  set_content_type(&http_response, uri);
+  set_content_type(http_response, uri);
   // Set last modified
-  set_last_modified(&http_response, uri);
+  set_last_modified(http_response, uri);
   // Set date
-  set_date(&http_response);
+  set_date(http_response);
   // Set etag
-  set_etag(&http_response, tmp_body_buffer, content_size);
+  set_etag(http_response, body_buffer, body_size);
   // Handle if-none-match
-  handle_if_none_match(&http_response, if_none_match);
+  handle_if_none_match(http_response, if_none_match);
 
-  if (http_response.status_code != HTTP_NOT_MODIFIED) {
+  if (http_response->status_code != HTTP_NOT_MODIFIED) {
     // Set compression
     unsigned int compressed_size =
-        set_compression(&http_response, accept_encoding, tmp_body_buffer);
+        set_compression(http_response, accept_encoding, body_buffer);
     // Update content length
-    set_content_length(&http_response, compressed_size);
+    set_content_length(http_response, compressed_size);
   }
 
-  return_value = to_string(&http_response, response);
-
-  log_info("Responding:\n%s", response);
+  return_value = to_string(http_response, body_buffer);
 
   return return_value;
 }
 
 unsigned int construct_upgrade_to_https_response(const char *uri,
                                                  const char *host,
-                                                 char *response) {
+                                                 char *buffer) {
   unsigned int return_value;
   http_response_t http_response;
 
@@ -90,28 +81,8 @@ unsigned int construct_upgrade_to_https_response(const char *uri,
   // Set content length
   set_content_length(&http_response, 0);
 
-  return_value = to_string(&http_response, response);
+  return_value = to_string(&http_response, buffer);
 
-  log_info("Responding:\n%s", response);
-
-  return return_value;
-}
-
-unsigned int set_body(http_response_t *http_response, const char *uri,
-                      char *tmp_buffer) {
-  int return_value = 0;
-  if (http_response->status_code != HTTP_OK) {
-    const char *status_code_str =
-        http_status_code_to_str(http_response->status_code);
-    snprintf(tmp_buffer, HTTP_BODY_SIZE,
-             "<html><body><h1>%d %s</h1></body></html>",
-             http_response->status_code, status_code_str);
-
-    return_value = strlen(tmp_buffer);
-  } else {
-    const char *file_name = uri_to_file_name(uri);
-    return_value = read_static_file(file_name, tmp_buffer, HTTP_BODY_SIZE);
-  }
   return return_value;
 }
 

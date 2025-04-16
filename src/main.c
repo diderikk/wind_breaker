@@ -1,5 +1,4 @@
 #include "data_structures/session.h"
-#include "data_structures/worker_queue.h"
 #include "listener.h"
 #include "listener_ssl.h"
 #include "properties.h"
@@ -23,8 +22,8 @@ void handle_exit(int signum) {
   if (https_socket_fd != -1) {
     close(https_socket_fd);
   }
-  destroy_session_cache();
   close_workers(get_worker_thread_max_size());
+  destroy_session_cache();
   if (ctx != NULL) {
     destroy_ssl_ctx();
     ctx = NULL;
@@ -55,9 +54,7 @@ int main(int argc, char *argv[]) {
 
   init_session_cache(get_session_max_size(), ctx);
 
-  assert(init_queue() == 0);
-  assert(init_workers(get_worker_thread_max_size(), listener_worker_function,
-                      NULL) == 0);
+  assert(init_workers(get_worker_thread_max_size(), NULL) == 0);
 
   handle_signals(handle_exit);
 

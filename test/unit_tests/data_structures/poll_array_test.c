@@ -1,5 +1,4 @@
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/data_structures/poll_array.h"
 #include "../../../src/properties.h"
 #include <pthread.h>
@@ -221,14 +220,14 @@ int poll_array_test() {
     pthread_join(poll_array_test_threads[i], NULL);
   }
 
-  log_info("Completed %d/%d poll_array tests", poll_array_test_count, poll_array_test_count);
+  printf("Completed %d/%d poll_array tests\n", poll_array_test_count, poll_array_test_count);
   return poll_array_test_count;
 }
 
 
 static int poll_array_start_case(void *(*func)(void *), const char *name) {
   assert(poll_array_test_threads != NULL);
-  log_trace("Starting test %d, named: %s", poll_array_test_count, name);
+  printf("Starting test %d, named: %s\n", poll_array_test_count, name);
 
   assert(pthread_create(&poll_array_test_threads[poll_array_test_count++], NULL, func, NULL) == 0);
 

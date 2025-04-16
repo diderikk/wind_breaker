@@ -12,7 +12,7 @@ int compress_gzip(const char *buffer, unsigned int buffer_size,
     log_error("Failed to create temporary file");
     return -1;
   }
-  log_trace("tmp_file: %p", tmp_file);
+  // log_trace("tmp_file: %p", tmp_file);
 
   // Open the temporary file with zlib's gzopen
   gzFile gzfile = gzdopen(dup(fileno(tmp_file)), "wb");
@@ -21,7 +21,7 @@ int compress_gzip(const char *buffer, unsigned int buffer_size,
     fclose(tmp_file);
     return -1;
   }
-  log_trace("gzfile: %p", gzfile);
+  // log_trace("gzfile: %p", gzfile);
 
   // Write the buffer to the gzip file
   int bytes_written = gzwrite(gzfile, buffer, buffer_size);
@@ -33,7 +33,7 @@ int compress_gzip(const char *buffer, unsigned int buffer_size,
     fclose(tmp_file);
     return -1;
   }
-  log_trace("bytes_written: %d", bytes_written);
+  // log_trace("bytes_written: %d", bytes_written);
 
   int close_result = gzclose(gzfile);
   if (close_result != Z_OK) {
@@ -45,7 +45,8 @@ int compress_gzip(const char *buffer, unsigned int buffer_size,
   // Get the size of the compressed data
   fseek(tmp_file, 0, SEEK_END);
   unsigned int compressed_size = ftell(tmp_file);
-  log_trace("compressed_size: %ld", compressed_size);
+  log_trace("Original size: %d Compressed_size: %ld", bytes_written,
+            compressed_size);
   rewind(tmp_file);
   if (compressed_size <= 0) {
     log_error("Failed to get compressed file size");

@@ -2,7 +2,6 @@
 #include "listener.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
-#include "data_structures/worker_queue.h"
 #include "http/request.h"
 #include "http/response.h"
 #include "shutdown/stop.h"
@@ -20,23 +19,26 @@ POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
-int new_connection_handler(SSL *ssl, BIO *bio) { return 0; }
+int new_connection_handler() { return 0; }
 void close_connection_handler(int fd) {}
-int handle_request_async(int fd, char *buffer) {
-  struct session_full_return session = get_session_sync(fd);
+int handle_request_async(int fd) {
+  struct session_full_return session = pop_request_by_fd(fd);
   assert(session.session != NULL);
   assert(session.bio != NULL);
-  int recv_return = recv_bio(session.bio, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  int recv_return =
+      recv_bio(session.bio, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
-    queue_push(fd, buffer, recv_return);
+    push_request(fd, WORK_STATUS_REQUEST_READ);
     return 0;
   } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1) {
+    push_request(fd, WORK_STATUS_INITIAL);
     return 0;
   } else {
     // Got error or connection closed by client
     if (recv_return == 0) {
       // Connection closed
       log_trace("Socket %d hung up", fd);
+      push_request(fd, WORK_STATUS_REJECTED);
     }
     return -1;
   }
@@ -97,9 +99,9 @@ int get_listener_socket(const char *port, int backlog) {
   return socket_fd;
 }
 
-void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
+void _listen(int listener, int (*new_connection_handler)(),
              void (*close_connection_handler)(int),
-             int (*request_handler)(int, char *)) {
+             int (*request_handler)(int)) {
   assert(listener > 0);
   assert(request_handler != NULL);
 
@@ -146,7 +148,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
       if (check_for_socket_error(poll->fd) == -1) {
         log_debug("Socket %d is invalid, removing...", poll->fd);
         close_connection_handler(poll->fd);
-        del_from_session_sync(poll->fd);
+        push_request(poll->fd, WORK_STATUS_REJECTED);
         remove_poll_fd_by_index_sync(poll_fd_array, &i);
         continue;
       }
@@ -158,7 +160,7 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
         if (error_class == REMOVE_FD) {
           log_debug("Socket %d error event, removing...", poll->fd);
           close_connection_handler(poll->fd);
-          del_from_session_sync(poll->fd);
+          push_request(poll->fd, WORK_STATUS_REJECTED);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
@@ -172,16 +174,15 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
           log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
           close_connection_handler(poll->fd);
-          del_from_session_sync(poll->fd);
+          push_request(poll->fd, WORK_STATUS_REJECTED);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
       }
       if (poll->revents & POLLOUT) {
         log_debug("Socket %d is ready for writing", poll->fd);
-        // Should already be data in worker queue, set it to be ready
-        set_work_ready(poll->fd | INT_SECOND_MOST_SIGNIFICANT_BIT |
-                       INT_MOST_SIGNIFICANT_BIT);
+        push_request(poll->fd, WORK_STATUS_RESPONSE_GENERATED);
+
         continue;
       }
       // HANDLES NEW SOCKET EVENTS
@@ -200,29 +201,27 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
                           sizeof(ip_str));
           log_info("Client connect %s:%d", ip_str,
                    get_in_addr_port((struct sockaddr *)&client_addr));
-          struct session_full_return full_session =
-              add_to_session_sync(client_socket_fd);
+          push_request(client_socket_fd, WORK_STATUS_INITIAL);
           int poll_array_index =
               add_poll_fd_sync(poll_fd_array, client_socket_fd);
-          new_conn_ret =
-              new_connection_handler(full_session.ssl, full_session.bio);
+          new_conn_ret = new_connection_handler();
           if (new_conn_ret == -1) {
             log_trace("New connection handler failed for fd %d",
                       client_socket_fd);
-            del_from_session_sync(client_socket_fd);
+            push_request(client_socket_fd, WORK_STATUS_REJECTED);
             remove_poll_fd_by_index_sync(poll_fd_array, &poll_array_index);
           }
           continue;
         } else {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 
-          if (request_handler(poll->fd, data) != -1) {
+          if (request_handler(poll->fd) != -1) {
             memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
             continue;
           }
 
           close_connection_handler(poll->fd);
-          del_from_session_sync(poll->fd);
+          push_request(poll->fd, WORK_STATUS_REJECTED);
           remove_poll_fd_by_index_sync(poll_fd_array, &i);
           continue;
         }
@@ -230,112 +229,6 @@ void _listen(int listener, int (*new_connection_handler)(SSL *, BIO *),
     }
   }
   destroy_poll_array(&poll_fd_array);
-}
-
-void *listener_worker_function(void *_arg) {
-  // worker_arg *arg = (worker_arg *)_arg;
-  int send_return, response_code, response_size, original_fd;
-  struct session_full_return session;
-  worker_data *data;
-  http_request_t *http_request = malloc(sizeof(http_request_t));
-  char *tmp_response_buffer = malloc(REQUEST_RESPONSE_MAX_SIZE);
-
-  assert(tmp_response_buffer != NULL);
-  assert(http_request != NULL);
-
-  memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
-  memset(http_request, 0, sizeof(http_request_t));
-  response_code = 500;
-  original_fd = 0;
-
-  while (!stop()) {
-    data = queue_pop();
-    if (data == NULL) {
-      continue;
-    }
-    if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0)
-      original_fd = data->fd;
-    else
-      original_fd = data->fd & ~(INT_MOST_SIGNIFICANT_BIT);
-
-    session = add_thread_to_session(original_fd);
-    assert(session.bio != NULL);
-    log_info("Handled by worker: %lu", (unsigned long)pthread_self());
-    char is_ssl =
-        (session.ssl != NULL && SSL_is_init_finished(session.ssl)) ? 1 : 0;
-    char should_be_ssl = (session.ssl != NULL && !is_ssl) ? 1 : 0;
-
-    if ((data->fd & INT_MOST_SIGNIFICANT_BIT) == 0) {
-      parse_http_request(http_request, data->data);
-      response_code = validate_request_headers(http_request);
-
-      memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);
-      if (should_be_ssl) {
-        response_size = construct_upgrade_to_https_response(
-            http_request->uri, http_request->host, data->data);
-      } else {
-        response_size = construct_response(
-            response_code, http_request->uri, http_request->accept_encoding,
-            http_request->if_none_match, data->data, tmp_response_buffer);
-      }
-    } else {
-      response_size = data->size;
-    }
-
-    send_return = (is_ssl) ? send_ssl(session.ssl, data->data, response_size)
-                           : send_bio(session.bio, data->data, response_size);
-
-    if (is_ssl && send_return <= 0 &&
-        SSL_get_error(session.ssl, send_return) == SSL_ERROR_WANT_READ) {
-      log_debug("SSL should retry, pushing data back to queue...");
-      // Most significant = write work, Second most significant = not ready
-      queue_push(original_fd | INT_MOST_SIGNIFICANT_BIT |
-                     INT_SECOND_MOST_SIGNIFICANT_BIT,
-                 data->data, response_size);
-
-    } else if (!is_ssl && send_return <= 0 &&
-               BIO_should_retry(session.bio) == 1) {
-      log_debug("BIO should retry, pushing data back to queue...");
-      // Most significant = write work, Second most significant = not ready
-      queue_push(original_fd | INT_MOST_SIGNIFICANT_BIT |
-                     INT_SECOND_MOST_SIGNIFICANT_BIT,
-                 data->data, response_size);
-    } else if (send_return == -1) {
-      log_debug("Could not send data to fd %d, closing connection...",
-                original_fd);
-      close(original_fd);
-    } else if (http_request->connection == CLOSE) {
-      log_debug("Connection close requested, closing connection...");
-      close(original_fd);
-    } else if (should_be_ssl) {
-      log_debug("Upgrading connection to SSL...");
-      // close(original_fd);
-    }
-
-    remove_thread_from_session();
-
-    // Reset worker queue data
-    memset(data->data, 0, REQUEST_RESPONSE_MAX_SIZE);
-    data->fd = 0;
-    data->size = 0;
-
-    // Reset buffers
-    memset(tmp_response_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
-    memset(http_request, 0, sizeof(http_request_t));
-    response_code = 500;
-    response_size = 0;
-    original_fd = 0;
-  }
-
-  free(tmp_response_buffer);
-  free(http_request);
-  free(data);
-  free(_arg);
-  tmp_response_buffer = NULL;
-  http_request = NULL;
-  data = NULL;
-  _arg = NULL;
-  return NULL;
 }
 
 POLL_ERROR_CLASS classify_poll_error(int code) {

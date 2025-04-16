@@ -1,9 +1,9 @@
 #include "cases.h"
 #include "../../src/utils/assert2.h"
-#include "../../src/utils/logger.h"
 #include "connection_cases.h"
 #include "http_cases.h"
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -14,7 +14,7 @@ int start_case(void *(*func)(void *), struct connection_data *arg, const char *n
 
 void run_cases(char *ip, char *port) {
   long seed = time(NULL);
-  log_info("Running cases with seed %ld", seed);
+  printf("Running cases with seed %ld\n", seed);
   cases = (pthread_t *)malloc(sizeof(pthread_t) * 100);
   // Validate server is reachable
   assert(test_connection(ip, port) == 0);
@@ -37,12 +37,12 @@ void run_cases(char *ip, char *port) {
   free(cases);
   cases = NULL;
 
-  log_info("Completed %d/%d simulator tests", case_count, case_count);
+  printf("\nCompleted %d/%d simulator tests\n", case_count, case_count);
 }
 
 int start_case(void *(*func)(void *), struct connection_data *arg, const char *name) {
   assert(cases != NULL);
-  log_trace("Starting case %d, named: %s", case_count, name);
+  printf("Starting case %d, named: %s\n", case_count, name);
 
   assert(pthread_create(&cases[case_count++], NULL, func, arg) == 0);
 

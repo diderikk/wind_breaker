@@ -1,7 +1,7 @@
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/utils/compression.h"
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 static int compression_test_count = 0;
@@ -134,7 +134,7 @@ int compression_test() {
 }
 
 static int compression_start_case(void *(*func)(void *), const char *name) {
-    log_info("Starting test case %d: %s", compression_test_count++, name);
+    printf("Starting test case %d: %s\n", compression_test_count++, name);
 
     func(NULL);
 

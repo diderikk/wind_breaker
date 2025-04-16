@@ -197,16 +197,16 @@ static inline int remap_log_buffer() {
 static inline unsigned int
 log_to_buffer(int log_destination, const char *time_str,
               const char *relative_file_path, const char *log_level,
-              unsigned long thread_id, struct session *session,
-              const char *message, va_list args_f, va_list args_c, int level) {
+              unsigned long thread_id, int session_id, const char *message,
+              va_list args_f, va_list args_c, int level) {
   unsigned int offset = 0;
   offset += sprintf(log_buffer + (log_buffer_offset + offset),
                     YEL "%-17s %-30s (%-5s) " RESET, time_str,
                     relative_file_path, log_level_to_string(level));
-  if (session != NULL) {
+  if (session_id != -1) {
     offset +=
         sprintf(log_buffer + (log_buffer_offset + offset),
-                CYN "[%lu-%d]: " RESET, (unsigned long)thread_id, session->id);
+                CYN "[%lu-%d]: " RESET, (unsigned long)thread_id, session_id);
   } else {
     offset += sprintf(log_buffer + (log_buffer_offset + offset),
                       CYN "[%lu]: " RESET, (unsigned long)thread_id);
@@ -234,7 +234,7 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
   struct tm *timeinfo;
   char time_str[20];
   pthread_t thread_id = pthread_self();
-  struct session *session = get_session_for_thread().session;
+  int session_id = get_session_id_for_thread();
   char *relative_file_path = (strstr(file, "src/") != NULL)
                                  ? strstr(file, "src/") + 4
                                  : strstr(file, "test/") + 5;
@@ -253,17 +253,16 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
     written =
         log_to_buffer(log_destination, time_str, relative_file_path,
                       log_level_to_string(level), (unsigned long)thread_id,
-                      session, message, args_f, args_c, level);
-  }
-  if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
-    printf("%s", log_buffer + log_buffer_offset);
-  }
+                      session_id, message, args_f, args_c, level);
+    if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
+      printf("%s", log_buffer + log_buffer_offset);
+    }
+    log_buffer_offset += written;
 
-  log_buffer_offset += written;
-
-  if (log_buffer_offset > LOG_BUFFER_SIZE - 1024 * 1024) {
-    assert(remap_log_buffer() >= 0);
-    log_buffer_offset = 0;
+    if (log_buffer_offset > LOG_BUFFER_SIZE - 1024 * 1024) {
+      assert(remap_log_buffer() >= 0);
+      log_buffer_offset = 0;
+    }
   }
 
   pthread_mutex_unlock(&log_mutex);

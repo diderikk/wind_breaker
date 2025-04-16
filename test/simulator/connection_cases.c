@@ -1,7 +1,6 @@
 #include "connection_cases.h"
 #include "../../src/socket.h"
 #include "../../src/utils/assert2.h"
-#include "../../src/utils/logger.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,10 +17,9 @@ int set_recv_timeout(int socket, int milliseconds);
 int test_connection(char *ip, char *port) {
   int socket_fd = connect_to_server(ip, port);
   if (socket_fd < 0) {
-    log_error("Failed to connect to server at %s:%s", ip, port);
+    printf("Failed to connect to server at %s:%s\n", ip, port);
     return -1;
   }
-  // log_info("Connection test successful");
   close(socket_fd);
   return 0;
 }
@@ -83,7 +81,6 @@ void *start_connection_send_recv_ten_times(void *arg) {
 
     size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
     assert(size > 0);
-    // log_trace("Server response: %s", buffer);
   }
 
   close(socket_fd);
@@ -118,7 +115,6 @@ void *start_write_recv_close_connection(void *arg) {
   size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
   assert(size > 0);
 
-  // log_trace("Connection established. Closing connection immediately");
   close(socket_fd);
   return 0;
 }
@@ -140,7 +136,7 @@ int connect_to_server(const char *ip, const char *port) {
   hints.ai_socktype = SOCK_STREAM;
 
   if ((rv = getaddrinfo(ip, port, &hints, &servinfo)) != 0) {
-    log_error("getaddrinfo: %s", gai_strerror(rv));
+    printf("getaddrinfo: %s\n", gai_strerror(rv));
     return -1;
   }
   for (p = servinfo; p != NULL; p = p->ai_next) {
@@ -154,22 +150,10 @@ int connect_to_server(const char *ip, const char *port) {
   }
 
   if (p == NULL) {
-    log_error("Failed to connect");
+    printf("Failed to connect\n");
     return -1;
   }
 
-  // log_trace("Connected to server at %s:%s. Opened socket: %d", ip, port,
-  //            socket_fd);
-
-  // Send message to server
-  // char *message = "Hello, server!";
-  // send_socket(socket_fd, message, strlen(message));
-
-  // Read response from server
-  // recv_socket(socket_fd, data, BUFFER_SIZE);
-  // printf("Server response: %s\n", data);
-
-  // Close the socket
   freeaddrinfo(servinfo);
   return socket_fd;
 }

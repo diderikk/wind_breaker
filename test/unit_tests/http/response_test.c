@@ -1,5 +1,4 @@
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/utils/hash.h"
 #include "../../../src/utils/static_file.h"
 #include "../../../src/http/response.h"
@@ -90,13 +89,13 @@ void* construct_response_not_modified_test() {
     assert(response_size > 0);
     assert(strstr(response, "HTTP/1.1 304 Not Modified") != NULL);
     assert(strstr(response, "Date: ") != NULL);
+    assert(strstr(response, "Content-Length: 0") != NULL);
     assert(strstr(response, "Last-Modified: ") != NULL);
     assert(strstr(response, "ETag: ") != NULL);
     assert(strstr(response, etag) != NULL);
 
     assert(strstr(response, "Content-Type: ") == NULL);
     assert(strstr(response, "Content-Encoding: ") == NULL);
-    assert(strstr(response, "Content-Length: ") == NULL);
     assert(strstr(response, "<body>") == NULL);
 
     return NULL;
@@ -113,7 +112,7 @@ int response_test() {
 }
 
 static int response_start_case(void *(*func)(void *), const char *name) {
-  log_trace("Starting test %d, named: %s", response_test_count++, name);
+  printf("Starting test %d, named: %s\n", response_test_count++, name);
 
   func(NULL);
 

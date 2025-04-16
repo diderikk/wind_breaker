@@ -1,6 +1,5 @@
 #include "../../../src/data_structures/worker_queue.h"
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/properties.h"
 #include <pthread.h>
 #include <stdlib.h>
@@ -145,7 +144,7 @@ int worker_queue_test() {
 }
 
 static int worker_queue_start_case(void *(*func)(void *), const char *name) {
-  log_trace("Starting test %d, named: %s", worker_queue_test_count++, name);
+  printf("Starting test %d, named: %s\n", worker_queue_test_count++, name);
 
   func(NULL);
 

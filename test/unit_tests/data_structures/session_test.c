@@ -1,6 +1,5 @@
 #include "../../../src/data_structures/session.h"
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/static.h"
 #include <pthread.h>
 #include <stdlib.h>
@@ -203,13 +202,13 @@ int session_test() {
   session_start_case(add_and_remove_all_test, "add_and_remove_all_test");
   session_start_case(add_and_get_all_test, "add_and_get_all_test");
 
-  log_info("Completed %d/%d session tests", session_test_count, session_test_count);
+  printf("Completed %d/%d session tests\n", session_test_count, session_test_count);
 
   return session_test_count;
 }
 
 static int session_start_case(void *(*func)(void *), const char *name) {
-  log_trace("Starting test %d, named: %s", session_test_count++, name);
+  printf("Starting test %d, named: %s\n", session_test_count++, name);
 
   func(NULL);
 

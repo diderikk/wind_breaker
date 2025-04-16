@@ -1,5 +1,4 @@
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/http/request.h"
 #include <string.h>
 
@@ -352,7 +351,7 @@ int request_test() {
 }
 
 static int request_start_case(void *(*func)(void *), const char *name) {
-  log_trace("Starting test %d, named: %s", request_test_count++, name);
+  printf("Starting test %d, named: %s\n", request_test_count++, name);
 
   func(NULL);
 

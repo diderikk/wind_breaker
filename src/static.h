@@ -46,6 +46,17 @@ typedef enum {
   HTTP_SERVICE_UNAVAILABLE = 503
 } http_status_code;
 
+typedef enum {
+  WORK_STATUS_INITIAL = 1,
+  WORK_STATUS_REQUEST_READ = 1 << 1,
+  WORK_STATUS_PARSED = 1 << 2,
+  WORK_STATUS_DATA_FETCHED = 1 << 3,
+  WORK_STATUS_RESPONSE_GENERATED = 1 << 4,
+  WORK_STATUS_PROCESSING = 1 << 5,
+  WORK_STATUS_SENT = 1 << 7,
+  WORK_STATUS_REJECTED = 1 << 8,
+} WORK_STATUS;
+
 typedef struct {
   int fd;
   int size;
@@ -109,6 +120,10 @@ struct session_full_return {
   struct session *session;
   BIO *bio;
   SSL *ssl;
+  char *buffer;
+  unsigned int *buffer_size;
+  http_request_t *request;
+  http_response_t *response;
 };
 
 typedef struct {

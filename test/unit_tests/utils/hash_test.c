@@ -1,7 +1,7 @@
 #include "../../../src/utils/assert2.h"
-#include "../../../src/utils/logger.h"
 #include "../../../src/utils/hash.h"
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 static int hash_test_count = 0;
@@ -89,7 +89,7 @@ int hash_test() {
 }
 
 static int hash_start_case(void *(*func)(void *), const char *name) {
-    log_info("Starting test case %d: %s", hash_test_count++, name);
+    printf("Starting test case %d: %s\n", hash_test_count++, name);
 
     func(NULL);
 
