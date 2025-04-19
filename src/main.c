@@ -1,3 +1,4 @@
+#include "data_structures/poll_array.h"
 #include "data_structures/session.h"
 #include "listener.h"
 #include "listener_ssl.h"
@@ -23,6 +24,7 @@ void handle_exit(int signum) {
     close(https_socket_fd);
   }
   close_workers(get_worker_thread_max_size());
+  destroy_poll_array();
   destroy_session_cache();
   if (ctx != NULL) {
     destroy_ssl_ctx();
@@ -53,7 +55,7 @@ int main(int argc, char *argv[]) {
   //    ctx = init_ssl_ctx();
 
   init_session_cache(get_session_max_size(), ctx);
-
+  init_poll_array(http_socket_fd);
   assert(init_workers(get_worker_thread_max_size(), NULL) == 0);
 
   handle_signals(handle_exit);

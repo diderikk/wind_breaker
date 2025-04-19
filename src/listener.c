@@ -11,9 +11,9 @@
 #include "worker.h"
 #include <errno.h>
 
-#define INT_MOST_SIGNIFICANT_BIT 1 << 31
-#define INT_SECOND_MOST_SIGNIFICANT_BIT 1 << 30
 
+extern int count;
+extern struct pollfd *fds;
 void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
@@ -26,7 +26,7 @@ int handle_request_async(int fd) {
   assert(session.session != NULL);
   assert(session.bio != NULL);
   int recv_return =
-      recv_bio(session.bio, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
+      recv_bio(session.bio, session.in_buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
     push_request(fd, WORK_STATUS_REQUEST_READ);
     return 0;
@@ -38,7 +38,6 @@ int handle_request_async(int fd) {
     if (recv_return == 0) {
       // Connection closed
       log_trace("Socket %d hung up", fd);
-      push_request(fd, WORK_STATUS_REJECTED);
     }
     return -1;
   }
@@ -111,27 +110,24 @@ void _listen(int listener, int (*new_connection_handler)(),
   sigset_t sigmask;
   struct sockaddr_storage client_addr;
   struct pollfd *poll;
-  poll_array *poll_fd_array = NULL;
   POLL_ERROR_CLASS error_class;
 
   event_count = 0;
   memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
   memset(ip_str, 0, INET6_ADDRSTRLEN);
   sigemptyset(&sigmask);
-  init_poll_array(&poll_fd_array, listener);
-  assert(poll_fd_array != NULL);
 
   // Continously listen for new connections
   while (!stop()) {
-    assert(poll_fd_array->count > 0);
+    assert(count > 0);
     log_info("Number of active sockets (including listener): %d",
-             poll_fd_array->count);
+             count);
 
     // https://man7.org/linux/man-pages/man2/poll.2.html
     // NULL causes the poll system call to poll until a revents
     // is updated by the kernel
     event_count =
-        ppoll(poll_fd_array->fds, poll_fd_array->count, NULL, &sigmask);
+        ppoll(fds, count, NULL, &sigmask);
 
     if (event_count < 0) {
       error_class = classify_poll_error(errno);
@@ -141,15 +137,21 @@ void _listen(int listener, int (*new_connection_handler)(),
     }
 
     // Iterate through all the file descriptors and check for events
-    for (int i = 0; i < poll_fd_array->count; i++) {
-      poll = &poll_fd_array->fds[i];
+    for (int i = 0; i < count; i++) {
+      poll = &fds[i];
       assert(poll != NULL);
+
+      if(is_marked(poll->fd)) {
+        log_debug("Socket %d is marked, removing from poll array...", poll->fd);
+        remove_poll_fd_by_index_sync(&i);
+        continue;
+      }
 
       if (check_for_socket_error(poll->fd) == -1) {
         log_debug("Socket %d is invalid, removing...", poll->fd);
         close_connection_handler(poll->fd);
         push_request(poll->fd, WORK_STATUS_REJECTED);
-        remove_poll_fd_by_index_sync(poll_fd_array, &i);
+        remove_poll_fd_by_index_sync(&i);
         continue;
       }
 
@@ -161,7 +163,7 @@ void _listen(int listener, int (*new_connection_handler)(),
           log_debug("Socket %d error event, removing...", poll->fd);
           close_connection_handler(poll->fd);
           push_request(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(poll_fd_array, &i);
+          remove_poll_fd_by_index_sync(&i);
           continue;
         }
       }
@@ -175,7 +177,7 @@ void _listen(int listener, int (*new_connection_handler)(),
         if (check_for_socket_error(poll->fd) == -1) {
           close_connection_handler(poll->fd);
           push_request(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(poll_fd_array, &i);
+          remove_poll_fd_by_index_sync(&i);
           continue;
         }
       }
@@ -203,13 +205,13 @@ void _listen(int listener, int (*new_connection_handler)(),
                    get_in_addr_port((struct sockaddr *)&client_addr));
           push_request(client_socket_fd, WORK_STATUS_INITIAL);
           int poll_array_index =
-              add_poll_fd_sync(poll_fd_array, client_socket_fd);
+              add_poll_fd_sync(client_socket_fd);
           new_conn_ret = new_connection_handler();
           if (new_conn_ret == -1) {
             log_trace("New connection handler failed for fd %d",
                       client_socket_fd);
             push_request(client_socket_fd, WORK_STATUS_REJECTED);
-            remove_poll_fd_by_index_sync(poll_fd_array, &poll_array_index);
+            remove_poll_fd_by_index_sync(&poll_array_index);
           }
           continue;
         } else {
@@ -222,13 +224,12 @@ void _listen(int listener, int (*new_connection_handler)(),
 
           close_connection_handler(poll->fd);
           push_request(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(poll_fd_array, &i);
+          remove_poll_fd_by_index_sync(&i);
           continue;
         }
       }
     }
   }
-  destroy_poll_array(&poll_fd_array);
 }
 
 POLL_ERROR_CLASS classify_poll_error(int code) {

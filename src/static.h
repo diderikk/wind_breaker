@@ -120,15 +120,14 @@ struct session_full_return {
   struct session *session;
   BIO *bio;
   SSL *ssl;
-  char *buffer;
-  unsigned int *buffer_size;
+  char *in_buffer;
+  unsigned int *in_buffer_size;
+  char *out_buffer;
   http_request_t *request;
   http_response_t *response;
 };
 
 typedef struct {
-  struct pollfd *fds;
-  int count, last_in_index;
 } poll_array;
 
 #endif // STATIC_H

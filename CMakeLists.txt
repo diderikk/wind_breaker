@@ -36,11 +36,13 @@ add_library(signal_wrapper_lib STATIC src/shutdown/signal2.c)
 add_library(stop_lib STATIC src/shutdown/stop.c)
 add_library(session_lib STATIC src/data_structures/session.c)
 
+
 # Handlers libraries
 add_library(builder_lib STATIC src/handlers/builder.c)
 add_library(loader_lib STATIC src/handlers/loader.c)
 add_library(parser_lib STATIC src/handlers/parser.c)
 add_library(sender_lib STATIC src/handlers/sender.c)
+
 
 # Simulator libraries
 add_library(simulator_cases_lib STATIC test/simulator/cases.c)
@@ -50,7 +52,7 @@ add_library(simulator_http_lib STATIC test/simulator/http_cases.c)
 #Unit test libraries
 
 
-add_executable(main src/main.c)
+add_executable(main src/main.c ${HEADER_FILES})
 target_link_libraries(main PRIVATE listener_ssl_lib listener_lib worker_lib builder_lib loader_lib parser_lib sender_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_compile_options(main)
 #enable_address_sanitizer(main)

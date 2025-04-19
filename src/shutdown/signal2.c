@@ -1,5 +1,6 @@
 #include "signal2.h"
 #include "stop.h"
+#include <signal.h>
 #include <stddef.h>
 
 void handle_signals(void (*handle_exit)(int)) {
@@ -12,6 +13,7 @@ void handle_signals(void (*handle_exit)(int)) {
   sigaction(SIGINT, &sa, NULL);
   sigaction(SIGTERM, &sa, NULL);
   sigaction(SIGQUIT, &sa, NULL);
+  sigaction(SIGSEGV, &sa, NULL);
 
   signal(SIGPIPE, SIG_IGN);
 }
@@ -26,6 +28,8 @@ char *get_signal_description(int signum) {
     return "Quit from keyboard";
   case SIGPIPE:
     return "Broken pipe";
+  case SIGSEGV:
+    return "Segmentation fault";
   default:
     return "Unknown signal";
   }

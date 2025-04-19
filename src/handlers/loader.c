@@ -18,28 +18,31 @@ void *handle_b() {
   struct session_full_return session;
   while (!stop()) {
     session = pop_request(WORK_STATUS_PARSED);
+
+    if (session.session == NULL) {
+      continue;
+    }
+
     session.session->thread_id = pthread_self();
 
     log_trace("Request %d is being handled by content loader",
               session.session->id);
 
-    if (session.session == NULL) {
-      continue;
-    }
     assert(session.request != NULL);
     assert(session.response != NULL);
-    assert(session.buffer != NULL);
+    assert(session.in_buffer != NULL);
+    assert(session.out_buffer != NULL);
 
     // Request already parsed
-    memset(session.buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+    memset(session.in_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
 
     if (session.response->status_code == HTTP_OK) {
       const char *file_name = uri_to_file_name(session.request->uri);
-      *session.buffer_size =
-          read_static_file(file_name, session.buffer, HTTP_BODY_SIZE);
+      *session.in_buffer_size =
+          read_static_file(file_name, session.in_buffer, HTTP_BODY_SIZE);
     } else {
-      *session.buffer_size =
-          gen_error_body(session.response->status_code, session.buffer);
+      *session.in_buffer_size =
+          gen_error_body(session.response->status_code, session.in_buffer);
     }
 
     session.session->thread_id = 0;
