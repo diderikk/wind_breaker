@@ -5,13 +5,14 @@ project(CServer VERSION 0.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 function(enable_compile_options target)
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3 -rdynamic)
 endfunction()
 
 function(enable_address_sanitizer target)

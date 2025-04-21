@@ -3,6 +3,7 @@
 #include "../static.h"
 #include <assert.h>
 #include <errno.h>
+#include <execinfo.h>
 #include <openssl/err.h>
 #include <stdarg.h>
 #include <sys/mman.h>
@@ -213,7 +214,13 @@ log_to_buffer(int log_destination, const char *time_str,
   }
   offset +=
       vsprintf(log_buffer + (log_buffer_offset + offset), message, args_c);
+
+  // Error handling
   if (level == ERROR && (errno != 0 || ERR_peek_error() != 0)) {
+    void *backtrace_buffer[BACKTRACE_SIZE];
+    unsigned int backtrace_size = backtrace(backtrace_buffer, BACKTRACE_SIZE);
+    char **backtrace_symbols_buffer =
+        backtrace_symbols(backtrace_buffer, backtrace_size);
     if (errno != 0)
       offset += sprintf(log_buffer + (log_buffer_offset + offset),
                         RED ": %d %s\n" RESET, errno, strerror(errno));
@@ -221,6 +228,16 @@ log_to_buffer(int log_destination, const char *time_str,
       offset +=
           sprintf(log_buffer + (log_buffer_offset + offset), RED ": %s\n" RESET,
                   ERR_error_string(ERR_get_error(), NULL));
+    if (backtrace_symbols_buffer != NULL && backtrace_size > 0) {
+      offset += sprintf(log_buffer + (log_buffer_offset + offset),
+                        MAG "Backtrace:\n" RESET);
+      for (unsigned int i = 0; i < backtrace_size; i++) {
+        offset +=
+            sprintf(log_buffer + (log_buffer_offset + offset),
+                    MAG "  %d: %s\n" RESET, i, backtrace_symbols_buffer[i]);
+      }
+      free(backtrace_symbols_buffer);
+    }
   } else {
     offset += sprintf(log_buffer + (log_buffer_offset + offset), "\n");
   }

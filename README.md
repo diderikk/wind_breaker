@@ -3,12 +3,14 @@
 
 ## TODO
 * Stack trace
+* State diagram
 * Fix session to use assert and logger
-* Add insert_time in worker_data
 * SSL/TLS
 * Caching
 * SQLite
-* Images referencing
+    * Images referencing
+* Metrics (See tcp(7) man page, and tcp_info struct) 
+    * TCP_INFO
 * Add more parsing for more HTTP headers.
 * Memory optimization, data-oriented design (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
 * Performance optimization (assembly understanding, cache optimization?)

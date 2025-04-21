@@ -11,7 +11,6 @@
 #include "worker.h"
 #include <errno.h>
 
-
 extern int count;
 extern struct pollfd *fds;
 void *worker_function(void *_arg);
@@ -23,8 +22,11 @@ int new_connection_handler() { return 0; }
 void close_connection_handler(int fd) {}
 int handle_request_async(int fd) {
   struct session_full_return session = pop_request_by_fd(fd);
-  assert(session.session != NULL);
-  assert(session.bio != NULL);
+  if (session.session == NULL) {
+    log_debug("Session is NULL for fd %d. Waiting for next cycle", fd);
+    return 0;
+  }
+
   int recv_return =
       recv_bio(session.bio, session.in_buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
@@ -120,14 +122,12 @@ void _listen(int listener, int (*new_connection_handler)(),
   // Continously listen for new connections
   while (!stop()) {
     assert(count > 0);
-    log_info("Number of active sockets (including listener): %d",
-             count);
+    log_info("Number of active sockets (including listener): %d", count);
 
     // https://man7.org/linux/man-pages/man2/poll.2.html
     // NULL causes the poll system call to poll until a revents
     // is updated by the kernel
-    event_count =
-        ppoll(fds, count, NULL, &sigmask);
+    event_count = ppoll(fds, count, NULL, &sigmask);
 
     if (event_count < 0) {
       error_class = classify_poll_error(errno);
@@ -141,7 +141,7 @@ void _listen(int listener, int (*new_connection_handler)(),
       poll = &fds[i];
       assert(poll != NULL);
 
-      if(is_marked(poll->fd)) {
+      if (is_marked(poll->fd)) {
         log_debug("Socket %d is marked, removing from poll array...", poll->fd);
         remove_poll_fd_by_index_sync(&i);
         continue;
@@ -183,7 +183,7 @@ void _listen(int listener, int (*new_connection_handler)(),
       }
       if (poll->revents & POLLOUT) {
         log_debug("Socket %d is ready for writing", poll->fd);
-        push_request(poll->fd, WORK_STATUS_RESPONSE_GENERATED);
+        push_request(poll->fd, WORK_STATUS_READY_TO_SEND);
 
         continue;
       }
@@ -204,8 +204,7 @@ void _listen(int listener, int (*new_connection_handler)(),
           log_info("Client connect %s:%d", ip_str,
                    get_in_addr_port((struct sockaddr *)&client_addr));
           push_request(client_socket_fd, WORK_STATUS_INITIAL);
-          int poll_array_index =
-              add_poll_fd_sync(client_socket_fd);
+          int poll_array_index = add_poll_fd_sync(client_socket_fd);
           new_conn_ret = new_connection_handler();
           if (new_conn_ret == -1) {
             log_trace("New connection handler failed for fd %d",

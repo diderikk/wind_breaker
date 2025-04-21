@@ -22,21 +22,11 @@ int parse_http_request(http_request_t *http_request, const char *raw_request) {
   line = strtok_r(raw_request_copy, "\r\n", &saveptr);
   return_value = parse_control_data(http_request, line);
 
-  if (return_value == 0)
-    log_info("extracted control data => method: %d, uri: %s, version: %s",
-             http_request->method, http_request->uri, http_request->version);
-
   while ((line = strtok_r(NULL, "\r\n", &saveptr)) != NULL) {
     return_value = parse_header_field(http_request, line);
     if (return_value != 0)
       return return_value;
   }
-
-  log_info("extracted header fields => host: %s, user_agent: %s, accept: %s, "
-           "accept_language: %s, accept_encoding: %s, connection: %d",
-           http_request->host, http_request->user_agent, http_request->accept,
-           http_request->accept_language, http_request->accept_encoding,
-           http_request->connection);
 
   return return_value;
 }

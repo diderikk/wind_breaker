@@ -8,7 +8,7 @@ int count;
 struct pollfd *fds;
 static int max_count = 0;
 static int last_in_index;
-static volatile int* marks = NULL;
+static volatile int *marks = NULL;
 
 // Initialize the poll array with the listen_fd
 // This should be called once, when the server fronts
@@ -37,7 +37,7 @@ void init_poll_array(int listen_fd) {
 void destroy_poll_array() {
   free(fds);
   fds = NULL;
-  free((int*)marks);
+  free((int *)marks);
   marks = NULL;
   assert(fds == NULL);
   assert(marks == NULL);

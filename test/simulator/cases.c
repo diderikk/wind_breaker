@@ -27,9 +27,9 @@ void run_cases(char *ip, char *port) {
   start_case(start_connections_simultaneously, &arg, "start_connections_simultaneously");
   sleep(1);
   start_case(start_http_get_request, &arg, "start_http_get_request");
-  //start_case(start_http_get_request_gzip, &arg, "start_http_get_request_gzip");
-  //start_case(start_http_get_request_deflate, &arg, "start_http_get_request_deflate");
-  //start_case(start_http_get_request_not_found, &arg, "start_http_get_request_not_found");
+  start_case(start_http_get_request_gzip, &arg, "start_http_get_request_gzip");
+  start_case(start_http_get_request_deflate, &arg, "start_http_get_request_deflate");
+  start_case(start_http_get_request_not_found, &arg, "start_http_get_request_not_found");
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);

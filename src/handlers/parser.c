@@ -16,7 +16,8 @@ void *handle_a() {
 
     session.session->thread_id = pthread_self();
 
-    log_trace("Request %d is being handled by parser", session.session->id);
+    log_trace("Request %d (%d) is being handled by request parser",
+              session.session->id, session.session->related_fd);
 
     assert(session.request != NULL);
     assert(session.response != NULL);
@@ -26,6 +27,15 @@ void *handle_a() {
 
     parse_http_request(session.request, session.in_buffer);
     session.response->status_code = validate_request_headers(session.request);
+
+    log_info("Parsed:\nmethod: %d, uri: %s, version: %s, "
+             "host: %s, user_agent: %s, accept: %s, "
+             "accept_language: %s, accept_encoding: %s, connection: %d",
+             session.request->method, session.request->uri,
+             session.request->version, session.request->host,
+             session.request->user_agent, session.request->accept,
+             session.request->accept_language, session.request->accept_encoding,
+             session.request->connection);
 
     session.session->thread_id = 0;
     push_request(session.session->related_fd, WORK_STATUS_PARSED);

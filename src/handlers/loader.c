@@ -25,8 +25,8 @@ void *handle_b() {
 
     session.session->thread_id = pthread_self();
 
-    log_trace("Request %d is being handled by content loader",
-              session.session->id);
+    log_trace("Request %d (%d) is being handled by response content loader",
+              session.session->id, session.session->related_fd);
 
     assert(session.request != NULL);
     assert(session.response != NULL);

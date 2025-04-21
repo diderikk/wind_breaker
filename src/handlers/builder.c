@@ -15,8 +15,8 @@ void *handle_c() {
 
     session.session->thread_id = pthread_self();
 
-    log_trace("Request %d is being handled by content loader",
-              session.session->id);
+    log_trace("Request %d (%d) is being handled by response builder",
+              session.session->id, session.session->related_fd);
 
     assert(session.request != NULL);
     assert(session.response != NULL);
@@ -37,16 +37,17 @@ void *handle_c() {
           session.in_buffer, *session.in_buffer_size);
     }
 
-    WORK_STATUS next_status = WORK_STATUS_RESPONSE_GENERATED;
+    WORK_STATUS next_status = WORK_STATUS_READY_TO_SEND;
     unsigned int out_buffer_offset = seek_buffer_offset(session.out_buffer);
-    if(out_buffer_offset + *session.in_buffer_size + 4 > REQUEST_RESPONSE_MAX_SIZE) {
+    if (out_buffer_offset + *session.in_buffer_size + 4 >
+        REQUEST_RESPONSE_MAX_SIZE) {
       log_info("No more space in out buffer...");
       next_status = WORK_STATUS_PROCESSING;
     } else {
-      out_buffer_offset = append_response_length(out_buffer_offset, session.out_buffer,
-          *session.in_buffer_size);
+      out_buffer_offset = append_response_length(
+          out_buffer_offset, session.out_buffer, *session.in_buffer_size);
       memcpy(session.out_buffer + out_buffer_offset, session.in_buffer,
-          *session.in_buffer_size);
+             *session.in_buffer_size);
     }
 
     session.session->thread_id = 0;

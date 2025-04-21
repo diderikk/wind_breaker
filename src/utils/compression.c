@@ -68,7 +68,7 @@ int decompress_gzip(const char *buffer, unsigned int buffer_size,
     log_error("Failed to create temporary file");
     return -1;
   }
-  log_trace("tmp_file: %p", tmp_file);
+  // log_trace("tmp_file: %p", tmp_file);
 
   if (fwrite(buffer, 1, buffer_size, tmp_file) != buffer_size) {
     log_error("Failed to write compressed data to temporary file");
@@ -83,7 +83,7 @@ int decompress_gzip(const char *buffer, unsigned int buffer_size,
     fclose(tmp_file);
     return -1;
   }
-  log_trace("gzfile: %p", gzfile);
+  // log_trace("gzfile: %p", gzfile);
 
   int bytes_read = gzread(gzfile, to_buffer, to_buffer_size);
   if (bytes_read < 0) {
@@ -94,7 +94,7 @@ int decompress_gzip(const char *buffer, unsigned int buffer_size,
     fclose(tmp_file);
     return -1;
   }
-  log_trace("bytes_read: %d", bytes_read);
+  // log_trace("bytes_read: %d", bytes_read);
 
   if (gzclose(gzfile) != Z_OK) {
     log_error("Failed to close gzip file");
