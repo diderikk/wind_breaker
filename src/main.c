@@ -1,3 +1,4 @@
+#include "data_structures/marked_fds.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
 #include "listener.h"
@@ -26,6 +27,7 @@ void handle_exit(int signum) {
   close_workers(get_worker_thread_max_size());
   destroy_poll_array();
   destroy_session_cache();
+  destroy_marked_fds();
   if (ctx != NULL) {
     destroy_ssl_ctx();
     ctx = NULL;
@@ -54,7 +56,8 @@ int main(int argc, char *argv[]) {
   //  if (https_socket_fd >= 0)
   //    ctx = init_ssl_ctx();
 
-  init_session_cache(get_session_max_size(), ctx);
+  init_marked_fds();
+  init_session_cache(ctx);
   init_poll_array(http_socket_fd);
   assert(init_workers(get_worker_thread_max_size(), NULL) == 0);
 

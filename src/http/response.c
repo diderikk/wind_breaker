@@ -47,7 +47,7 @@ unsigned int construct_response(http_response_t *http_response, const char *uri,
   // Set date
   set_date(http_response);
   // Set etag
-  set_etag(http_response, body_buffer, body_size);
+  set_etag(http_response, http_response->body, body_size);
   // Handle if-none-match
   handle_if_none_match(http_response, if_none_match);
 

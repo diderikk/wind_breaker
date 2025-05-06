@@ -59,9 +59,7 @@ void *handle_d() {
     }
 
     session.session->thread_id = 0;
-    if (next_status == WORK_STATUS_REJECTED) {
-      mark(session.session->related_fd);
-    } else if (next_status == WORK_STATUS_SENT) {
+    if (next_status == WORK_STATUS_SENT) {
       buffer_move_to_front(response_size + 4, session.out_buffer);
     }
     push_request(session.session->related_fd, next_status);

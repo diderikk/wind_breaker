@@ -4,7 +4,7 @@
 #include "../static.h"
 #include <openssl/ssl.h>
 
-int init_session_cache(int _max_size, SSL_CTX *ctx);
+int init_session_cache(SSL_CTX *ctx);
 void destroy_session_cache();
 
 int get_session_id_for_thread();

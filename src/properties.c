@@ -1,5 +1,6 @@
 #include "properties.h"
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -14,8 +15,8 @@ static char http_port[5] = "8080";
 static char https_port[5] = "8443";
 static char env[4] = "dev";
 static char log_file[200] = "/tmp/app.log";
-static LOG_LEVEL log_level = TRACE;
-static LOG_DESTINATION log_type = CONSOLE_FILE;
+static int log_level = 0;
+static int log_type = 0;
 static char properties_file[200] = "/etc/wind_breaker/properties.conf";
 static char cert_chain_file[200] = "/etc/wind_breaker/cert.pem";
 static char private_key_file[200] = "/etc/wind_breaker/key.pem";
@@ -72,15 +73,15 @@ void init_properties(int argc, char *argv[]) {
              strcasecmp(argv[i + 1], "ERROR") == 0 ||
              strcasecmp(argv[i + 1], "FATAL") == 0);
       if (strcasecmp(argv[i + 1], "TRACE") == 0) {
-        log_level = TRACE;
+        log_level = 0;
       } else if (strcasecmp(argv[i + 1], "DEBUG") == 0) {
-        log_level = DEBUG;
+        log_level = 1;
       } else if (strcasecmp(argv[i + 1], "INFO") == 0) {
-        log_level = INFO;
+        log_level = 2;
       } else if (strcasecmp(argv[i + 1], "WARN") == 0) {
-        log_level = WARN;
+        log_level = 3;
       } else if (strcasecmp(argv[i + 1], "ERROR") == 0) {
-        log_level = ERROR;
+        log_level = 4;
       }
       log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                     LOG_BUFFER_SIZE - log_buffer_offset,
@@ -90,11 +91,11 @@ void init_properties(int argc, char *argv[]) {
              strcasecmp(argv[i + 1], "FILE_ONLY") == 0 ||
              strcasecmp(argv[i + 1], "CONSOLE_FILE") == 0);
       if (strcasecmp(argv[i + 1], "CONSOLE_ONLY") == 0) {
-        log_type = CONSOLE_ONLY;
+        log_type = 0;
       } else if (strcasecmp(argv[i + 1], "FILE_ONLY") == 0) {
-        log_type = FILE_ONLY;
+        log_type = 1;
       } else if (strcasecmp(argv[i + 1], "CONSOLE_FILE") == 0) {
-        log_type = CONSOLE_FILE;
+        log_type = 2;
       }
       log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                     LOG_BUFFER_SIZE - log_buffer_offset,
@@ -162,15 +163,15 @@ void init_properties(int argc, char *argv[]) {
                strcasecmp(line + 10, "ERROR") == 0 ||
                strcasecmp(line + 10, "FATAL") == 0);
         if (strcasecmp(line + 10, "TRACE") == 0) {
-          log_level = TRACE;
+          log_level = 0;
         } else if (strcasecmp(line + 10, "DEBUG") == 0) {
-          log_level = DEBUG;
+          log_level = 1;
         } else if (strcasecmp(line + 10, "INFO") == 0) {
-          log_level = INFO;
+          log_level = 2;
         } else if (strcasecmp(line + 10, "WARN") == 0) {
-          log_level = WARN;
+          log_level = 3;
         } else if (strcasecmp(line + 10, "ERROR") == 0) {
-          log_level = ERROR;
+          log_level = 4;
         }
         log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                       LOG_BUFFER_SIZE - log_buffer_offset,
@@ -180,11 +181,11 @@ void init_properties(int argc, char *argv[]) {
                strcasecmp(line + 9, "FILE_ONLY") == 0 ||
                strcasecmp(line + 9, "CONSOLE_FILE") == 0);
         if (strcasecmp(line + 9, "CONSOLE_ONLY") == 0) {
-          log_type = CONSOLE_ONLY;
+          log_type = 0;
         } else if (strcasecmp(line + 9, "FILE_ONLY") == 0) {
-          log_type = FILE_ONLY;
+          log_type = 1;
         } else if (strcasecmp(line + 9, "CONSOLE_FILE") == 0) {
-          log_type = CONSOLE_ONLY;
+          log_type = 2;
         }
         log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                       LOG_BUFFER_SIZE - log_buffer_offset,
@@ -235,9 +236,9 @@ void set_env(char *env) {
 
 const char *get_log_file() { return log_file; }
 
-LOG_LEVEL get_log_level() { return log_level; }
+int get_log_level() { return log_level; }
 
-LOG_DESTINATION get_log_type() { return log_type; }
+int get_log_type() { return log_type; }
 
 char *get_cert_file() { return cert_chain_file; }
 

@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "listener.h"
+#include "data_structures/marked_fds.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
 #include "http/request.h"

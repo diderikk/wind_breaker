@@ -25,6 +25,7 @@ add_library(listener_ssl_lib STATIC src/listener_ssl.c)
 add_library(worker_lib STATIC src/worker.c)
 add_library(properties_lib STATIC src/properties.c)
 add_library(poll_array_lib STATIC src/data_structures/poll_array.c)
+add_library(marked_fds_lib STATIC src/data_structures/marked_fds.c)
 add_library(http_request_lib STATIC src/http/request.c)
 add_library(http_response_lib STATIC src/http/response.c)
 add_library(file_utils_lib STATIC src/utils/static_file.c)
@@ -54,18 +55,18 @@ add_library(simulator_http_lib STATIC test/simulator/http_cases.c)
 
 
 add_executable(main src/main.c ${HEADER_FILES})
-target_link_libraries(main PRIVATE listener_ssl_lib listener_lib worker_lib builder_lib loader_lib parser_lib sender_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(main PRIVATE listener_ssl_lib listener_lib worker_lib builder_lib loader_lib parser_lib sender_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib marked_fds_lib stop_lib properties_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_compile_options(main)
 #enable_address_sanitizer(main)
 
 add_executable(client test/simulator/client.c)
-target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib stop_lib marked_fds_lib properties_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_compile_options(client)
 enable_address_sanitizer(client)
 
 
 add_executable(unit_test test/unit_tests/all_tests.c)
-target_link_libraries(unit_test PRIVATE http_request_lib http_response_lib file_utils_lib regex_utils_lib poll_array_lib compression_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(unit_test PRIVATE http_request_lib http_response_lib file_utils_lib regex_utils_lib poll_array_lib compression_utils_lib hash_utils_lib properties_lib assert_utils_lib logger_utils_lib session_lib stop_lib marked_fds_lib properties_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
 enable_compile_options(unit_test)
 #enable_address_sanitizer(unit_test)
 # Add custom target to copy the static folder

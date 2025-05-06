@@ -6,9 +6,6 @@
 void init_poll_array(int listen_fd);
 void destroy_poll_array();
 
-void mark(int fd);
-char is_marked(int fd);
-
 int add_poll_fd_sync(int fd);
 void remove_poll_fd_by_index_sync(int *index);
 

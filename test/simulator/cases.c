@@ -6,8 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+
+#define GRN "\x1B[32m"
+#define RESET "\x1B[0m"
 
 static int case_count = 0;
+static char *case_names[100];
 static pthread_t *cases = NULL;
 
 int start_case(void *(*func)(void *), struct connection_data *arg, const char *name);
@@ -33,6 +38,7 @@ void run_cases(char *ip, char *port) {
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);
+    printf(GRN "Case: %s passed\n" RESET, case_names[i]);
   }
   free(cases);
   cases = NULL;
@@ -45,6 +51,8 @@ int start_case(void *(*func)(void *), struct connection_data *arg, const char *n
   printf("Starting case %d, named: %s\n", case_count, name);
 
   assert(pthread_create(&cases[case_count++], NULL, func, arg) == 0);
+  case_names[case_count - 1] = (char *)malloc(strlen(name) + 1);
+  strcpy(case_names[case_count - 1], name);
 
   return 0;
 }

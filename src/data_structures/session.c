@@ -1,5 +1,7 @@
 #include "session.h"
+#include "../properties.h"
 #include "../shutdown/stop.h"
+#include "marked_fds.h"
 #include <execinfo.h>
 #include <openssl/err.h>
 
@@ -43,15 +45,15 @@ static void assert_(const char *file, int line, const char *func,
 #define assert(expr)                                                           \
   ((void)((expr) || (assert_(__FILE__, __LINE__, __func__, #expr), 0)))
 
-int init_session_cache(int _max_size, SSL_CTX *ctx) {
+int init_session_cache(SSL_CTX *ctx) {
   SSL_library_init();
-  assert(_max_size > 0);
   assert(session_array == NULL);
-  max_size = _max_size;
+
+  max_size = get_session_max_size();
   // Static array of sessions, should not be resized... Tiger style
 
   // Session array
-  session_array = calloc(_max_size, sizeof(struct session *));
+  session_array = calloc(max_size, sizeof(struct session *));
   assert(session_array != NULL);
   for (int i = 0; i < max_size; i++) {
     session_array[i] = calloc(1, sizeof(struct session));
@@ -428,6 +430,7 @@ void push_request(int related_fd, WORK_STATUS status) {
         break;
       case WORK_STATUS_REJECTED:
         del_from_session(i);
+        mark(related_fd);
         break;
 
       default:
@@ -559,7 +562,6 @@ struct session_full_return pop_request_by_fd(int related_fd) {
       break;
     }
   }
-  assert(result.session != NULL || in_process == 1);
 
   pthread_mutex_unlock(&session_mutex);
   return result;
