@@ -1,5 +1,6 @@
 #include "../../src/properties.h"
 #include "../../src/utils/logger.h"
+#include "data_structures/marked_fds_test.c"
 #include "data_structures/poll_array_test.c"
 #include "data_structures/session_test.c"
 #include "http/request_test.c"
@@ -16,6 +17,11 @@ int main() {
   int prev_number_of_tests = 0;
   int number_of_tests = 0;
   int group_count = 0;
+
+  number_of_tests += marked_fds_test();
+  group_count = number_of_tests - prev_number_of_tests;
+  printf(GRN "\nCompleted %d/%d marked fds tests\n" RESET, group_count, group_count);
+  prev_number_of_tests = number_of_tests;
 
   number_of_tests += poll_array_test();
   group_count = number_of_tests - prev_number_of_tests;
@@ -45,7 +51,6 @@ int main() {
   number_of_tests += response_test();
   group_count = number_of_tests - prev_number_of_tests;
   printf(GRN "\nCompleted %d/%d response tests\n" RESET, group_count, group_count);
-  prev_number_of_tests = number_of_tests;
   
   printf(GRN "\nNumber of tests passed: %d\n" RESET, number_of_tests);
 
