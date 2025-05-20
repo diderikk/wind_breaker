@@ -1,16 +1,17 @@
-# Use an official Alpine Linux image
-FROM alpine:latest
+FROM debian:bookworm-slim
 
-# Install necessary dependencies
-RUN apk update && apk add --no-cache \
-    cmake \
+RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
+    wget \
+    ca-certificates \
     gcc \
     make \
-    openssl-dev \
-    zlib-dev \
-    musl-dev
+    cmake \
+    libssl-dev \
+    zlib1g-dev \
+    sqlite3 \
+    libsqlite3-dev && \
+    apt clean && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
 WORKDIR /app
 
 # Copy the entire project into the container

@@ -14,7 +14,7 @@ void *handle_a() {
       continue;
     }
 
-    session.session->thread_id = pthread_self();
+    session.session->thread_id = (long unsigned int)pthread_self();
 
     log_trace("Request %d (%d) is being handled by request parser",
               session.session->id, session.session->related_fd);
@@ -28,14 +28,17 @@ void *handle_a() {
     parse_http_request(session.request, session.in_buffer);
     session.response->status_code = validate_request_headers(session.request);
 
-    log_info("Parsed:\nmethod: %d, uri: %s, version: %s, "
+    // char full_uri[HTTP_URI_TOKEN_COUNT * (HTTP_URI_TOKEN_SIZE + 1)];
+
+    log_info("Parsed:\nmethod: %d, uri_tokens: %s %s %s %s, version: %s, "
              "host: %s, user_agent: %s, accept: %s, "
              "accept_language: %s, accept_encoding: %s, connection: %d",
-             session.request->method, session.request->uri,
-             session.request->version, session.request->host,
-             session.request->user_agent, session.request->accept,
-             session.request->accept_language, session.request->accept_encoding,
-             session.request->connection);
+             session.request->method, session.request->uri[0],
+             session.request->uri[1], session.request->uri[2],
+             session.request->uri[3], session.request->version,
+             session.request->host, session.request->user_agent,
+             session.request->accept, session.request->accept_language,
+             session.request->accept_encoding, session.request->connection);
 
     session.session->thread_id = 0;
     push_request(session.session->related_fd, WORK_STATUS_PARSED);

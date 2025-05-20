@@ -8,7 +8,8 @@
 
 #define REQUEST_RESPONSE_MAX_SIZE 32768
 #define HTTP_HEADER_SIZE 256
-#define HTTP_URI_SIZE 512
+#define HTTP_URI_TOKEN_COUNT 4
+#define HTTP_URI_TOKEN_SIZE 200
 #define HTTP_VERSION_SIZE 16
 #define HTTP_METHOD_SIZE 8
 #define HTTP_BODY_SIZE 16192
@@ -16,6 +17,9 @@
 #define HTTP_HEADER_ETAG_SIZE 65
 #define HTTP_VERSION "1.1"
 #define BACKTRACE_SIZE 128
+#define WB_SQLITE_OPEN_FLAGS                                                   \
+  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI |               \
+      SQLITE_OPEN_NOMUTEX
 
 typedef enum { RESET, REMOVE_FD, CONTINUE } POLL_ERROR_CLASS;
 
@@ -86,12 +90,14 @@ typedef struct {
   char last_modified[HTTP_HEADER_SMALL_SIZE];
   char date[HTTP_HEADER_SMALL_SIZE];
   char etag[HTTP_HEADER_ETAG_SIZE];
-  char location[HTTP_URI_SIZE];
+  char location[HTTP_HEADER_SIZE];
   char body[HTTP_BODY_SIZE];
 } http_response_t;
 
+typedef char uri_token_t[HTTP_URI_TOKEN_COUNT][HTTP_URI_TOKEN_SIZE];
+
 typedef struct {
-  char uri[HTTP_URI_SIZE];
+  uri_token_t uri;
   http_method method;
   char version[HTTP_VERSION_SIZE];
   char host[HTTP_HEADER_SIZE];

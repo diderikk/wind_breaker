@@ -40,7 +40,7 @@ static void assert_(const char *file, int line, const char *func,
     free(backtrace_symbols_buffer);
   }
 
-  exit(EXIT_FAILURE);
+  raise(SIGABRT);
 }
 #define assert(expr)                                                           \
   ((void)((expr) || (assert_(__FILE__, __LINE__, __func__, #expr), 0)))
@@ -298,6 +298,17 @@ static inline void reset_session_at_index(int index) {
   BIO_set_fd(bio_array[index], -1, BIO_NOCLOSE);
 }
 
+static inline void reset_request_at_index(int index) {
+  // Buffer array
+  memset(in_buffer_array[index], 0, REQUEST_RESPONSE_MAX_SIZE);
+
+  // Buffer size array
+  *in_buffer_size_array[index] = 0;
+
+  // Request array
+  memset(request_array[index], 0, sizeof(http_request_t));
+}
+
 // Get the session for a given thread id
 int get_session_id_for_thread() {
   int session_id = -1;
@@ -417,6 +428,7 @@ void push_request(int related_fd, WORK_STATUS status) {
       case WORK_STATUS_READY_TO_SEND:
         *status_array[i] &= ~(WORK_STATUS_REQUEST_READ | WORK_STATUS_PARSED |
                               WORK_STATUS_DATA_FETCHED);
+        reset_request_at_index(i);
         pthread_cond_broadcast(&response_generated_cond);
         break;
       case WORK_STATUS_SEND_FAILED:

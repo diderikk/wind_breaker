@@ -14,19 +14,21 @@ unsigned int to_string(const http_response_t *http_response,
                        char *response_str);
 unsigned int set_content_length(http_response_t *http_response,
                                 const unsigned int content_length);
-int set_content_type(http_response_t *http_response, const char *uri);
-unsigned int set_last_modified(http_response_t *http_response, const char *uri);
+int set_content_type(http_response_t *http_response, const uri_token_t uri);
+unsigned int set_last_modified(http_response_t *http_response,
+                               const uri_token_t uri);
 unsigned int set_date(http_response_t *http_response);
 unsigned int set_etag(http_response_t *http_response, const char *tmp_body,
                       const unsigned int tmp_body_size);
 unsigned int set_location(http_response_t *http_response, const char *host,
-                          const char *uri);
+                          const uri_token_t uri);
 unsigned int set_compression(http_response_t *http_response,
                              const char *accept_encoding, char *tmp_buffer);
 void handle_if_none_match(http_response_t *http_response,
                           const char *if_none_match);
 
-unsigned int construct_response(http_response_t *http_response, const char *uri,
+unsigned int construct_response(http_response_t *http_response,
+                                const uri_token_t uri,
                                 const char *accept_encoding,
                                 const char *if_none_match, char *body_buffer,
                                 unsigned int body_size) {
@@ -64,7 +66,7 @@ unsigned int construct_response(http_response_t *http_response, const char *uri,
   return return_value;
 }
 
-unsigned int construct_upgrade_to_https_response(const char *uri,
+unsigned int construct_upgrade_to_https_response(const uri_token_t uri,
                                                  const char *host,
                                                  char *buffer) {
   unsigned int return_value;
@@ -86,7 +88,7 @@ unsigned int construct_upgrade_to_https_response(const char *uri,
   return return_value;
 }
 
-int set_content_type(http_response_t *http_response, const char *uri) {
+int set_content_type(http_response_t *http_response, const uri_token_t uri) {
   if (http_response->status_code != HTTP_OK) {
     strcpy(http_response->content_type, "text/html;charset=utf-8");
   } else {
@@ -112,20 +114,20 @@ int set_content_type(http_response_t *http_response, const char *uri) {
 }
 
 unsigned int set_location(http_response_t *http_response, const char *host,
-                          const char *uri) {
+                          const uri_token_t uri) {
   if (http_response->status_code != HTTP_MOVED_PERMANENTLY) {
     strcpy(http_response->location, "");
     return -1;
   } else {
     snprintf(http_response->location, HTTP_HEADER_SIZE, "https://%s%s", host,
-             uri);
+             uri[0]); // TODO: Use env variable and join uri
   }
 
   return 0;
 }
 
 unsigned int set_last_modified(http_response_t *http_response,
-                               const char *uri) {
+                               const uri_token_t uri) {
   if (http_response->status_code != HTTP_OK) {
     strcpy(http_response->last_modified, "");
     return 0;

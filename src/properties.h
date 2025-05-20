@@ -15,7 +15,9 @@ void set_env(char *env);
 const char *get_log_file();
 int get_log_level();
 int get_log_type();
-char *get_cert_file();
-char *get_key_file();
+const char *get_cert_file();
+const char *get_key_file();
+const char *get_db_url();
+int get_reset_db();
 
 #endif // PROPERTIES_H

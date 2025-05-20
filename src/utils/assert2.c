@@ -1,11 +1,12 @@
 #include "assert2.h"
 #include "logger.h"
+#include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
 
 void assert_(const char *file, int line, const char *func, const char *msg) {
   log_error("Assertion failed: %s:%d: %s: %s\n", file, line, func, msg);
-  exit(EXIT_FAILURE);
+  raise(SIGABRT);
 }
 
 void assert_log_(const char *file, int line, const char *func, const char *msg,

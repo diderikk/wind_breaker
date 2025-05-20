@@ -20,6 +20,8 @@ static int log_type = 0;
 static char properties_file[200] = "/etc/wind_breaker/properties.conf";
 static char cert_chain_file[200] = "/etc/wind_breaker/cert.pem";
 static char private_key_file[200] = "/etc/wind_breaker/key.pem";
+static char db_url[200] = "/etc/wind_breaker/data.db";
+static char reset_db = 0;
 
 void init_properties(int argc, char *argv[]) {
   char log_buffer[LOG_BUFFER_SIZE + 1];
@@ -100,6 +102,8 @@ void init_properties(int argc, char *argv[]) {
       log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                     LOG_BUFFER_SIZE - log_buffer_offset,
                                     "Log type from args: %d\n", log_type);
+    } else if (strcasecmp(argv[i], "--reset-db") == 0) {
+      reset_db = 1;
     }
   }
 
@@ -240,6 +244,10 @@ int get_log_level() { return log_level; }
 
 int get_log_type() { return log_type; }
 
-char *get_cert_file() { return cert_chain_file; }
+const char *get_cert_file() { return cert_chain_file; }
 
-char *get_key_file() { return private_key_file; }
+const char *get_key_file() { return private_key_file; }
+
+const char *get_db_url() { return db_url; }
+
+int get_reset_db() { return reset_db; }

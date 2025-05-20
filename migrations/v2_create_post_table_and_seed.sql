@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS Post (
+    id TEXT PRIMARY KEY CHECK(LENGTH(id) = 36),
+    title TEXT NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

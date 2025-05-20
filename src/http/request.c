@@ -51,20 +51,13 @@ int validate_request_headers(const http_request_t *http_request) {
 
   // Validate URI to file path.
   const char *file_name = uri_to_file_name(http_request->uri);
-  if (strcmp(http_request->uri, "/") == 0) {
-    if (file_name == NULL || !find_static_file(file_name)) {
+  if (file_name != NULL) {
+    if (!find_static_file(file_name)) {
       log_error("File Not Found: %s", file_name);
       return HTTP_NOT_FOUND;
     }
-
-  } else if (strcmp(http_request->uri, "/favicon") == 0) {
-    if (file_name == NULL || !find_static_file(file_name)) {
-      log_error("File Not Found: %s", file_name);
-      return HTTP_NOT_FOUND;
-    }
-
   } else {
-    log_error("Path Not Found: %s", http_request->uri);
+    log_error("Path Not Found: %s", http_request->uri[0]);
     return HTTP_NOT_FOUND;
   }
 
@@ -117,11 +110,14 @@ int validate_request_headers(const http_request_t *http_request) {
   return HTTP_OK;
 }
 
-char *uri_to_file_name(const char *uri) {
-  if (strcmp(uri, "/") == 0) {
+char *uri_to_file_name(const uri_token_t uri) {
+  if (strcmp(uri[0], "") == 0) {
     return "index.html";
-  } else if (strcmp(uri, "/favicon") == 0) {
+  } else if (strncmp(uri[0], "favicon", strlen("favicon")) == 0) {
     return "favicon.png";
+  } else if (strcmp(uri[0], "projects") == 0 && strlen(uri[1]) > 0 &&
+             uri[2][0] == 0) {
+    return "project.html";
   } else {
     return NULL;
   }
@@ -138,7 +134,8 @@ int parse_control_data(http_request_t *http_request,
   if (matches_count != 4)
     return matches_count;
 
-  if (matches[2].rm_eo - matches[2].rm_so >= HTTP_URI_SIZE) {
+  if (matches[2].rm_eo - matches[2].rm_so >=
+      HTTP_URI_TOKEN_COUNT * HTTP_URI_TOKEN_SIZE) {
     log_error("URI Too Big");
     return -1;
   }
@@ -158,14 +155,29 @@ int parse_control_data(http_request_t *http_request,
   http_request->method = method;
 
   // HTTP URI
-  strncpy(http_request->uri, raw_control_data + matches[2].rm_so,
+  char uri[HTTP_URI_TOKEN_COUNT * HTTP_URI_TOKEN_SIZE];
+  char *save_ptr;
+  strncpy(uri, raw_control_data + matches[2].rm_so,
           matches[2].rm_eo - matches[2].rm_so);
-  http_request->uri[matches[2].rm_eo - matches[2].rm_so] = '\0';
+  uri[matches[2].rm_eo - matches[2].rm_so] = '\0';
+  char *token = strtok_r(uri, "/", &save_ptr);
+  for (int i = 0; i < HTTP_URI_TOKEN_COUNT; i++) {
+    if (token == NULL) {
+      break;
+    }
+    if (strlen(token) >= HTTP_URI_TOKEN_SIZE - 1) {
+      log_error("URI Token Too Big");
+      return -1;
+    }
+    strncpy(http_request->uri[i], token, HTTP_URI_TOKEN_SIZE);
+    http_request->uri[i][HTTP_URI_TOKEN_SIZE - 1] = '\0';
+    token = strtok_r(NULL, "/", &save_ptr);
+  }
 
   // HTTP Version
   strncpy(http_request->version, raw_control_data + matches[3].rm_so,
           matches[3].rm_eo - matches[3].rm_so);
-  http_request->uri[matches[3].rm_eo - matches[3].rm_so] = '\0';
+  http_request->version[matches[3].rm_eo - matches[3].rm_so] = '\0';
 
   return 0;
 }

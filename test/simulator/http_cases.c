@@ -210,7 +210,7 @@ int http_request_to_string(const http_request_t *request, char *buffer) {
                  "Accept-Language: %s\r\n"
                  "Accept-Encoding: %s\r\n"
                  "Connection: %s\r\n",
-                 http_method_to_string(request->method), request->uri,
+                 http_method_to_string(request->method), request->uri[0],
                  request->version, request->host, request->user_agent,
                  request->accept, request->accept_language,
                  request->accept_encoding,

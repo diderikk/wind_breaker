@@ -14,6 +14,7 @@
 * Add more parsing for more HTTP headers.
 * Memory optimization, data-oriented design (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
 * Performance optimization (assembly understanding, cache optimization?)
+* A thread that listens to console input and can send commands to the server (e.g. reload config, shutdown, etc.)
 
 ## Try to remember
 * Clean up includes

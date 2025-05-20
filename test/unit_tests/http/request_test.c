@@ -67,6 +67,15 @@ static const char *request7 = "GET / HTTP/1.1\r\n"
                        "Connection: close\r\n"
                        "\r\n";
 
+static const char *request8 = "GET /abc/def/ghe HTTP/1.1\r\n"
+                       "Host: example.com\r\n"
+                       "User-Agent: test-agent\r\n"
+                       "Accept: text/html\r\n"
+                       "Accept-Language: en-US\r\n"
+                       "Accept-Encoding: gzip, deflate\r\n"
+                       "Connection: close\r\n"
+                       "\r\n";
+
 // Test function for basic GET request
 void* parse_http_request_basic_test() {
     http_request_t http_request;
@@ -78,7 +87,7 @@ void* parse_http_request_basic_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "localhost") == 0);
     assert(strcmp(http_request.user_agent, "test-agent") == 0);
@@ -100,7 +109,7 @@ void* parse_http_request_with_additional_headers_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "example.com") == 0);
     assert(strcmp(http_request.user_agent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36") == 0);
@@ -123,7 +132,7 @@ void* parse_http_request_if_none_match_header_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "example.com") == 0);
     assert(strcmp(http_request.user_agent, "test-agent") == 0);
@@ -147,7 +156,7 @@ void* parse_http_request_content_type_and_length_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "example.com") == 0);
     assert(strcmp(http_request.user_agent, "test-agent") == 0);
@@ -172,7 +181,7 @@ void* parse_http_request_minimal_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "example.com") == 0);
 
@@ -190,7 +199,7 @@ void* parse_http_request_with_complex_accept_header_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "example.com") == 0);
     assert(strcmp(http_request.user_agent, "test-agent") == 0);
@@ -213,7 +222,31 @@ void* parse_http_request_with_connection_close_test() {
 
     assert(result == 0);
     assert(http_request.method == HTTP_GET);
-    assert(strcmp(http_request.uri, "/") == 0);
+    assert(strcmp(http_request.uri[0], "") == 0);
+    assert(strcmp(http_request.version, "HTTP/1.1") == 0);
+    assert(strcmp(http_request.host, "example.com") == 0);
+    assert(strcmp(http_request.user_agent, "test-agent") == 0);
+    assert(strcmp(http_request.accept, "text/html") == 0);
+    assert(strcmp(http_request.accept_language, "en-US") == 0);
+    assert(strcmp(http_request.accept_encoding, "gzip, deflate") == 0);
+    assert(http_request.connection == CLOSE);
+
+    return NULL;
+}
+
+void* parse_http_request_with_multiple_path_parameters_test() {
+    http_request_t http_request;
+    memset(&http_request, 0, sizeof(http_request_t));
+    char buffer[REQUEST_RESPONSE_MAX_SIZE];
+    strcpy(buffer, request8);
+
+    int result = parse_http_request(&http_request, buffer);
+
+    assert(result == 0);
+    assert(http_request.method == HTTP_GET);
+    assert(strcmp(http_request.uri[0], "abc") == 0);
+    assert(strcmp(http_request.uri[1], "def") == 0);
+    assert(strcmp(http_request.uri[2], "ghe") == 0);
     assert(strcmp(http_request.version, "HTTP/1.1") == 0);
     assert(strcmp(http_request.host, "example.com") == 0);
     assert(strcmp(http_request.user_agent, "test-agent") == 0);
@@ -231,7 +264,7 @@ void* validate_request_headers_valid_get_request_test() {
 
     // Populate the http_request structure with valid values
     http_request.method = HTTP_GET;
-    strcpy(http_request.uri, "/");
+    strcpy(http_request.uri[0], "");
     strcpy(http_request.host, "localhost");
     strcpy(http_request.user_agent, "test-agent");
     strcpy(http_request.accept, "text/html");
@@ -251,7 +284,7 @@ void* validate_request_headers_method_not_allowed_test() {
 
     // Populate the http_request structure with an unsupported method
     http_request.method = HTTP_POST;
-    strcpy(http_request.uri, "/");
+    strcpy(http_request.uri[0], "");
     strcpy(http_request.host, "localhost");
     strcpy(http_request.user_agent, "test-agent");
     strcpy(http_request.accept, "text/html");
@@ -271,7 +304,7 @@ void* validate_request_headers_language_not_supported_test() {
 
     // Populate the http_request structure with an unsupported language
     http_request.method = HTTP_GET;
-    strcpy(http_request.uri, "/");
+    strcpy(http_request.uri[0], "");
     strcpy(http_request.host, "localhost");
     strcpy(http_request.user_agent, "test-agent");
     strcpy(http_request.accept, "text/html");
@@ -291,7 +324,7 @@ void* validate_request_headers_encoding_not_supported_test() {
 
     // Populate the http_request structure with an unsupported encoding
     http_request.method = HTTP_GET;
-    strcpy(http_request.uri, "/");
+    strcpy(http_request.uri[0], "");
     strcpy(http_request.host, "localhost");
     strcpy(http_request.user_agent, "test-agent");
     strcpy(http_request.accept, "text/html");
@@ -311,7 +344,7 @@ void* validate_request_headers_file_not_found_test() {
 
     // Populate the http_request structure with a non-existent URI
     http_request.method = HTTP_GET;
-    strcpy(http_request.uri, "/nonexistent");
+    strcpy(http_request.uri[0], "nonexistent");
     strcpy(http_request.host, "localhost");
     strcpy(http_request.user_agent, "test-agent");
     strcpy(http_request.accept, "text/html");
@@ -326,8 +359,14 @@ void* validate_request_headers_file_not_found_test() {
 }
 
 void * uri_test() {
-  assert(strcmp(uri_to_file_name("/"), "index.html") == 0);
-  assert(strcmp(uri_to_file_name("/favicon"), "favicon.png") == 0);
+  uri_token_t uri1 = {0};
+  uri_token_t uri2 = {0};
+  strcpy(uri1[0], "");
+  strcpy(uri2[0], "favicon");
+
+
+  assert(strcmp(uri_to_file_name(uri1), "index.html") == 0);
+  assert(strcmp(uri_to_file_name(uri2), "favicon.png") == 0);
 
   return NULL;
 }

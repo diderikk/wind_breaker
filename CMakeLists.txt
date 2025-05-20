@@ -10,6 +10,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 function(enable_compile_options target)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3 -rdynamic)
@@ -34,6 +35,7 @@ add_library(hash_utils_lib STATIC src/utils/hash.c)
 add_library(logger_utils_lib STATIC src/utils/logger.c)
 add_library(assert_utils_lib STATIC src/utils/assert2.c)
 add_library(regex_utils_lib STATIC src/utils/regex2.c)
+add_library(db_migration_utils_lib STATIC src/utils/db_migration.c)
 add_library(signal_wrapper_lib STATIC src/shutdown/signal2.c)
 add_library(stop_lib STATIC src/shutdown/stop.c)
 add_library(session_lib STATIC src/data_structures/session.c)
@@ -55,7 +57,7 @@ add_library(simulator_http_lib STATIC test/simulator/http_cases.c)
 
 
 add_executable(main src/main.c ${HEADER_FILES})
-target_link_libraries(main PRIVATE listener_ssl_lib listener_lib worker_lib builder_lib loader_lib parser_lib sender_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib poll_array_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib marked_fds_lib stop_lib properties_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(main PRIVATE listener_ssl_lib listener_lib worker_lib builder_lib loader_lib parser_lib sender_lib http_request_lib http_response_lib socket_lib signal_wrapper_lib poll_array_lib db_migration_utils_lib file_utils_lib compression_utils_lib regex_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib marked_fds_lib stop_lib properties_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB SQLite::SQLite3)
 enable_compile_options(main)
 #enable_address_sanitizer(main)
 
@@ -75,5 +77,11 @@ add_custom_target(copy_static ALL
     ${CMAKE_SOURCE_DIR}/static ${CMAKE_BINARY_DIR}/static
 )
 
+add_custom_target(copy_migrations ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/migrations ${CMAKE_BINARY_DIR}/migrations
+)
+
 # Ensure the main executable depends on the copy_static target
 add_dependencies(main copy_static)
+add_dependencies(main copy_migrations)

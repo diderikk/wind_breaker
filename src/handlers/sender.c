@@ -14,7 +14,7 @@ void *handle_d() {
       continue;
     }
 
-    session.session->thread_id = pthread_self();
+    session.session->thread_id = (long unsigned int)pthread_self();
 
     log_trace("Request %d (%d) is being handled by response sender",
               session.session->id, session.session->related_fd);

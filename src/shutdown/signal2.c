@@ -14,6 +14,7 @@ void handle_signals(void (*handle_exit)(int)) {
   sigaction(SIGTERM, &sa, NULL);
   sigaction(SIGQUIT, &sa, NULL);
   sigaction(SIGSEGV, &sa, NULL);
+  sigaction(SIGABRT, &sa, NULL);
 
   signal(SIGPIPE, SIG_IGN);
 }
@@ -30,6 +31,8 @@ char *get_signal_description(int signum) {
     return "Broken pipe";
   case SIGSEGV:
     return "Segmentation fault";
+  case SIGABRT:
+    return "Abnormal termination (probably from assertion)";
   default:
     return "Unknown signal";
   }

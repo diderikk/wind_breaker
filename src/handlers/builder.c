@@ -13,7 +13,7 @@ void *handle_c() {
       continue;
     }
 
-    session.session->thread_id = pthread_self();
+    session.session->thread_id = (long unsigned int)pthread_self();
 
     log_trace("Request %d (%d) is being handled by response builder",
               session.session->id, session.session->related_fd);
