@@ -37,6 +37,7 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
     }
   }
 
+  char tmp_buffer[1024] = {0};
   sqlite3_bind_text(*stmt, 1, argument, -1, SQLITE_STATIC);
   rc = sqlite3_step(*stmt);
   if (rc == SQLITE_ROW) {
@@ -46,33 +47,42 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
     *in_out_buffer_size =
         str_replace(in_out_buffer, "%DESCRIPTION%", description);
     const char *githubUrl = (const char *)sqlite3_column_text(*stmt, 2);
-    if (githubUrl != NULL)
-      *in_out_buffer_size =
-          str_replace(in_out_buffer, "%GITHUB_URL%", githubUrl);
+    *in_out_buffer_size = str_replace(in_out_buffer, "%GITHUB_URL%", githubUrl);
     const char *imageUrl = (const char *)sqlite3_column_text(*stmt, 3);
-    if (imageUrl != NULL)
-      *in_out_buffer_size = str_replace(in_out_buffer, "%IMAGE_URL%", imageUrl);
+    *in_out_buffer_size = str_replace(in_out_buffer, "%IMAGE_URL%", imageUrl);
     const char *websiteUrl = (const char *)sqlite3_column_text(*stmt, 4);
-    if (websiteUrl != NULL)
+    if (websiteUrl != NULL) {
+      snprintf(tmp_buffer, sizeof(tmp_buffer), "<a href=\"%s\">Website</a>",
+               websiteUrl);
       *in_out_buffer_size =
-          str_replace(in_out_buffer, "%WEBSITE_URL%", websiteUrl);
+          str_replace(in_out_buffer, "%WEBSITE_LINK%", tmp_buffer);
+      memset(tmp_buffer, 0, sizeof(tmp_buffer));
+    } else {
+      *in_out_buffer_size = str_replace(in_out_buffer, "%WEBSITE_LINK%", "");
+    }
     const char *githubReadme = (const char *)sqlite3_column_text(*stmt, 5);
-    if (githubReadme != NULL)
+    if (githubReadme != NULL) {
+      snprintf(tmp_buffer, sizeof(tmp_buffer), "<a href=\"%s\">Readme</a>",
+               githubReadme);
       *in_out_buffer_size =
-          str_replace(in_out_buffer, "%README_URL%", githubReadme);
-  } else if (rc == SQLITE_DONE) {
-    log_error("Failed to fetch data: %s", sqlite3_errmsg(db));
-    return -2;
+          str_replace(in_out_buffer, "%README_LINK%", tmp_buffer);
+      memset(tmp_buffer, 0, sizeof(tmp_buffer));
+    } else {
+      *in_out_buffer_size = str_replace(in_out_buffer, "%README_LINK%", "");
+    }
   }
 
-  rc = sqlite3_reset(*stmt);
-  if (rc != SQLITE_OK) {
-    log_error("Failed to fetch data: %s", sqlite3_errmsg(db));
-    return -1;
-  }
+  int reset_rc = sqlite3_reset(*stmt);
   sqlite3_clear_bindings(*stmt);
 
-  return 0;
+  if (rc == SQLITE_DONE) {
+    return -2;
+  } else if (reset_rc != SQLITE_OK) {
+    log_error("Failed to reset statement: %s", sqlite3_errmsg(db));
+    return -1;
+  } else {
+    return 0;
+  }
 }
 
 static inline int load_index(sqlite3 *db, sqlite3_stmt **stmt,
@@ -100,18 +110,13 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **stmt,
   }
   if (rc == SQLITE_DONE) {
     offset += snprintf(tmp_buffer + offset, HTTP_BODY_SIZE - offset, "</ul>");
-    log_debug("Fetched %s projects", tmp_buffer);
-
-    // sqlite3_finalize(stmt);
-    rc = sqlite3_reset(*stmt);
+    *in_out_buffer_size = str_replace(in_out_buffer, "%PROJECTS%", tmp_buffer);
   } else {
     log_error("Failed to fetch data: %s", sqlite3_errmsg(db));
-    return -1;
   }
+  rc = sqlite3_reset(*stmt);
 
-  *in_out_buffer_size = str_replace(in_out_buffer, "%PROJECTS%", tmp_buffer);
-
-  return 0;
+  return (rc != SQLITE_OK) ? -1 : 0;
 }
 
 static inline int load(sqlite3 *db, sqlite3_stmt **index_stmt,

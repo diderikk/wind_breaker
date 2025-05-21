@@ -118,6 +118,8 @@ char *uri_to_file_name(const uri_token_t uri) {
   } else if (strcmp(uri[0], "projects") == 0 && strlen(uri[1]) > 0 &&
              uri[2][0] == 0) {
     return "project.html";
+  } else if (strcmp(uri[0], "style.css") == 0) {
+    return "style.css";
   } else {
     return NULL;
   }
