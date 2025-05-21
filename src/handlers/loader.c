@@ -215,6 +215,7 @@ static inline unsigned int str_replace(char *target, const char *needle,
     if (hit == NULL) {
       // no more occurrences, copy the rest of the string
       strcpy(insert_point, read_only_target);
+      insert_point += strlen(read_only_target);
       break;
     }
     occurrences++;

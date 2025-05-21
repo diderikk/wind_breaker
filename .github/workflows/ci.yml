@@ -48,7 +48,7 @@ jobs:
         run: |
           touch /tmp/logs
           (./build/main &> /tmp/logs) & echo "MAIN_PID=$!" >> $GITHUB_ENV
-          sleep 5
+          sleep 3
           ./build/client
 
       - name: Print logs

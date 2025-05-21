@@ -1,5 +1,6 @@
 FROM debian:bookworm-slim
 
+
 RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
     wget \
     ca-certificates \
@@ -18,7 +19,7 @@ WORKDIR /app
 COPY . .
 
 # Create a build directory
-RUN mkdir -p build
+RUN mkdir -p build && mkdir -p /etc/wind_breaker && chown -R 1001:1001 /etc/wind_breaker
 
 # Set the working directory to the build directory
 WORKDIR /app/build
@@ -31,6 +32,8 @@ RUN cmake ..
 
 # Build the project
 RUN cmake --build .
+
+USER 1001:1001
 
 # Specify the command to run the main executable by default
 CMD ["./main"]
