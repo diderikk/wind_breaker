@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define LOG_BUFFER_SIZE 16 * 1024 * 1024 // 16 MiB
+#define LOG_BUFFER_SIZE 4 * 1024 * 1024 // 4 MiB
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"
 #define YEL "\x1B[33m"

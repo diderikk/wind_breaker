@@ -10,13 +10,14 @@ static int response_start_case(void *(*func)(void *), const char *name);
 
 void* construct_response_ok_test() {
     char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+    char tmp[REQUEST_RESPONSE_MAX_SIZE] = {0};
     unsigned int body_size = sprintf(response, "<html><body><h1>Hello, World from Static folder!</h1></body></html>");
     uri_token_t uri = {0};
 
     http_response_t *http_response = calloc(1, sizeof(http_response_t));
     http_response->status_code = HTTP_OK;
 
-    size_t response_size = construct_response(http_response, uri, "", "", response, body_size);
+    size_t response_size = construct_response(http_response, uri, "", "", response, body_size, tmp);
 
     assert(response_size > 0);
     assert(strstr(response, "HTTP/1.1 200 OK") != NULL);
@@ -34,13 +35,14 @@ void* construct_response_ok_test() {
 
 void* construct_response_ok_with_compression_test() {
     char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+    char tmp[REQUEST_RESPONSE_MAX_SIZE] = {0};
     unsigned int body_size = sprintf(response, "<html><body><h1>Hello, World from Static folder!</h1></body></html>");
     uri_token_t uri = {0};
 
     http_response_t *http_response = calloc(1, sizeof(http_response_t));
     http_response->status_code = HTTP_OK;
 
-    size_t response_size = construct_response(http_response, uri, "gzip", "", response, body_size);
+    size_t response_size = construct_response(http_response, uri, "gzip", "", response, body_size, tmp);
 
     assert(response_size > 0);
     assert(strstr(response, "HTTP/1.1 200 OK") != NULL);
@@ -58,6 +60,7 @@ void* construct_response_ok_with_compression_test() {
 
 void* construct_response_not_found_test() {
     char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+    char tmp[REQUEST_RESPONSE_MAX_SIZE] = {0};
     unsigned int body_size = sprintf(response, "<html><body><h1>404</h1></body></html>");
     uri_token_t uri = {0};
     strcpy(uri[0], "nonexistent");
@@ -65,7 +68,7 @@ void* construct_response_not_found_test() {
     http_response_t *http_response = calloc(1, sizeof(http_response_t));
     http_response->status_code = HTTP_NOT_FOUND;
 
-    size_t response_size = construct_response(http_response, uri, "", "", response, body_size);
+    size_t response_size = construct_response(http_response, uri, "", "", response, body_size, tmp);
 
     assert(response_size > 0);
     assert(strstr(response, "HTTP/1.1 404 Not Found") != NULL);
@@ -76,13 +79,14 @@ void* construct_response_not_found_test() {
 
 void* construct_response_bad_request_test() {
     char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+    char tmp[REQUEST_RESPONSE_MAX_SIZE] = {0};
     unsigned int body_size = sprintf(response, "<html><body><h1>400</h1></body></html>");
     uri_token_t uri = {0};
 
     http_response_t *http_response = calloc(1, sizeof(http_response_t));
     http_response->status_code = HTTP_BAD_REQUEST;
 
-    size_t response_size = construct_response(http_response, uri, "", "", response, body_size);
+    size_t response_size = construct_response(http_response, uri, "", "", response, body_size, tmp);
 
     assert(response_size > 0);
     assert(strstr(response, "HTTP/1.1 400 Bad Request") != NULL);
@@ -92,11 +96,12 @@ void* construct_response_bad_request_test() {
 }
 
 void* construct_response_not_modified_test() {
+    char tmp[REQUEST_RESPONSE_MAX_SIZE] = {0};
     char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
     char etag[SHA256_DIGEST_LENGTH * 2 + 1] = {0};
     uri_token_t uri = {0};
 
-    unsigned int buff_size = read_static_file("index.html", response, HTTP_BODY_SIZE);
+    unsigned int buff_size = read_static_file("index.html", response, REQUEST_RESPONSE_MAX_SIZE);
     sha256_hash_hex(response, buff_size, etag); 
 
     /*memset(response, 0, HTTP_BODY_SIZE);*/
@@ -105,7 +110,7 @@ void* construct_response_not_modified_test() {
     http_response_t *http_response = calloc(1, sizeof(http_response_t));
     http_response->status_code = HTTP_OK;
 
-    size_t response_size = construct_response(http_response, uri, "gzip", etag, response, buff_size);
+    size_t response_size = construct_response(http_response, uri, "gzip", etag, response, buff_size, tmp);
 
     assert(response_size > 0);
     assert(strstr(response, "HTTP/1.1 304 Not Modified") != NULL);

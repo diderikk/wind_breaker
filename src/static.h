@@ -6,13 +6,13 @@
 #include <poll.h>
 #include <pthread.h>
 
-#define REQUEST_RESPONSE_MAX_SIZE 32768
+#define REQUEST_RESPONSE_MAX_SIZE 1024 * 1024 // 1 MB 
+#define HTML_MAX_SIZE 16 * 1024 // 16 kB
 #define HTTP_HEADER_SIZE 256
 #define HTTP_URI_TOKEN_COUNT 4
 #define HTTP_URI_TOKEN_SIZE 200
 #define HTTP_VERSION_SIZE 16
 #define HTTP_METHOD_SIZE 8
-#define HTTP_BODY_SIZE 16192
 #define HTTP_HEADER_SMALL_SIZE 128
 #define HTTP_HEADER_ETAG_SIZE 65
 #define HTTP_VERSION "1.1"
@@ -91,7 +91,6 @@ typedef struct {
   char date[HTTP_HEADER_SMALL_SIZE];
   char etag[HTTP_HEADER_ETAG_SIZE];
   char location[HTTP_HEADER_SIZE];
-  char body[HTTP_BODY_SIZE];
 } http_response_t;
 
 typedef char uri_token_t[HTTP_URI_TOKEN_COUNT][HTTP_URI_TOKEN_SIZE];
@@ -128,14 +127,12 @@ struct session_full_return {
   struct session *session;
   BIO *bio;
   SSL *ssl;
-  char *in_buffer;
-  unsigned int *in_buffer_size;
-  char *out_buffer;
+  char *buffer;
+  unsigned int *buffer_size;
   http_request_t *request;
   http_response_t *response;
 };
 
-typedef struct {
-} poll_array;
+char *uri_to_file_name(const uri_token_t uri);
 
 #endif // STATIC_H

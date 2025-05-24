@@ -18,7 +18,7 @@ static inline unsigned int str_replace(char *target, const char *needle,
 static inline unsigned int gen_error_body(http_status_code http_status_code,
                                           char *buffer) {
   const char *status_code_str = http_status_code_to_str(http_status_code);
-  return snprintf(buffer, HTTP_BODY_SIZE,
+  return snprintf(buffer, REQUEST_RESPONSE_MAX_SIZE,
                   "<html><body><h1>%d %s</h1></body></html>", http_status_code,
                   status_code_str);
 }
@@ -98,18 +98,18 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **stmt,
   }
 
   // Fetch and inject arguments
-  char tmp_buffer[HTTP_BODY_SIZE];
+  char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE];
   unsigned int offset = 0;
-  offset += snprintf(tmp_buffer + offset, HTTP_BODY_SIZE - offset, "<ul>");
+  offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset, "<ul>");
   while ((rc = sqlite3_step(*stmt)) == SQLITE_ROW) {
     const char *id = (const char *)sqlite3_column_text(*stmt, 0);
     const char *title = (const char *)sqlite3_column_text(*stmt, 1);
-    offset += snprintf(tmp_buffer + offset, HTTP_BODY_SIZE - offset,
+    offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
                        "<li id=\"%s\"><a href=\"/projects/%s\">%s</a></li>", id,
                        id, title);
   }
   if (rc == SQLITE_DONE) {
-    offset += snprintf(tmp_buffer + offset, HTTP_BODY_SIZE - offset, "</ul>");
+    offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset, "</ul>");
     *in_out_buffer_size = str_replace(in_out_buffer, "%PROJECTS%", tmp_buffer);
   } else {
     log_error("Failed to fetch data: %s", sqlite3_errmsg(db));
@@ -155,51 +155,56 @@ void *handle_b() {
 
     assert(session.request != NULL);
     assert(session.response != NULL);
-    assert(session.in_buffer != NULL);
-    assert(session.out_buffer != NULL);
+    assert(session.buffer != NULL);
 
     // Request already parsed
-    memset(session.in_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+    memset(session.buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
 
     if (session.response->status_code == HTTP_OK) {
       const char *file_name = uri_to_file_name(session.request->uri);
-      *session.in_buffer_size =
-          read_static_file(file_name, session.in_buffer, HTTP_BODY_SIZE);
+      *session.buffer_size =
+          read_static_file(file_name, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
 
-      if (*session.in_buffer_size == 0) {
+      if (*session.buffer_size == 0) {
         log_error("Failed to read static file: %s", file_name);
         session.response->status_code = HTTP_NOT_FOUND;
-        *session.in_buffer_size =
-            gen_error_body(session.response->status_code, session.in_buffer);
+        *session.buffer_size =
+            gen_error_body(session.response->status_code, session.buffer);
       } else {
         // Fetch and inject arguments
         switch (load(db, &index_stmt, &project_stmt, file_name,
-                     session.in_buffer, session.in_buffer_size,
+                     session.buffer, session.buffer_size,
                      session.request->uri[1])) {
         case 0:
           break;
         case -1:
           log_error("Failed to fetch and inject arguments");
           session.response->status_code = HTTP_INTERNAL_SERVER_ERROR;
-          *session.in_buffer_size =
-              gen_error_body(session.response->status_code, session.in_buffer);
+          *session.buffer_size =
+              gen_error_body(session.response->status_code, session.buffer);
           break;
         case -2:
           log_error("Failed to fetch and inject arguments");
           session.response->status_code = HTTP_NOT_FOUND;
-          *session.in_buffer_size =
-              gen_error_body(session.response->status_code, session.in_buffer);
+          *session.buffer_size =
+              gen_error_body(session.response->status_code, session.buffer);
           break;
         }
       }
 
     } else {
-      *session.in_buffer_size =
-          gen_error_body(session.response->status_code, session.in_buffer);
+      *session.buffer_size =
+          gen_error_body(session.response->status_code, session.buffer);
     }
 
     session.session->thread_id = 0;
     push_request(session.session->related_fd, WORK_STATUS_DATA_FETCHED);
+  }
+  
+  sqlite3_finalize(index_stmt);
+  sqlite3_finalize(project_stmt);
+  if (db != NULL) {
+    sqlite3_close(db);
   }
 
   return NULL;
@@ -207,7 +212,7 @@ void *handle_b() {
 
 static inline unsigned int str_replace(char *target, const char *needle,
                                        const char *replacement) {
-  char buffer[HTTP_BODY_SIZE] = {0};
+  char buffer[HTML_MAX_SIZE] = {0};
   char *insert_point = &buffer[0];
   const char *read_only_target = target;
   unsigned int needle_len = strlen(needle);
@@ -226,8 +231,8 @@ static inline unsigned int str_replace(char *target, const char *needle,
     occurrences++;
 
     assert(hit >= read_only_target);
-    assert(hit < target + HTTP_BODY_SIZE);
-    assert(hit + repl_len < target + HTTP_BODY_SIZE);
+    assert(hit < target + HTML_MAX_SIZE);
+    assert(hit + repl_len < target + HTML_MAX_SIZE);
 
     // copy part before needle
     memcpy(insert_point, read_only_target, hit - read_only_target);

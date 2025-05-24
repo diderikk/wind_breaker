@@ -29,7 +29,7 @@ int handle_request_async(int fd) {
   }
 
   int recv_return =
-      recv_bio(session.bio, session.in_buffer, REQUEST_RESPONSE_MAX_SIZE);
+      recv_bio(session.bio, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
   if (recv_return > 0) {
     push_request(fd, WORK_STATUS_REQUEST_READ);
     return 0;

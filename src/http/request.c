@@ -110,21 +110,6 @@ int validate_request_headers(const http_request_t *http_request) {
   return HTTP_OK;
 }
 
-char *uri_to_file_name(const uri_token_t uri) {
-  if (strcmp(uri[0], "") == 0) {
-    return "index.html";
-  } else if (strncmp(uri[0], "favicon", strlen("favicon")) == 0) {
-    return "favicon.png";
-  } else if (strcmp(uri[0], "projects") == 0 && strlen(uri[1]) > 0 &&
-             uri[2][0] == 0) {
-    return "project.html";
-  } else if (strcmp(uri[0], "style.css") == 0) {
-    return "style.css";
-  } else {
-    return NULL;
-  }
-}
-
 int parse_control_data(http_request_t *http_request,
                        const char *raw_control_data) {
   http_method method;

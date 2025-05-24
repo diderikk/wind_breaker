@@ -21,22 +21,18 @@ void *handle_d() {
 
     assert(session.request != NULL);
     assert(session.response != NULL);
-    assert(session.in_buffer != NULL);
-    assert(session.out_buffer != NULL);
+    assert(session.buffer != NULL);
 
     char is_ssl =
         (session.ssl != NULL && SSL_is_init_finished(session.ssl)) ? 1 : 0;
 
-    unsigned int response_size =
-        combine_chars(session.out_buffer[0], session.out_buffer[1],
-                      session.out_buffer[2], session.out_buffer[3]);
 
     log_info("Sending response to session %d:\n%s", session.session->id,
-             session.out_buffer + 4);
+             session.buffer);
 
     int send_return =
-        (is_ssl) ? send_ssl(session.ssl, session.out_buffer + 4, response_size)
-                 : send_bio(session.bio, session.out_buffer + 4, response_size);
+        (is_ssl) ? send_ssl(session.ssl, session.buffer, *session.buffer_size)
+                 : send_bio(session.bio, session.buffer, *session.buffer_size);
 
     WORK_STATUS next_status = WORK_STATUS_SENT;
     if (is_ssl && send_return <= 0 &&
@@ -59,9 +55,6 @@ void *handle_d() {
     }
 
     session.session->thread_id = 0;
-    if (next_status == WORK_STATUS_SENT) {
-      buffer_move_to_front(response_size + 4, session.out_buffer);
-    }
     push_request(session.session->related_fd, next_status);
   }
   return NULL;

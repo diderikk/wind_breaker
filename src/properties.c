@@ -7,7 +7,7 @@
 
 #define LOG_BUFFER_SIZE 4096
 
-static int session_max_size = 128;
+static int session_max_size = 64;
 static int queue_max_size = 1024;
 static int worker_thread_max_size = 1;
 static int listen_backlog_max_size = 50;

@@ -6,7 +6,8 @@ unsigned int construct_response(http_response_t *http_response,
                                 const uri_token_t uri,
                                 const char *accept_encoding,
                                 const char *if_none_match, char *body_buffer,
-                                unsigned int body_size);
+                                unsigned int body_size, 
+                                char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE]);
 unsigned int construct_upgrade_to_https_response(const uri_token_t uri,
                                                  const char *host,
                                                  char *response);

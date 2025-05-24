@@ -21,11 +21,11 @@ void *handle_a() {
 
     assert(session.request != NULL);
     assert(session.response != NULL);
-    assert(session.in_buffer != NULL);
+    assert(session.buffer != NULL);
 
-    log_trace("Parsing request:\n%s", session.in_buffer);
+    log_trace("Parsing request:\n%s", session.buffer);
 
-    parse_http_request(session.request, session.in_buffer);
+    parse_http_request(session.request, session.buffer);
     session.response->status_code = validate_request_headers(session.request);
 
     // char full_uri[HTTP_URI_TOKEN_COUNT * (HTTP_URI_TOKEN_SIZE + 1)];
