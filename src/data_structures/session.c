@@ -68,8 +68,7 @@ int init_session_cache(SSL_CTX *ctx) {
   }
 
   // Buffer array
-  buffer_array =
-      calloc(max_size, sizeof(char *));
+  buffer_array = calloc(max_size, sizeof(char *));
   assert(buffer_array != NULL);
 
   for (int i = 0; i < max_size; i++) {
@@ -402,8 +401,9 @@ void push_request(int related_fd, WORK_STATUS status) {
         *status_array[i] &= ~WORK_STATUS_READY_TO_SEND;
         break;
       case WORK_STATUS_SENT:
-        *status_array[i] &= ~(WORK_STATUS_REQUEST_READ | WORK_STATUS_PARSED |
-                              WORK_STATUS_DATA_FETCHED | WORK_STATUS_READY_TO_SEND);
+        *status_array[i] &=
+            ~(WORK_STATUS_REQUEST_READ | WORK_STATUS_PARSED |
+              WORK_STATUS_DATA_FETCHED | WORK_STATUS_READY_TO_SEND);
         reset_request_at_index(i);
         break;
       case WORK_STATUS_PROCESSING:
@@ -519,7 +519,7 @@ struct session_full_return pop_request_by_fd(int related_fd) {
       if (*status_array[i] & WORK_STATUS_REQUEST_READ ||
           *status_array[i] & WORK_STATUS_PARSED ||
           *status_array[i] & WORK_STATUS_DATA_FETCHED ||
-          *status_array[i] & WORK_STATUS_PROCESSING || 
+          *status_array[i] & WORK_STATUS_PROCESSING ||
           *status_array[i] & WORK_STATUS_READY_TO_SEND) {
         process = 1;
       } else {

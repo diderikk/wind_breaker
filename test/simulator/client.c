@@ -18,11 +18,11 @@ int main(int argc, char *argv[]) {
     run_cases(argv[1], argv[2]);
   } else if (argc > 1) {
     printf("Running simulation against server at %s:%s\n", argv[1],
-             SERVER_PORT);
+           SERVER_PORT);
     run_cases(argv[1], SERVER_PORT);
   } else {
     printf("Running simulation against server at %s:%s\n", SERVER_IP,
-             SERVER_PORT);
+           SERVER_PORT);
     run_cases(SERVER_IP, SERVER_PORT);
   }
 

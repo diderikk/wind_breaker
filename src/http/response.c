@@ -10,8 +10,8 @@
 #include <time.h>
 
 char *http_status_code_to_str(http_status_code status_code);
-unsigned int to_string(const http_response_t *http_response,
-                       char *response_str, char *tmp_buffer);
+unsigned int to_string(const http_response_t *http_response, char *response_str,
+                       char *tmp_buffer);
 unsigned int set_content_length(http_response_t *http_response,
                                 const unsigned int content_length);
 int set_content_type(http_response_t *http_response, const uri_token_t uri);
@@ -23,7 +23,8 @@ unsigned int set_etag(http_response_t *http_response, const char *tmp_body,
 unsigned int set_location(http_response_t *http_response, const char *host,
                           const uri_token_t uri);
 unsigned int set_compression(http_response_t *http_response,
-                             const char *accept_encoding, char *body_buffer, char *tmp_buffer);
+                             const char *accept_encoding, char *body_buffer,
+                             char *tmp_buffer);
 void handle_if_none_match(http_response_t *http_response,
                           const char *if_none_match, char *tmp_buffer);
 
@@ -31,7 +32,8 @@ unsigned int construct_response(http_response_t *http_response,
                                 const uri_token_t uri,
                                 const char *accept_encoding,
                                 const char *if_none_match, char *body_buffer,
-                                unsigned int body_size, char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE]) {
+                                unsigned int body_size,
+                                char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE]) {
   assert(body_buffer != NULL);
 
   unsigned int return_value;
@@ -55,8 +57,8 @@ unsigned int construct_response(http_response_t *http_response,
 
   if (http_response->status_code != HTTP_NOT_MODIFIED) {
     // Set compression
-    unsigned int compressed_size =
-        set_compression(http_response, accept_encoding, body_buffer, tmp_buffer);
+    unsigned int compressed_size = set_compression(
+        http_response, accept_encoding, body_buffer, tmp_buffer);
     // Update content length
     set_content_length(http_response, compressed_size);
   }
@@ -176,7 +178,8 @@ void handle_if_none_match(http_response_t *http_response,
 }
 
 unsigned int set_compression(http_response_t *http_response,
-                             const char *accept_encoding, char* body_buffer, char *tmp_buffer) {
+                             const char *accept_encoding, char *body_buffer,
+                             char *tmp_buffer) {
   unsigned int return_value = http_response->content_length;
   int header_count = 0;
   // Validate header
@@ -189,8 +192,8 @@ unsigned int set_compression(http_response_t *http_response,
 
   if (header_count == 1 || header_count == 3) {
     strcpy(http_response->content_encoding, "gzip");
-    return_value = compress_gzip(body_buffer, http_response->content_length,
-                                 tmp_buffer);
+    return_value =
+        compress_gzip(body_buffer, http_response->content_length, tmp_buffer);
   } else if (header_count == 2) {
     strcpy(http_response->content_encoding, "deflate");
     return_value = compress_deflate(body_buffer, http_response->content_length,
@@ -212,8 +215,8 @@ unsigned int set_content_length(http_response_t *http_response,
   return content_length;
 }
 
-unsigned int to_string(const http_response_t *http_response,
-                       char *response_str, char *tmp_buffer) {
+unsigned int to_string(const http_response_t *http_response, char *response_str,
+                       char *tmp_buffer) {
   char *status_code_str = http_status_code_to_str(http_response->status_code);
   unsigned int offset = 0;
 
@@ -278,8 +281,7 @@ unsigned int to_string(const http_response_t *http_response,
       return -1;
     }
 
-    memcpy(response_str + offset, tmp_buffer,
-           http_response->content_length);
+    memcpy(response_str + offset, tmp_buffer, http_response->content_length);
     offset += http_response->content_length;
   }
 

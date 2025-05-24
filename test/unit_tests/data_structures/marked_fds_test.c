@@ -92,7 +92,6 @@ int marked_fds_test() {
   return marked_fds_test_count;
 }
 
-
 static int marked_fds_start_case(void *(*func)(void *), const char *name) {
   printf("Starting test %d, named: %s\n", marked_fds_test_count++, name);
 

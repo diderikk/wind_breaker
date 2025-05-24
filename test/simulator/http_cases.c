@@ -1,6 +1,6 @@
 #include "http_cases.h"
-#include "../../src/static.h"
 #include "../../src/socket.h"
+#include "../../src/static.h"
 #include "../../src/utils/assert2.h"
 #include "../../src/utils/compression.h"
 #include "connection_cases.h"
@@ -150,7 +150,7 @@ void *start_http_get_request_deflate(void *arg) {
 
   int decompressed_length =
       decompress_deflate(body, 1024, decompressed, REQUEST_RESPONSE_MAX_SIZE);
-  //printf("Decompressed: %s\n", decompressed);
+  // printf("Decompressed: %s\n", decompressed);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<head>") != NULL);
 

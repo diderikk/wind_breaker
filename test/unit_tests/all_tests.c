@@ -20,22 +20,26 @@ int main() {
 
   number_of_tests += marked_fds_test();
   group_count = number_of_tests - prev_number_of_tests;
-  printf(GRN "\nCompleted %d/%d marked fds tests\n" RESET, group_count, group_count);
+  printf(GRN "\nCompleted %d/%d marked fds tests\n" RESET, group_count,
+         group_count);
   prev_number_of_tests = number_of_tests;
 
   number_of_tests += poll_array_test();
   group_count = number_of_tests - prev_number_of_tests;
-  printf(GRN "\nCompleted %d/%d poll array tests\n" RESET, group_count, group_count);
+  printf(GRN "\nCompleted %d/%d poll array tests\n" RESET, group_count,
+         group_count);
   prev_number_of_tests = number_of_tests;
 
   number_of_tests += session_test();
   group_count = number_of_tests - prev_number_of_tests;
-  printf(GRN "\nCompleted %d/%d session tests\n" RESET, group_count, group_count);
+  printf(GRN "\nCompleted %d/%d session tests\n" RESET, group_count,
+         group_count);
   prev_number_of_tests = number_of_tests;
 
   number_of_tests += compression_test();
   group_count = number_of_tests - prev_number_of_tests;
-  printf(GRN "\nCompleted %d/%d compression tests\n" RESET, group_count, group_count);
+  printf(GRN "\nCompleted %d/%d compression tests\n" RESET, group_count,
+         group_count);
   prev_number_of_tests = number_of_tests;
 
   number_of_tests += hash_test();
@@ -45,13 +49,15 @@ int main() {
 
   number_of_tests += request_test();
   group_count = number_of_tests - prev_number_of_tests;
-  printf(GRN "\nCompleted %d/%d request tests\n" RESET, group_count, group_count);
+  printf(GRN "\nCompleted %d/%d request tests\n" RESET, group_count,
+         group_count);
   prev_number_of_tests = number_of_tests;
 
   number_of_tests += response_test();
   group_count = number_of_tests - prev_number_of_tests;
-  printf(GRN "\nCompleted %d/%d response tests\n" RESET, group_count, group_count);
-  
+  printf(GRN "\nCompleted %d/%d response tests\n" RESET, group_count,
+         group_count);
+
   printf(GRN "\nNumber of tests passed: %d\n" RESET, number_of_tests);
 
   return 0;

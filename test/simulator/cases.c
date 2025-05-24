@@ -5,8 +5,8 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 
 #define GRN "\x1B[32m"
 #define RESET "\x1B[0m"
@@ -15,7 +15,8 @@ static int case_count = 0;
 static char *case_names[100];
 static pthread_t *cases = NULL;
 
-int start_case(void *(*func)(void *), struct connection_data *arg, const char *name);
+int start_case(void *(*func)(void *), struct connection_data *arg,
+               const char *name);
 
 void run_cases(char *ip, char *port) {
   long seed = time(NULL);
@@ -25,16 +26,21 @@ void run_cases(char *ip, char *port) {
   assert(test_connection(ip, port) == 0);
 
   struct connection_data arg = {ip, port, seed};
-  start_case(start_connection_delay_before_close, &arg, "start_connection_delay_before_close");
-  start_case(start_connection_send_recv_ten_times, &arg, "start_connection_send_recv_ten_times");
+  start_case(start_connection_delay_before_close, &arg,
+             "start_connection_delay_before_close");
+  start_case(start_connection_send_recv_ten_times, &arg,
+             "start_connection_send_recv_ten_times");
   start_case(start_connection_close, &arg, "start_connection_close");
   sleep(1);
-  start_case(start_connections_simultaneously, &arg, "start_connections_simultaneously");
+  start_case(start_connections_simultaneously, &arg,
+             "start_connections_simultaneously");
   sleep(1);
   start_case(start_http_get_request, &arg, "start_http_get_request");
   start_case(start_http_get_request_gzip, &arg, "start_http_get_request_gzip");
-  start_case(start_http_get_request_deflate, &arg, "start_http_get_request_deflate");
-  start_case(start_http_get_request_not_found, &arg, "start_http_get_request_not_found");
+  start_case(start_http_get_request_deflate, &arg,
+             "start_http_get_request_deflate");
+  start_case(start_http_get_request_not_found, &arg,
+             "start_http_get_request_not_found");
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);
@@ -46,7 +52,8 @@ void run_cases(char *ip, char *port) {
   printf("\nCompleted %d/%d simulator tests\n", case_count, case_count);
 }
 
-int start_case(void *(*func)(void *), struct connection_data *arg, const char *name) {
+int start_case(void *(*func)(void *), struct connection_data *arg,
+               const char *name) {
   assert(cases != NULL);
   printf("Starting case %d, named: %s\n", case_count, name);
 

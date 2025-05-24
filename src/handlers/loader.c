@@ -100,7 +100,8 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **stmt,
   // Fetch and inject arguments
   char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE];
   unsigned int offset = 0;
-  offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset, "<ul>");
+  offset +=
+      snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset, "<ul>");
   while ((rc = sqlite3_step(*stmt)) == SQLITE_ROW) {
     const char *id = (const char *)sqlite3_column_text(*stmt, 0);
     const char *title = (const char *)sqlite3_column_text(*stmt, 1);
@@ -109,7 +110,8 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **stmt,
                        id, title);
   }
   if (rc == SQLITE_DONE) {
-    offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset, "</ul>");
+    offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+                       "</ul>");
     *in_out_buffer_size = str_replace(in_out_buffer, "%PROJECTS%", tmp_buffer);
   } else {
     log_error("Failed to fetch data: %s", sqlite3_errmsg(db));
@@ -162,8 +164,8 @@ void *handle_b() {
 
     if (session.response->status_code == HTTP_OK) {
       const char *file_name = uri_to_file_name(session.request->uri);
-      *session.buffer_size =
-          read_static_file(file_name, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
+      *session.buffer_size = read_static_file(file_name, session.buffer,
+                                              REQUEST_RESPONSE_MAX_SIZE);
 
       if (*session.buffer_size == 0) {
         log_error("Failed to read static file: %s", file_name);
@@ -172,9 +174,8 @@ void *handle_b() {
             gen_error_body(session.response->status_code, session.buffer);
       } else {
         // Fetch and inject arguments
-        switch (load(db, &index_stmt, &project_stmt, file_name,
-                     session.buffer, session.buffer_size,
-                     session.request->uri[1])) {
+        switch (load(db, &index_stmt, &project_stmt, file_name, session.buffer,
+                     session.buffer_size, session.request->uri[1])) {
         case 0:
           break;
         case -1:
@@ -200,7 +201,7 @@ void *handle_b() {
     session.session->thread_id = 0;
     push_request(session.session->related_fd, WORK_STATUS_DATA_FETCHED);
   }
-  
+
   sqlite3_finalize(index_stmt);
   sqlite3_finalize(project_stmt);
   if (db != NULL) {
