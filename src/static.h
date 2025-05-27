@@ -7,7 +7,7 @@
 #include <pthread.h>
 
 #define REQUEST_RESPONSE_MAX_SIZE 1024 * 1024 // 1 MB
-#define HTML_MAX_SIZE 16 * 1024               // 16 kB
+#define HTML_MAX_SIZE 20 * 1024               // 16 kB
 #define HTTP_HEADER_SIZE 256
 #define HTTP_URI_TOKEN_COUNT 4
 #define HTTP_URI_TOKEN_SIZE 200

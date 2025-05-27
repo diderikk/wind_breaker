@@ -1,0 +1,73 @@
+<h1 id="personal-website-update">Personal Website Update</h1>
+<p>
+  The portfolio website has been updated, and this note explains the changes.
+  The previous version of the website only contained notes. However, after the
+  recent update, I decided to add a front page and a project page, and I updated
+  the layout of the notes. In addition, I adjusted the responsiveness to better
+  fit mobile users (not entirely satisfied with the outcome, but it works).
+</p>
+<h2 id="frontpage">Frontpage</h2>
+<p>
+  As mentioned, the previous version did not include a welcome page and only
+  directed users to a list of posts. I developed a front page at the top to
+  improve first impressions when users visit my site. The inspiration for the
+  design was made from code editors and terminals, bearing a typing effect. It
+  is replicated in React using useEffect and CSS transitions and keyframes. The
+  useEffect part updates the displayed text every 150th millisecond using the JS
+  setTimout() function and imitates the effect of someone typing letters. To
+  improve the outcome, I added a blinking cursor using CSS keyframes, but since
+  I have no experience with them, I took inspiration from this
+  <a
+    href="https://stackoverflow.com/questions/73318943/how-to-make-text-blink-in-react"
+    >StackOverflow discussion</a
+  >.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/15642b10-1759-44c1-bf90-be91720d699d/keyframes.png"
+    alt=""
+  />
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/15642b10-1759-44c1-bf90-be91720d699d/use-effect.png"
+    alt=""
+  />
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/15642b10-1759-44c1-bf90-be91720d699d/front-page.gif"
+    alt=""
+  />
+</p>
+<h2 id="project-page">Project page</h2>
+<p>
+  In addition to creating a welcome page, I developed a project page using the
+  <a href="https://swiperjs.com/">SwiperJS</a> library. It provides a cover flow
+  effect with an infinite loop of my projects. In addition, it provides
+  integrated features such as grabbing (useful for mobile) and
+  slide-to-clicked-slide (this function is full of bugs on Firefox). One can
+  also manually do the transitions using a helpful API, which allowed me to
+  implement two buttons for sliding in each direction. The buttons also better
+  indicate the possibility of sliding.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/15642b10-1759-44c1-bf90-be91720d699d/projects.png"
+    alt=""
+  />
+</p>
+<h2 id="updated-post-page">Updated Post page</h2>
+<p>
+  Lastly, I updated the previously simple notes page to a timeline. The code is
+  inspired and refactored from
+  <a href="https://codepen.io/htmlcodex/pen/LYGjPgV">this sandbox</a>. The
+  refactoring consisted of changing CSS to fit the website&#39;s theme by
+  changing the color scheme and box layout.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/15642b10-1759-44c1-bf90-be91720d699d/posts.png"
+    alt=""
+  />
+</p>

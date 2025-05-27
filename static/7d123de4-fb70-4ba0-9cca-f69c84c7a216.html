@@ -1,0 +1,150 @@
+<h1 id="kubernetes-zero-to-hero-part-1">Kubernetes Zero to Hero: Part 1</h1>
+<p>
+  This series of notes is about my experience learning and configuring a
+  Kubernetes cluster. Previously, I used a single Virtual Machine to host all my
+  web applications. However, they have become cumbersome to keep track of and
+  are hard to deploy and update. In addition, cloud technologies are in trend
+  and something I want to get practical and theoretical experience on.
+</p>
+<h2 id="why-kubernetes-">Why Kubernetes?</h2>
+<p>
+  Kubernetes is an open-source system for automating deployment, scaling, and
+  managing containerized applications. The multiple standalone VMs can be
+  replaced by worker nodes (machines) in the Kubernetes cluster, which are
+  maintained and operated by a single centralized control plane node. As a
+  result, the maintainer(me) only works against a single node, contrary to
+  connecting to several VMs. It also simplifies the deployment process because
+  deployments in Kubernetes are usually released using manifest files and
+  container repositories (e.g., Docker Hub). Lastly, it provides options for
+  centralized logs, metrics, and far more features.
+</p>
+<h2 id="initial-configuration">Initial Configuration</h2>
+<p>
+  Firstly, I had to select a Web Service provider to host the VMs used as nodes
+  in the cluster. After some research, I decided to use AWS&#39;s EC2 instances
+  because of their price and AWS being the most popular provider selected by
+  <a href="https://survey.stackoverflow.co/2022/#cloud-platforms">developers</a
+  >. To further reduce cost, I opted into a Saving Plan for three years,
+  resulting in a total price tag of approximately 20$ / month for three VMs with
+  two Gib Memory and two vCPUs.
+</p>
+<p>
+  After that, I began configuring the VMs, by installing the required libraries
+  and packages to use Kubeadm. These commands combine scripts from different
+  tutorials, referred to under <a href="#references">References</a>. The
+  combination process consisted of many trials and errors using the tutorials as
+  they didn&#39;t work as expected. My working script is lengthy, so I decided
+  to post a
+  <a href="https://www.diderikk.dev/posts/74d59295-0c03-4516-ba0b-fa414d5f0b56"
+    >separate article for the setup commands</a
+  >. In short, they consist of downloading and running a container runtime and
+  fetching the Kubeadm library.
+</p>
+<p>
+  Thirdly, I initialized the Kubernetes cluster using Kubeadm. Kubeadm
+  configures most options using the given command:
+</p>
+<pre><code class="lang-bash">sudo kubeadm init --<span class="hljs-attr">control-plane-endpoint=</span><span class="hljs-string">"&lt;PUBLIC IP_ADDR/DNS&gt;"</span> --<span class="hljs-attr">pod-network-cidr=</span><span class="hljs-number">192.168</span>.<span class="hljs-number">0.0</span>/<span class="hljs-number">16</span> --<span class="hljs-keyword">node</span><span class="hljs-title">-name</span>=<span class="hljs-literal">master</span>
+</code></pre>
+<p>
+  After the cluster had finished initializing, other VMs could join and become
+  worker nodes by executing the command provided by the result of the following
+  command:
+</p>
+<pre><code class="lang-bash">kubeadm <span class="hljs-built_in">token</span> <span class="hljs-keyword">create</span> --<span class="hljs-keyword">print</span>-join-command
+</code></pre>
+<p>
+  However, the communication between the worker nodes and the controller node
+  did not work out of the box. Kubernetes requires a
+  <a
+    href="https://www.tigera.io/learn/guides/kubernetes-networking/kubernetes-cni/"
+    >CNI (Network Plugin)</a
+  >
+  before they can talk with each other. In short, it is like a virtual network
+  inside the cluster that, for instance, provisions internal IP addresses,
+  controls/secures internal communication, and manages the connection between
+  the controller node and the worker nodes. The most popular option is
+  <a href="https://www.tigera.io/project-calico/">Calico by Tigera</a>, which is
+  open-source and recommended by all the tutorials I used.
+</p>
+<p>
+  When I applied the Calico plugin, it should have created one pod (container)
+  for each worker node responsible for configuring the communication to and from
+  that node. However, a problem occurred where the pods did not reach their
+  desired states, and the worker nodes could not communicate with the controller
+  node. After many trials and errors, including resetting all VMs and a lot of
+  research, I found the problem: the controller VM refused inbound traffic on
+  port 179, which must be open for Calico to work. Calico worked after I updated
+  the inbound policy in the AWS console.
+</p>
+<p>
+  After I completed the initial configuration, the following pods ran in the
+  kube-system namespace:
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/7d123de4-fb70-4ba0-9cca-f69c84c7a216/pods.png"
+    alt=""
+  />
+</p>
+<h2 id="additional-configurations">Additional Configurations</h2>
+<h3 id="metrics-server">Metrics Server</h3>
+<p>
+  The first monitoring plugin I added was a
+  <a href="https://github.com/kubernetes-sigs/metrics-server">Metrics Server</a
+  >. It provides information about the CPU and memory usage of all pods and all
+  nodes. Since the worker nodes are limited by memory and CPU, it gives me
+  information about available resources and if I need to expand the cluster. The
+  plugin runs on port 4443, so I had to open a new inbound port in the AWS
+  console, similar to the Calico plugin.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/7d123de4-fb70-4ba0-9cca-f69c84c7a216/metrics.png"
+    alt=""
+  />
+</p>
+<h3 id="secrets-encryption">Secrets Encryption</h3>
+<p>
+  <a href="https://kubernetes.io/docs/concepts/configuration/secret/"
+    >Secrets</a
+  >
+  is by default only encoded using Base64. However, Kubernetes provides options
+  for symmetric encryption using pre-defined keys and algorithms called
+  <a href="https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/"
+    >EncryptionConfiguration</a
+  >. The secrets are encrypted when stored and decrypted when used(mounts in
+  pods). In the future, I want to improve further by using an external provider.
+  Important to note that the provider selection is from top to bottom, meaning
+  that Kubernetes will encrypt the secrets using the encryption provider listed
+  at the top under providers. In my case, it selects the secretbox provider.
+</p>
+<pre><code class="lang-yaml"><span class="hljs-attr">apiVersion:</span> apiserver.config.k8s.io/v1
+<span class="hljs-attr">kind:</span> EncryptionConfiguration
+<span class="hljs-attr">resources:</span>
+<span class="hljs-attr">  - resources:</span>
+<span class="hljs-bullet">      -</span> secrets
+<span class="hljs-attr">    providers:</span>
+<span class="hljs-attr">      - secretbox:</span>
+<span class="hljs-attr">          keys:</span>
+<span class="hljs-attr">            - name:</span> key
+<span class="hljs-attr">              secret:</span> MOvM/bdzZaJcipNJpynNqrrwLctOJ1c/lWxT6MsU3a0=
+<span class="hljs-attr">    - identity:</span> {}
+</code></pre>
+<h2 id="references">References</h2>
+<p>
+  <a
+    href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/"
+    >Install kubeadm</a
+  ><br /><a href="https://docs.docker.com/engine/install/ubuntu/"
+    >Install containerd</a
+  ><br /><a
+    href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/"
+    >Kube Config 1</a
+  ><br /><a href="https://devopscube.com/setup-kubernetes-cluster-kubeadm/"
+    >Kube Config 2</a
+  ><br /><a
+    href="https://www.linuxtechi.com/install-kubernetes-on-ubuntu-22-04/"
+    >Kube Config 3</a
+  >
+</p>

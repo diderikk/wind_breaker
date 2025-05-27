@@ -1,0 +1,152 @@
+<h1 id="file-storage-part-1">File Storage: Part 1</h1>
+<p>
+  This note reflects my framework selection of the current in-development
+  application: File Storage. As an Elixir enthusiast, I selected Phoenix for
+  both the front- and backend. I have had superb experience using the framework
+  for backend APIs and WebSocket. After the recent 1.7 release, the CSS
+  framework Tailwind was added to LiveView, which I have previously used and
+  found beneficial. Therefore I also decided to use it on the frontend. It
+  provides predefined classes that can be used to style inline, streamlining the
+  development process and eliminating the need for CSS files. Furthermore, one
+  of the new key features of Phoenix that caught my attention is its built-in
+  support for streaming large files efficiently. Given that the File Storage
+  application will likely involve handling large amounts of data, this
+  capability is crucial for delivering a smooth and responsive user experience.
+</p>
+<h2 id="phoenix">Phoenix</h2>
+<p>
+  Phoenix is the web framework used for the Elixir programming language. In
+  <a
+    href="https://survey.stackoverflow.co/2022/#most-loved-dreaded-and-wanted-webframe-love-dread"
+    >Stack Overflow&#39;s Survey</a
+  >, Phoenix was the most loved framework relatively. Phoenix also provides a
+  variety of out-of-the-box features, including its support for real-time
+  applications through channels and its robust error handling. Additionally, the
+  framework&#39;s &quot;Plugs&quot; allows developers to easily customize and
+  extend the request/response pipeline, making it a flexible and powerful tool
+  for building web applications.
+</p>
+<h3 id="version-1-7">Version 1.7</h3>
+<p>
+  Recently, a new version was released, 1.7. It provided mainly two new
+  features; built-in Tailwind CSS and streaming. Tailwind support allows
+  developers to utilize Tailwind classes in components directly without adding
+  it as a dependency. The second feature provides streams of data to be directly
+  used on the website. An Elixir stream is a lazy enumerable used for large
+  amounts of data. Unlike a list, streams do not need to load the entire array
+  into memory before computing. Streams chunk the lists in parts and do
+  computations on each chunk before passing it on. This functionality is more
+  efficient and complements file handling better than lists. All stream
+  functions operate simultaneously by continuously passing chunks forward in the
+  streamline. An example would be to capitalize all words in a file. Instead of
+  reading the entire file into a list before looping through it and capitalizing
+  each word, and writing them to a new file, streams can read, capitalize and
+  write simultaneously.
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/bd3226ba-5b3e-427d-8815-a3350402f510/liveview.png"
+    alt=""
+  />
+</p>
+<h3 id="functional-programming">Functional Programming</h3>
+<p>
+  One of the main advantages of the Phoenix framework is the functional
+  programming aspect using the Elixir programming language. The
+  <a href="https://hexdocs.pm/plug/Plug.Conn.html">Conn Structure</a> is the
+  primary object containing all information about the current connection,
+  session, request, and eventual response. The structure is streamlined through
+  <a href="https://hexdocs.pm/plug/Plug.html">Plugs</a>, which are functions
+  that update the Conn structure and passes it forward to the next Plug until
+  the response. Phoenix&#39;s initial template project includes many of these,
+  mainly in the endpoint.ex file, where they can be removed or changed
+  voluntarily. Their use cases include routing, adding a RequestId, and parsing
+  the request input parameters. In addition, developers can write new ones to
+  implement more functionality. In a recent project, I used the Django Python
+  web framework. It requires a CSRF token for all API endpoints which are not
+  explicitly annotated, which prevented me from testing them using Postman
+  (without adding an interceptor). In Phoenix, I would only need to remove the
+  CSRF validator plug, while there were no equivalent solutions in Django.
+  Another benefit of using the functional programming aspect of Phoenix is the
+  improved modularity and reusability of code. The use of functions and the Conn
+  structure, along with the streamlined structure provided by Plugs, makes it
+  easier to write small, modular units of code that can be easily reused across
+  different parts of the application. This can lead to faster development times,
+  easier maintenance, and more flexible applications that can be easily extended
+  with new features. Additionally, the use of functional programming can lead to
+  more predictable and reliable code that is easier to test and debug.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/bd3226ba-5b3e-427d-8815-a3350402f510/plug.png"
+    alt=""
+  />
+</p>
+<p>
+  Plug.RequestId appends a request Id to the response, Plug.Telemetry is used
+  for updating telemetry data in the metrics dashboard, Plug.Parsers for parsing
+  requests etc. I could add additional functionality for personal encryption on
+  the request and a Plug that decrypts it on response arrival. In other words, I
+  have control over the order of each configuration and can easily extend them
+  without needing a complex infrastructure.
+</p>
+<h3 id="routes">Routes</h3>
+<p>
+  In Phoenix, routes are defined explicitly in a single file, connecting to
+  controller functions. These are contrary to Spring Boot and Next, where the
+  routes are decided by annotations and directory path, respectively. However,
+  it is as many other of Phoenix&#39;s functionalities similar to Ruby on Rails.
+  It simplifies route definitions as all routes are centralized in a single file
+  and can be updated by only updating the file.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/bd3226ba-5b3e-427d-8815-a3350402f510/router.png"
+    alt=""
+  />
+</p>
+<h3 id="phx-gen-auth">phx.gen.auth</h3>
+<p>
+  The Phoenix framework offers a useful terminal command called phx.gen.auth. It
+  is one of several generator commands that Phoenix provides, allowing you to
+  generate
+  <a href="https://hexdocs.pm/phoenix/Mix.Tasks.Phx.Gen.html"
+    >entire HTML pages</a
+  >
+  for a database structure. Specifically, phx.gen.auth generates the necessary
+  HTML pages and logic for sign-in, sign-up, email confirmation, and forgotten
+  password. It also ensures session management and database integration by
+  storing a user structure containing a validated email and hashed password.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/bd3226ba-5b3e-427d-8815-a3350402f510/auth.png"
+    alt=""
+  />
+</p>
+<h2 id="code-analysis">Code analysis</h2>
+<h3 id="credo">Credo</h3>
+<p>
+  <a href="https://github.com/rrrene/credo">Credo</a> is a static code analysis
+  tool for the Elixir language focusing on teaching and code consistency. It is
+  either run statically in the terminal: CREDO IMAGE Or one can add a credo
+  extension in VSCode, that gives continuous feedback on my writing.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/bd3226ba-5b3e-427d-8815-a3350402f510/credo.png"
+    alt=""
+  />
+</p>
+<h3 id="dialyxir">Dialyxir</h3>
+<p>
+  <a href="https://github.com/jeremyjh/dialyxir">Dialyxir</a> can analyze the
+  BEAM files and provide warnings about problems in your code, including type
+  mismatches and other issues that are commonly detected by static language
+  compilers. The analysis can be improved by including type hints (specs
+  annotations), which can be helpful even without those.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/bd3226ba-5b3e-427d-8815-a3350402f510/dialixyr.png"
+    alt=""
+  />
+</p>

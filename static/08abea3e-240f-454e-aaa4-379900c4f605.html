@@ -1,0 +1,818 @@
+<h1 id="file-storage-impl-part-1">File Storage Impl: Part 1</h1>
+<h2 id="installation">Installation</h2>
+<p>
+  Firstly, I installed and import the forge.js module. The module can be copied
+  or downloaded from
+  <a href="https://www.npmjs.com/package/node-forge?activeTab=code"
+    >node-forge npm</a
+  >
+  by selecting the <strong>dist/forge.min.js</strong> file and moving the
+  content into the assets/vendor/forge.js (could be named anything).
+</p>
+<p>Next, import the forge object in your assets/js/app.js file:</p>
+<pre><code class="lang-javascript"><span class="hljs-keyword">import</span> forge <span class="hljs-keyword">from</span> <span class="hljs-string">"../vendor/forge"</span>;
+</code></pre>
+<h2 id="key-exchange">Key Exchange</h2>
+<p><strong>crypto_web.ex</strong></p>
+<pre><code class="lang-elixir"><span class="hljs-class"><span class="hljs-keyword">defmodule</span> <span class="hljs-title">FileStorage</span></span>.Crypto.Web <span class="hljs-keyword">do</span>
+  <span class="hljs-variable">@moduledoc</span> <span class="hljs-string">""</span><span class="hljs-string">"
+  Cryptography methods used for encryption and signatures on files downloaded from web form
+  "</span><span class="hljs-string">""</span>
+  <span class="hljs-variable">@key_encryption_padding_options</span> [{<span class="hljs-symbol">:encrypt</span>, <span class="hljs-keyword">false</span>}, {<span class="hljs-symbol">:padding</span>, <span class="hljs-symbol">:pkcs_padding</span>}]
+  <span class="hljs-variable">@aes_cipher</span> <span class="hljs-symbol">:aes_256_ctr</span>
+  <span class="hljs-variable">@hash_cipher</span> <span class="hljs-symbol">:sha512</span>
+  <span class="hljs-variable">@pbkdf2_interations</span> <span class="hljs-number">310</span> <span class="hljs-comment"># Unsure if 310_000 is required since this is not password. Therefore, no rainbow attack.</span>
+  <span class="hljs-variable">@private_key_pem</span> System.fetch_env!(<span class="hljs-string">"PRIVATE_KEY_PEM"</span>)
+                   |&gt; to_string()
+                   |&gt; String.replace(<span class="hljs-string">"\\n"</span>, <span class="hljs-string">"\n"</span>)
+
+
+  <span class="hljs-variable">@spec</span> gen_ecdh_keypair(atom()) <span class="hljs-symbol">:</span>: {binary(), tuple()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">gen_ecdh_keypair</span></span>(named_curve) <span class="hljs-keyword">when</span> is_atom(named_curve) <span class="hljs-keyword">do</span>
+    private_key = <span class="hljs-symbol">:public_key</span>.generate_key({<span class="hljs-symbol">:namedCurve</span>, named_curve})
+    public_key = {{<span class="hljs-symbol">:ECPoint</span>, elem(private_key, <span class="hljs-number">4</span>)}, elem(private_key, <span class="hljs-number">3</span>)}
+
+    public_entry = <span class="hljs-symbol">:public_key</span>.pem_entry_encode(<span class="hljs-symbol">:SubjectPublicKeyInfo</span>, public_key)
+
+    {public_entry |&gt; elem(<span class="hljs-number">1</span>), private_key}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> compute_shared_secret!(binary(), tuple()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">compute_shared_secret!</span></span>(public_key_der, private_key)
+      <span class="hljs-keyword">when</span> is_binary(public_key_der) <span class="hljs-keyword">and</span> is_tuple(private_key) <span class="hljs-keyword">do</span>
+    public_key_point =
+      <span class="hljs-symbol">:public_key</span>.pem_entry_decode({<span class="hljs-symbol">:SubjectPublicKeyInfo</span>, public_key_der, <span class="hljs-symbol">:not_encrypted</span>})
+      |&gt; elem(<span class="hljs-number">0</span>)
+
+    <span class="hljs-symbol">:public_key</span>.compute_key(public_key_point, private_key)
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> key_derivation!(binary()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">key_derivation!</span></span>(shared_secret) <span class="hljs-keyword">when</span> is_binary(shared_secret) <span class="hljs-keyword">do</span>
+    key_part = binary_part(shared_secret, <span class="hljs-number">0</span>, <span class="hljs-number">32</span>)
+    salt_part = binary_part(shared_secret, <span class="hljs-number">32</span>, <span class="hljs-number">32</span>)
+
+    Pbkdf2.Base.hash_password(key_part, salt_part, <span class="hljs-symbol">rounds:</span> <span class="hljs-variable">@pbkdf2_interations</span>, <span class="hljs-symbol">digest:</span> <span class="hljs-symbol">:sha256</span>, <span class="hljs-symbol">format:</span> <span class="hljs-symbol">:hex</span>)
+    |&gt; Base.decode16!(<span class="hljs-symbol">case:</span> <span class="hljs-symbol">:lower</span>)
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> sign_key!(binary()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">sign_key!</span></span>(public_key_pem) <span class="hljs-keyword">when</span> is_binary(public_key_pem) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, private_key} = decode_private_pem(<span class="hljs-variable">@private_key_pem</span>)
+    <span class="hljs-symbol">:public_key</span>.sign(public_key_pem, <span class="hljs-symbol">:sha256</span>, private_key)
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-comment"># ...</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p><strong>form_component.ex</strong></p>
+<pre><code class="lang-elixir"><span class="hljs-class"><span class="hljs-keyword">defmodule</span> <span class="hljs-title">FileStorageWeb</span></span>.FileLive.FormComponent <span class="hljs-keyword">do</span>
+  <span class="hljs-keyword">use</span> FileStorageWeb, <span class="hljs-symbol">:live_component</span>
+
+  <span class="hljs-keyword">alias</span> FileStorage.Storages
+  <span class="hljs-keyword">alias</span> FileStorage.Accounts
+  <span class="hljs-keyword">alias</span> FileStorageWeb.MultiSelectComponent
+  <span class="hljs-keyword">alias</span> FileStorageWeb.FileLive.Filewriter
+  <span class="hljs-keyword">alias</span> FileStorage.Crypto.Web, <span class="hljs-symbol">as:</span> Crypto
+  <span class="hljs-comment"># ...</span>
+
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">render</span></span>(assigns) <span class="hljs-keyword">do</span>
+        <span class="hljs-comment"># ...</span>
+            &lt;.live_file_input upload={<span class="hljs-variable">@uploads</span>.file} class=<span class="hljs-string">"hidden"</span> /&gt;
+            &lt;%= if <span class="hljs-variable">@folder</span> <span class="hljs-keyword">do</span> %&gt;
+              &lt;input
+                id=<span class="hljs-string">"dropzone-file"</span>
+                type=<span class="hljs-string">"file"</span>
+                class=<span class="hljs-string">"hidden"</span>
+                webkitdirectory={<span class="hljs-variable">@folder</span>}
+                phx-hook=<span class="hljs-string">"Folder"</span>
+                name={<span class="hljs-variable">@edh</span>}
+              /&gt;
+            &lt;% else %&gt;
+              &lt;input id=<span class="hljs-string">"dropzone-file"</span> name={<span class="hljs-variable">@edh</span>} type=<span class="hljs-string">"file"</span> class=<span class="hljs-string">"hidden"</span> phx-hook=<span class="hljs-string">"File"</span> /&gt;
+            &lt;% <span class="hljs-keyword">end</span> %&gt;
+        <span class="hljs-comment"># ...</span>
+    <span class="hljs-keyword">end</span>
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">update</span></span>(%{<span class="hljs-symbol">file:</span> file, <span class="hljs-symbol">current_user:</span> user, <span class="hljs-symbol">action:</span> action} = assigns, socket) <span class="hljs-keyword">do</span>
+        {public_key_der, private_key} = Crypto.gen_ecdh_keypair
+        (<span class="hljs-symbol">:secp521r1</span>)
+        base64_public_key_der = public_key_der |&gt; Base.encode64()
+        base64_signature = Crypto.sign_key!(base64_public_key_der) |&gt; Base.encode64()
+
+        {<span class="hljs-symbol">:ok</span>,
+        socket
+        |&gt; assign(assigns)
+        |&gt; assign(<span class="hljs-symbol">:current_user</span>, updated_user)
+        |&gt; assign(<span class="hljs-symbol">:folder</span>, action == <span class="hljs-symbol">:folder</span> || file.is_folder)
+        |&gt; assign(<span class="hljs-symbol">:loading</span>, <span class="hljs-keyword">false</span>)
+        |&gt; assign(<span class="hljs-symbol">:edh</span>, base64_signature &lt;&gt; <span class="hljs-string">","</span> &lt;&gt; base64_public_key_der)
+        |&gt; assign(<span class="hljs-symbol">:edh_private</span>, private_key)
+        |&gt; assign(<span class="hljs-symbol">:shared_key</span>, <span class="hljs-keyword">nil</span>)
+        <span class="hljs-comment"># ...</span>
+        }
+    <span class="hljs-keyword">end</span>
+
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">handle_event</span></span>(<span class="hljs-string">"DHexchange"</span>, %{<span class="hljs-string">"publicKey"</span> =&gt; base64_public_key_der}, socket) <span class="hljs-keyword">do</span>
+        shared_key =
+          Crypto.compute_shared_secret!(
+        Base.decode64!(base64_public_key_der),
+        socket.assigns.edh_private
+      )
+      |&gt; Crypto.key_derivation!()
+
+    <span class="hljs-comment"># <span class="hljs-doctag">TODO:</span> Secret storage? or often updated</span>
+    {<span class="hljs-symbol">:noreply</span>, assign(socket, <span class="hljs-symbol">:shared_key</span>, shared_key) |&gt; assign(<span class="hljs-symbol">:edh_private</span>, <span class="hljs-keyword">nil</span>)}
+  <span class="hljs-keyword">end</span>
+</code></pre>
+<p><strong>app.js</strong></p>
+<pre><code class="lang-javascript"><span class="hljs-comment">// ...</span>
+import { encryptContentToBlob, generateSymmetricKey } <span class="hljs-keyword">from</span> <span class="hljs-string">"./utils"</span>;
+
+<span class="hljs-keyword">let</span> hooks = {};
+hooks.Folder = {
+  <span class="hljs-function"><span class="hljs-keyword">async</span> <span class="hljs-title">mounted</span>(<span class="hljs-params"></span>) </span>{
+    <span class="hljs-keyword">const</span> sharedKey = <span class="hljs-keyword">await</span> generateSymmetricKey(<span class="hljs-keyword">this</span>);
+    <span class="hljs-comment">// ...</span>
+  },
+};
+hooks.File = {
+  <span class="hljs-function"><span class="hljs-keyword">async</span> <span class="hljs-title">mounted</span>(<span class="hljs-params"></span>) </span>{
+    <span class="hljs-keyword">const</span> sharedKey = <span class="hljs-keyword">await</span> generateSymmetricKey(<span class="hljs-keyword">this</span>);
+    <span class="hljs-comment">// ...</span>
+  },
+};
+<span class="hljs-comment">// ...</span>
+</code></pre>
+<p><strong>utils.js</strong></p>
+<pre><code class="lang-javascript"><span class="hljs-comment">// ...</span>
+<span class="hljs-comment"><span class="markdown">/**
+ * </span><span class="hljs-doctag">TODO:</span><span class="markdown"> Should be stored better ;(
+ * @returns public signing key
+ */</span></span>
+<span class="hljs-keyword">const</span> getPublicSignKey = <span class="hljs-keyword">async</span> () =&gt; {
+  <span class="hljs-keyword">const</span> pemDecoded = forge.pem.decode(<span class="hljs-string">"-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAA/OGbMbh8AFZep/vYM1o7BunL48x\nZuciAFDQ551pTT7SCffLL9xhCelJhJhM1ywDtDU5KVYKYWAlEX8yM3B7U/cAZr77\nwwrHkoW+orROTAHnjiMuRq5GfHXgZoAbQoU8EYbfQlIenAWh4FocWwceqc6XUDhK\n2xsQG6ZoEL477ssRGmc=\n-----END PUBLIC KEY-----"</span>)[<span class="hljs-number">0</span>]
+  <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> crypto.subtle.importKey(<span class="hljs-string">"spki"</span>, stringToArrayBuffer(pemDecoded.body), {name: <span class="hljs-string">"ECDSA"</span>, namedCurve: <span class="hljs-string">"P-521"</span>}, <span class="hljs-keyword">false</span>, [<span class="hljs-string">"verify"</span>])
+}
+
+<span class="hljs-comment"><span class="markdown">/**
+ * Checks </span>the<span class="markdown"> signature against </span>the<span class="markdown"> data
+ * @param {string} signature 
+ * @param {string} data -&gt; </span>a<span class="markdown"> DER encoded EC public key
+ * @returns verification of </span>the<span class="markdown"> signature represented by </span>a<span class="markdown"> boolean
+ */</span></span>
+<span class="hljs-keyword">const</span> verifySignature = <span class="hljs-keyword">async</span> (signature, data) =&gt; {
+  <span class="hljs-keyword">const</span> publicKey = <span class="hljs-keyword">await</span> getPublicSignKey()
+  <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> crypto.subtle.verify({name: <span class="hljs-string">"ECDSA"</span>, hash: <span class="hljs-string">"SHA-256"</span>}, publicKey, signature, data)
+}
+
+<span class="hljs-comment"><span class="markdown">/**
+ * Derives </span>a<span class="markdown"> key from </span>a<span class="markdown"> shared secret using PBKDF2 (</span>a<span class="markdown"> key derivation function)
+ * @param {string} sharedSecret 
+ * @returns </span>a<span class="markdown"> symmetric key 
+ */</span></span>
+<span class="hljs-keyword">const</span> generateSymmetricKeyFromSharedSecret = <span class="hljs-keyword">async</span> (sharedSecret) =&gt; {
+  <span class="hljs-keyword">const</span> keyPart = sharedSecret.slice(<span class="hljs-number">0</span>, <span class="hljs-number">32</span>);
+  <span class="hljs-keyword">const</span> saltPart = sharedSecret.slice(<span class="hljs-number">32</span>, <span class="hljs-number">64</span>);
+  <span class="hljs-keyword">const</span> importedKey = <span class="hljs-keyword">await</span> crypto.subtle.importKey(<span class="hljs-string">"raw"</span>, keyPart, <span class="hljs-string">"PBKDF2"</span>, <span class="hljs-keyword">false</span>, [<span class="hljs-string">"deriveBits"</span>]);
+  <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> Uint8Array(<span class="hljs-keyword">await</span> crypto.subtle.deriveBits({name: <span class="hljs-string">"PBKDF2"</span>, hash: <span class="hljs-string">"SHA-256"</span>, salt: saltPart, iterations: <span class="hljs-number">310</span>}, importedKey, <span class="hljs-number">256</span>));
+
+}
+
+<span class="hljs-comment"><span class="markdown">/**
+ * Verifies </span>the<span class="markdown"> DER encoded publicKey with </span>the<span class="markdown"> signature
+ * Generates its own EDH-part and calculates </span>the<span class="markdown"> shared secret =&gt; key derivation
+ * @param {string} signature 
+ * @param {string} publicKeyDer 
+ * @returns symmetricKey derviced from </span>the<span class="markdown"> sharedSecret and its publicKey part
+ */</span></span>
+<span class="hljs-keyword">const</span> verifyAndGenerateSymmetricKey = <span class="hljs-keyword">async</span> (signature, publicKeyDer) =&gt; {
+  <span class="hljs-keyword">try</span> {
+    <span class="hljs-keyword">const</span> signatureBuffer = stringToArrayBuffer(<span class="hljs-built_in">window</span>.atob(signature))
+    <span class="hljs-keyword">const</span> publicKeyDerBuffer = stringToArrayBuffer(<span class="hljs-built_in">window</span>.atob(publicKeyDer))
+    <span class="hljs-keyword">if</span>(verifySignature(signatureBuffer, publicKeyDerBuffer)){
+      <span class="hljs-keyword">const</span> importedPublicKey = <span class="hljs-keyword">await</span> crypto.subtle.importKey(<span class="hljs-string">"spki"</span>, publicKeyDerBuffer, {name: <span class="hljs-string">"ECDH"</span>, namedCurve: <span class="hljs-string">"P-521"</span>}, <span class="hljs-keyword">true</span>, [<span class="hljs-string">"deriveBits"</span>])
+      <span class="hljs-keyword">const</span> browserKeyPair = <span class="hljs-keyword">await</span> crypto.subtle.generateKey({name: <span class="hljs-string">"ECDH"</span>, namedCurve: <span class="hljs-string">"P-521"</span>}, <span class="hljs-keyword">true</span>, [<span class="hljs-string">"deriveBits"</span>, <span class="hljs-string">"deriveKey"</span>])
+      <span class="hljs-keyword">const</span> sharedSecret = <span class="hljs-keyword">await</span> crypto.subtle.deriveBits({ name:<span class="hljs-string">"ECDH"</span>, public: importedPublicKey }, browserKeyPair.privateKey, <span class="hljs-number">512</span>)
+      <span class="hljs-keyword">return</span> {key: <span class="hljs-keyword">await</span> generateSymmetricKeyFromSharedSecret(sharedSecret), publicKey: <span class="hljs-keyword">new</span> Uint8Array(<span class="hljs-keyword">await</span> crypto.subtle.exportKey(<span class="hljs-string">'spki'</span>, browserKeyPair.publicKey))}
+    } <span class="hljs-keyword">else</span>
+      <span class="hljs-keyword">return</span> {error: <span class="hljs-string">"Could not verify signature of key"</span>}
+  } <span class="hljs-keyword">catch</span> {
+    <span class="hljs-keyword">return</span> {error: <span class="hljs-string">"Issue occured trying to generate shared secret"</span>}
+  }
+}
+
+<span class="hljs-comment"><span class="markdown">/** 
+<span class="hljs-bullet">* </span>Fetches </span>the<span class="markdown"> name of </span>the<span class="markdown"> mounted element, which </span>should<span class="markdown"> contain </span>the<span class="markdown"> server's key part and its signature
+<span class="hljs-bullet">* </span>Generates its own EDH-part and calculates </span>the<span class="markdown"> shared secret =&gt; key derivation
+<span class="hljs-bullet">* </span>Sends its public EDH-part to </span>the<span class="markdown"> server 
+<span class="hljs-bullet">* </span>@param {HTMLInputElement} mountEl
+<span class="hljs-bullet">* </span>@returns symmetricKey derviced from </span>the<span class="markdown"> sharedSecret
+*/</span></span>
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> generateSymmetricKey = <span class="hljs-keyword">async</span> (mountEl) =&gt; {
+  <span class="hljs-keyword">const</span> nameSplit = mountEl.el.name.split(<span class="hljs-string">","</span>)
+  <span class="hljs-keyword">const</span> sharedSecretAndDHPart = <span class="hljs-keyword">await</span> verifyAndGenerateSymmetricKey(nameSplit[<span class="hljs-number">0</span>], nameSplit[<span class="hljs-number">1</span>])
+  <span class="hljs-keyword">try</span> {
+    <span class="hljs-keyword">if</span>(sharedSecretAndDHPart.error == undefined){
+      <span class="hljs-keyword">await</span> mountEl.pushEventTo(<span class="hljs-string">"1"</span>, <span class="hljs-string">"DHexchange"</span>, {publicKey: <span class="hljs-built_in">window</span>.btoa(<span class="hljs-built_in">String</span>.fromCharCode.apply(<span class="hljs-keyword">null</span>, sharedSecretAndDHPart.publicKey))})
+      <span class="hljs-keyword">return</span> sharedSecretAndDHPart.key
+    } <span class="hljs-keyword">else</span> {
+      <span class="hljs-keyword">await</span> mountEl.pushEvent(<span class="hljs-string">"error"</span>, sharedSecretAndDHPart)
+      <span class="hljs-keyword">return</span> undefined
+    }
+  } <span class="hljs-keyword">catch</span>(e) {
+    <span class="hljs-keyword">await</span> mountEl.pushEvent(<span class="hljs-string">"error"</span>, <span class="hljs-string">"Could not transfer key"</span>)
+    <span class="hljs-keyword">return</span> undefined
+  }
+}
+
+<span class="hljs-keyword">const</span> stringToArrayBuffer = (byteString) =&gt; {
+  <span class="hljs-keyword">const</span> byteArray = <span class="hljs-keyword">new</span> Uint8Array(byteString.length);
+  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">var</span> i = <span class="hljs-number">0</span>; i &lt; byteString.length; i++) {
+    byteArray[i] = byteString.charCodeAt(i);
+  }
+
+  <span class="hljs-keyword">return</span> byteArray;
+}
+<span class="hljs-comment">// ...</span>
+</code></pre>
+<h2 id="client-encryption">Client Encryption</h2>
+<p><strong>app.js</strong></p>
+<pre><code class="lang-javascript"><span class="hljs-comment">// ...</span>
+
+<span class="hljs-keyword">import</span> JSZip <span class="hljs-keyword">from</span> <span class="hljs-string">"../vendor/jszip"</span>;
+<span class="hljs-keyword">import</span> { encryptContentToBlob, generateSymmetricKey } <span class="hljs-keyword">from</span> <span class="hljs-string">"./utils"</span>;
+
+<span class="hljs-keyword">let</span> hooks = {};
+hooks.Folder = {
+  <span class="hljs-keyword">async</span> mounted() {
+    <span class="hljs-keyword">const</span> sharedKey = <span class="hljs-keyword">await</span> generateSymmetricKey(<span class="hljs-keyword">this</span>);
+    <span class="hljs-keyword">this</span>.el.addEventListener(<span class="hljs-string">"input"</span>, <span class="hljs-keyword">async</span> (e) =&gt; {
+      e.preventDefault();
+      <span class="hljs-keyword">this</span>.pushEventTo(<span class="hljs-string">"1"</span>, <span class="hljs-string">"loading"</span>)
+      <span class="hljs-keyword">const</span> folderName = e.target.files[<span class="hljs-number">0</span>].webkitRelativePath.split(<span class="hljs-string">"/"</span>)[<span class="hljs-number">0</span>];
+      <span class="hljs-keyword">const</span> zip = <span class="hljs-keyword">new</span> JSZip();
+      <span class="hljs-built_in">Array</span>.from(e.target.files).forEach(<span class="hljs-function">(<span class="hljs-params">file</span>) =&gt;</span> {
+        zip.file(file.webkitRelativePath || file.name, file, { <span class="hljs-attr">binary</span>: <span class="hljs-literal">true</span> });
+      });
+      <span class="hljs-keyword">const</span> zipBlob = <span class="hljs-keyword">await</span> zip.generateAsync({ <span class="hljs-attr">type</span>: <span class="hljs-string">"blob"</span> });
+      <span class="hljs-keyword">const</span> encryptedBlob = <span class="hljs-keyword">await</span> encryptContentToBlob(zipBlob, folderName, sharedKey);
+      <span class="hljs-keyword">this</span>.upload(<span class="hljs-string">"file"</span>, [encryptedBlob]);
+    });
+  },
+};
+hooks.File = {
+  <span class="hljs-keyword">async</span> mounted() {
+    <span class="hljs-keyword">const</span> sharedKey = <span class="hljs-keyword">await</span> generateSymmetricKey(<span class="hljs-keyword">this</span>);
+    <span class="hljs-keyword">this</span>.el.addEventListener(<span class="hljs-string">"input"</span>, <span class="hljs-keyword">async</span> (e) =&gt; {
+      e.preventDefault();
+      <span class="hljs-keyword">await</span> <span class="hljs-keyword">this</span>.pushEventTo(<span class="hljs-string">"1"</span>, <span class="hljs-string">"loading"</span>)
+      <span class="hljs-keyword">const</span> file = <span class="hljs-built_in">Array</span>.from(e.target.files)[<span class="hljs-number">0</span>];
+      <span class="hljs-keyword">const</span> encryptedBlob = <span class="hljs-keyword">await</span> encryptContentToBlob(file, file.name, sharedKey);
+      <span class="hljs-keyword">this</span>.upload(<span class="hljs-string">"file"</span>, [encryptedBlob]);
+    });
+  },
+};
+<span class="hljs-comment">// ...</span>
+</code></pre>
+<p><strong>utils.js</strong></p>
+<pre><code class="lang-javascript">import forge from <span class="hljs-string">"../vendor/forge"</span>;
+
+<span class="hljs-comment">/**
+ * Converts a Blob and a filename to a File type
+ * <span class="hljs-doctag">@param</span> {Blob} blob 
+ * <span class="hljs-doctag">@param</span> {string} fileName 
+ * <span class="hljs-doctag">@returns</span> {File} of the Blob and filename
+ */</span>
+<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">blobToFile</span><span class="hljs-params">(blob, fileName)</span> </span>{
+  <span class="hljs-comment">// Get the mime type of the blob</span>
+  <span class="hljs-keyword">var</span> mimeType = blob.type;
+
+  <span class="hljs-comment">// Create a new file object using the blob and filename</span>
+  <span class="hljs-keyword">var</span> file = <span class="hljs-keyword">new</span> File([blob], fileName, { type: mimeType });
+
+  <span class="hljs-keyword">return</span> file;
+}
+
+<span class="hljs-comment">/**
+ * Encrypts a file using AES in CTR mode
+ * SHA512 hashes the ciphertext 
+ * <span class="hljs-doctag">@param</span> {File} file 
+ * <span class="hljs-doctag">@param</span> {string} key 
+ * <span class="hljs-doctag">@param</span> {string} iv 
+ * <span class="hljs-doctag">@returns</span> the ciphertext with its hash
+ */</span>
+<span class="hljs-keyword">const</span> encryptAesCtrAndSha512 = async (file, key, iv) =&gt; {
+  <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> Promise(async (res, _rej) =&gt; {
+    <span class="hljs-keyword">const</span> cipher = forge.cipher.createCipher(<span class="hljs-string">"AES-CTR"</span>, key);
+    <span class="hljs-keyword">const</span> md = forge.hmac.create();
+
+    cipher.start({
+      iv: iv,
+    });
+    md.start(<span class="hljs-string">"sha512"</span>, key)
+    <span class="hljs-keyword">const</span> fileReader = file.stream().getReader();
+    <span class="hljs-keyword">const</span> encryptedData = [];
+    <span class="hljs-keyword">let</span> finished = <span class="hljs-keyword">false</span>;
+    <span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>;
+    <span class="hljs-keyword">while</span> (!finished) {
+      <span class="hljs-keyword">const</span> { value, done } = await fileReader.read();
+      finished = done;
+      <span class="hljs-keyword">if</span> (!finished) {
+        <span class="hljs-keyword">if</span> (i % <span class="hljs-number">5</span> == <span class="hljs-number">0</span>) await refreshUi();
+        cipher.update(forge.util.createBuffer(value));
+        <span class="hljs-keyword">const</span> encryptedBytes = cipher.output.getBytes();
+        md.update(encryptedBytes);
+        bytes = window.btoa(encryptedBytes);
+
+        encryptedData.push(bytes);
+      }
+      i++;
+    }
+    cipher.finish();
+
+    res({
+      encrypted: encryptedData.join(<span class="hljs-string">","</span>),
+      hash: md.digest().bytes(),
+    });
+  });
+};
+
+<span class="hljs-comment">/**
+ * Encrypts a file using the sharedKey
+ * <span class="hljs-doctag">@param</span> {File} file
+ * <span class="hljs-doctag">@param</span> {string} sharedKey 
+ * <span class="hljs-doctag">@returns</span> Object containing the ciphertext with its IV and the hash of the ciphertext
+ */</span>
+<span class="hljs-keyword">const</span> encryptFile = async (file, sharedKey) =&gt; {
+  <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> Promise(async (res, rej) =&gt; {
+
+    forge.options.usePureJavaScript = <span class="hljs-keyword">true</span>;
+    <span class="hljs-keyword">const</span> iv = forge.random.getBytesSync(<span class="hljs-number">16</span>);
+    <span class="hljs-keyword">const</span> { encrypted, hash } = await encryptAesCtrAndSha512(file, sharedKey, iv);
+    res({
+      cipherText: encrypted,
+      hash: window.btoa(hash),
+      iv: window.btoa(iv),
+    });
+  });
+};
+
+<span class="hljs-comment">/**
+ * Encrypts a file
+ * Converts the filename to contain the hash and iv
+ * <span class="hljs-doctag">@param</span> {File} file 
+ * <span class="hljs-doctag">@param</span> {string} filename 
+ * <span class="hljs-doctag">@param</span> {Uint8Array} sharedKey 
+ * <span class="hljs-doctag">@returns</span> {File} the encrypted file 
+ */</span>
+export <span class="hljs-keyword">const</span> encryptContentToBlob = async (file, filename, sharedKey) =&gt; {
+  <span class="hljs-keyword">const</span> encryptedFile = await encryptFile(file, String.fromCharCode.apply(<span class="hljs-keyword">null</span>, sharedKey));
+  <span class="hljs-keyword">const</span> encryptedBlob = <span class="hljs-keyword">new</span> Blob([encryptedFile.cipherText], {
+    type: file.type,
+  });
+
+  <span class="hljs-keyword">const</span> combinedFilename =
+    encryptedFile.hash + <span class="hljs-string">","</span> + encryptedFile.iv + <span class="hljs-string">","</span> + filename;
+
+  <span class="hljs-keyword">if</span> (combinedFilename.length - filename.length &gt;= <span class="hljs-number">100</span>)
+    <span class="hljs-keyword">return</span> blobToFile(encryptedBlob, combinedFilename);
+  <span class="hljs-keyword">else</span> <span class="hljs-keyword">return</span> blobToFile(file, filename);
+};
+
+<span class="hljs-comment">// ...</span>
+</code></pre>
+<h2 id="server-decryption-and-re-encryption">
+  Server Decryption and re-encryption
+</h2>
+<p><strong>crypto_web.ex</strong></p>
+<pre><code class="lang-elixir"><span class="hljs-class"><span class="hljs-keyword">defmodule</span> <span class="hljs-title">FileStorage</span></span>.Crypto.Web <span class="hljs-keyword">do</span>
+  <span class="hljs-variable">@moduledoc</span> <span class="hljs-string">""</span><span class="hljs-string">"
+  Cryptography methods used for encryption and signatures on files downloaded from web form
+  "</span><span class="hljs-string">""</span>
+  <span class="hljs-variable">@key_encryption_padding_options</span> [{<span class="hljs-symbol">:encrypt</span>, <span class="hljs-keyword">false</span>}, {<span class="hljs-symbol">:padding</span>, <span class="hljs-symbol">:pkcs_padding</span>}]
+  <span class="hljs-variable">@aes_cipher</span> <span class="hljs-symbol">:aes_256_ctr</span>
+  <span class="hljs-variable">@hash_cipher</span> <span class="hljs-symbol">:sha512</span>
+  <span class="hljs-variable">@pbkdf2_interations</span> <span class="hljs-number">310</span> <span class="hljs-comment"># Unsure if 310_000 is required since this is not password. Therefore, no rainbow attack.</span>
+  <span class="hljs-variable">@private_key_pem</span> System.fetch_env!(<span class="hljs-string">"PRIVATE_KEY_PEM"</span>)
+                   |&gt; to_string()
+                   |&gt; String.replace(<span class="hljs-string">"\\n"</span>, <span class="hljs-string">"\n"</span>)
+
+
+    <span class="hljs-comment"># ...</span>
+
+  <span class="hljs-variable">@spec</span> mac_init(binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, reference()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_init</span></span>(key) <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.mac_init(<span class="hljs-symbol">:hmac</span>, <span class="hljs-variable">@hash_cipher</span>, key)}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> mac_chunk(reference(), binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, reference()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_chunk</span></span>(state, chunk) <span class="hljs-keyword">when</span> is_binary(chunk) <span class="hljs-keyword">and</span> is_reference(state) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.mac_update(state, chunk)}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> mac_digest(reference()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, binary()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_digest</span></span>(state) <span class="hljs-keyword">when</span> is_reference(state) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.mac_final(state)}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> mac_equals!(binary(), binary()) <span class="hljs-symbol">:</span>: boolean()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_equals!</span></span>(mac1, mac2) <span class="hljs-keyword">when</span> is_binary(mac1) <span class="hljs-keyword">and</span> is_binary(mac2) <span class="hljs-keyword">do</span>
+    <span class="hljs-symbol">:crypto</span>.hash_equals(mac1, mac2)
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> decrypt_init(binary(), binary()) <span class="hljs-symbol">:</span>:
+          {<span class="hljs-symbol">:ok</span>, reference()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">decrypt_init</span></span>(key, iv) <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">and</span> is_binary(iv) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.crypto_init(<span class="hljs-variable">@aes_cipher</span>, key, iv, <span class="hljs-variable">@key_encryption_padding_options</span>)}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> decrypt_chunk(reference(), binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, binary()} | {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:aes_decrypt_error</span>}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">decrypt_chunk</span></span>(decrypter_state, cipher_chunk)
+      <span class="hljs-keyword">when</span> is_reference(decrypter_state) <span class="hljs-keyword">and</span> is_binary(cipher_chunk) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.crypto_update(decrypter_state, cipher_chunk)}
+  rescue
+    <span class="hljs-number">_</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:aes_decrypt_error</span>}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> decrypt_finalize(reference()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, binary()} | {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:aes_decrypt_error</span>}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">decrypt_finalize</span></span>(decrypter_state) <span class="hljs-keyword">when</span> is_reference(decrypter_state) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.crypto_final(decrypter_state)}
+  rescue
+    <span class="hljs-number">_</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:aes_decrypt_error</span>}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> decode_private_pem(binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, binary()}
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">decode_private_pem</span></span>(pem) <span class="hljs-keyword">when</span> is_binary(pem) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>,
+     pem
+     |&gt; <span class="hljs-symbol">:public_key</span>.pem_decode()
+     |&gt; List.first()
+     |&gt; <span class="hljs-symbol">:public_key</span>.pem_entry_decode()}
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p><strong>crypto_s3.ex</strong></p>
+<pre><code class="lang-elixir">defmodule FileStorage.Crypto.S3 <span class="hljs-keyword">do</span>
+  @moduledoc <span class="hljs-string">""</span><span class="hljs-string">"
+  Cryptography methods used for encryption and signatures on files uploaded to S3
+  "</span><span class="hljs-string">""</span>
+
+  @key_encryption_padding_options {<span class="hljs-symbol">:padding</span>, <span class="hljs-symbol">:pkcs_padding</span>}
+  @aes_mode <span class="hljs-symbol">:aes_256_ctr</span>
+  @hash_cipher <span class="hljs-symbol">:sha512</span>
+
+  @spec random_bytes(number()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">random_bytes</span><span class="hljs-params">(length)</span></span> <span class="hljs-keyword">do</span>
+    <span class="hljs-symbol">:crypto</span>.strong_rand_bytes(length)
+  <span class="hljs-keyword">end</span>
+
+  @spec encrypt_key!(binary(), binary()) <span class="hljs-symbol">:</span>: binary()
+  @spec encrypt_key!({binary(), binary()}, binary(), binary()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">encrypt_key!</span><span class="hljs-params">(key, key_iv)</span></span> <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">and</span> is_binary(key_iv) <span class="hljs-keyword">do</span>
+    <span class="hljs-symbol">:crypto</span>.crypto_one_time(@aes_mode, System.fetch_env!(<span class="hljs-string">"KEK"</span>), key_iv, key, [
+      {<span class="hljs-symbol">:encrypt</span>, <span class="hljs-literal">true</span>},
+      @key_encryption_padding_options
+    ])
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">encrypt_key!</span><span class="hljs-params">({key, key_iv}, encrypted_key, encrypted_key_iv)</span></span>
+      <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">and</span> is_binary(key_iv) <span class="hljs-keyword">and</span> is_binary(encrypted_key) <span class="hljs-keyword">and</span>
+             is_binary(encrypted_key_iv) <span class="hljs-keyword">do</span>
+    decrypted_key = decrypt_key!(encrypted_key, encrypted_key_iv)
+
+    <span class="hljs-symbol">:crypto</span>.crypto_one_time(@aes_mode, decrypted_key, key_iv, key, [
+      {<span class="hljs-symbol">:encrypt</span>, <span class="hljs-literal">true</span>},
+      @key_encryption_padding_options
+    ])
+  <span class="hljs-keyword">end</span>
+
+  @spec decrypt_key!(binary(), binary()) <span class="hljs-symbol">:</span>: binary()
+  @spec decrypt_key!({binary(), binary()}, binary(), binary()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">decrypt_key!</span><span class="hljs-params">(key_cipher, key_iv)</span></span> <span class="hljs-keyword">when</span> is_binary(key_cipher) <span class="hljs-keyword">and</span> is_binary(key_iv) <span class="hljs-keyword">do</span>
+    <span class="hljs-symbol">:crypto</span>.crypto_one_time(@aes_mode, System.fetch_env!(<span class="hljs-string">"KEK"</span>), key_iv, key_cipher, [
+      {<span class="hljs-symbol">:encrypt</span>, <span class="hljs-literal">false</span>},
+      @key_encryption_padding_options
+    ])
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">decrypt_key!</span><span class="hljs-params">({key_cipher, key_iv}, encrypted_key, encrypted_key_iv)</span></span>
+      <span class="hljs-keyword">when</span> is_binary(key_cipher) <span class="hljs-keyword">and</span> is_binary(key_iv) <span class="hljs-keyword">and</span> is_binary(encrypted_key) <span class="hljs-keyword">and</span>
+             is_binary(encrypted_key_iv) <span class="hljs-keyword">do</span>
+    decrypted_key = decrypt_key!(encrypted_key, encrypted_key_iv)
+
+    <span class="hljs-symbol">:crypto</span>.crypto_one_time(@aes_mode, decrypted_key, key_iv, key_cipher, [
+      {<span class="hljs-symbol">:encrypt</span>, <span class="hljs-literal">false</span>},
+      @key_encryption_padding_options
+    ])
+  <span class="hljs-keyword">end</span>
+
+  @spec encrypt_init(binary(), binary(), boolean()) <span class="hljs-symbol">:</span>:
+          {<span class="hljs-symbol">:ok</span>, reference()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">encrypt_init</span><span class="hljs-params">(key, iv, is_encrypt)</span></span>
+      <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">and</span> is_binary(iv) <span class="hljs-keyword">and</span> is_boolean(is_encrypt) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>,
+     <span class="hljs-symbol">:crypto</span>.crypto_init(@aes_mode, key, iv, [
+       {<span class="hljs-symbol">:encrypt</span>, is_encrypt},
+       @key_encryption_padding_options
+     ])}
+  <span class="hljs-keyword">end</span>
+
+  @spec encrypt_chunk(reference(), binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, binary()} <span class="hljs-params">| {:error, :aes_encrypt_error}
+  def encrypt_chunk(encrypter_state, cipher_chunk)
+      <span class="hljs-keyword">when</span> is_reference(encrypter_state) <span class="hljs-keyword">and</span> is_binary(cipher_chunk) <span class="hljs-keyword">do</span>
+    {:ok, :crypto.crypto_update(encrypter_state, cipher_chunk)}
+  <span class="hljs-keyword">rescue</span>
+    _ -&gt; {:error, :aes_encrypt_error}
+  <span class="hljs-keyword">end</span>
+
+  @spec encrypt_finalize(reference()) :: {:ok, binary()} |</span> {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:aes_encrypt_error</span>}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">encrypt_finalize</span><span class="hljs-params">(encrypter_state)</span></span> <span class="hljs-keyword">when</span> is_reference(encrypter_state) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.crypto_final(encrypter_state)}
+  <span class="hljs-keyword">rescue</span>
+    <span class="hljs-number">_</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:aes_encrypt_error</span>}
+  <span class="hljs-keyword">end</span>
+
+  @spec mac_init(binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, reference()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_init</span><span class="hljs-params">(key)</span></span> <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.mac_init(<span class="hljs-symbol">:hmac</span>, @hash_cipher, key)}
+  <span class="hljs-keyword">rescue</span>
+    <span class="hljs-number">_</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:mac_init_error</span>}
+  <span class="hljs-keyword">end</span>
+
+  @spec mac_chunk(reference(), binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, reference()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_chunk</span><span class="hljs-params">(state, chunk)</span></span> <span class="hljs-keyword">when</span> is_binary(chunk) <span class="hljs-keyword">and</span> is_reference(state) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.mac_update(state, chunk)}
+  <span class="hljs-keyword">rescue</span>
+    <span class="hljs-number">_</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:mac_chunk_error</span>}
+  <span class="hljs-keyword">end</span>
+
+  @spec mac_digest(reference()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, binary()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_digest</span><span class="hljs-params">(state)</span></span> <span class="hljs-keyword">when</span> is_reference(state) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, <span class="hljs-symbol">:crypto</span>.mac_final(state)}
+  <span class="hljs-keyword">rescue</span>
+    <span class="hljs-number">_</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:mac_digest_error</span>}
+  <span class="hljs-keyword">end</span>
+
+  @spec mac!(binary(), binary()) <span class="hljs-symbol">:</span>: binary()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac!</span><span class="hljs-params">(key, data)</span></span> <span class="hljs-keyword">when</span> is_binary(key) <span class="hljs-keyword">and</span> is_binary(data) <span class="hljs-keyword">do</span>
+    <span class="hljs-symbol">:crypto</span>.mac(<span class="hljs-symbol">:hmac</span>, @hash_cipher, key, data)
+  <span class="hljs-keyword">end</span>
+
+  @spec mac_equals!(binary(), binary()) <span class="hljs-symbol">:</span>: boolean()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">mac_equals!</span><span class="hljs-params">(mac1, mac2)</span></span> <span class="hljs-keyword">when</span> is_binary(mac1) <span class="hljs-keyword">and</span> is_binary(mac2) <span class="hljs-keyword">do</span>
+    <span class="hljs-symbol">:crypto</span>.hash_equals(mac1, mac2)
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p><strong>form_component.ex</strong></p>
+<pre><code class="lang-elixir">allow_upload(:file,
+<span class="hljs-attr">       accept:</span> :any,
+<span class="hljs-attr">       max_entries:</span> <span class="hljs-number">1</span>,
+<span class="hljs-attr">       max_file_size:</span> updated_user.max_size,
+       <span class="hljs-comment"># 65536 base64 encoded (plus 1 for comma)</span>
+<span class="hljs-attr">       chunk_size:</span> <span class="hljs-number">87</span>_385,
+<span class="hljs-attr">       writer:</span> fn _name, %{client_name: name}, socket -<span class="hljs-string">&gt;
+         {mac, iv, _} = filename_to_meta(name)
+         {Filewriter, mac: mac, key: socket.assigns.shared_key, iv: iv, parent: self()}
+       end,
+</span><span class="hljs-attr">       auto_upload:</span> <span class="hljs-literal">true</span>)
+</code></pre>
+<p><strong>filewriter.ex</strong></p>
+<pre><code class="lang-elixir"><span class="hljs-comment"># https://github.com/phoenixframework/phoenix_live_view/blob/main/lib/phoenix_live_view/upload_tmp_file_writer.ex</span>
+<span class="hljs-class"><span class="hljs-keyword">defmodule</span> <span class="hljs-title">FileStorageWeb</span></span>.FileLive.Filewriter <span class="hljs-keyword">do</span>
+  <span class="hljs-variable">@moduledoc</span> <span class="hljs-string">""</span><span class="hljs-string">"
+  FileWriter implementation
+  Decrypts the file received from the client
+  Re-encrypts the file with a new symmetric key
+  "</span><span class="hljs-string">""</span>
+  <span class="hljs-variable">@behaviour</span> Phoenix.LiveView.UploadWriter
+
+  <span class="hljs-keyword">alias</span> FileStorage.Crypto.Web, <span class="hljs-symbol">as:</span> Crypto
+  <span class="hljs-keyword">alias</span> FileStorage.Crypto.S3, <span class="hljs-symbol">as:</span> CryptoS3
+
+  <span class="hljs-variable">@spec</span> init(keyword()) <span class="hljs-symbol">:</span>:
+          {<span class="hljs-symbol">:error</span>, atom}
+          | {<span class="hljs-symbol">:no_tmp</span>, [binary]}
+          | {<span class="hljs-symbol">:ok</span>,
+             %{
+               <span class="hljs-symbol">file:</span> pid | {<span class="hljs-symbol">:file_descriptor</span>, atom, any},
+               <span class="hljs-symbol">mac:</span> any,
+               <span class="hljs-symbol">path:</span> &lt;&lt;<span class="hljs-symbol">_:</span><span class="hljs-symbol">:</span><span class="hljs-number">32</span>, <span class="hljs-symbol">_:</span><span class="hljs-symbol">:_*</span><span class="hljs-number">8</span>&gt;&gt;,
+               <span class="hljs-symbol">mac_state:</span> reference(),
+               <span class="hljs-symbol">state:</span> reference
+             }}
+          | {<span class="hljs-symbol">:too_many_attempts</span>, binary, <span class="hljs-number">1</span> | <span class="hljs-number">2</span> | <span class="hljs-number">3</span> | <span class="hljs-number">4</span> | <span class="hljs-number">5</span> | <span class="hljs-number">6</span> | <span class="hljs-number">7</span> | <span class="hljs-number">8</span> | <span class="hljs-number">9</span> | <span class="hljs-number">10</span>}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">init</span></span>(opts) <span class="hljs-keyword">do</span>
+    key = Keyword.fetch!(opts, <span class="hljs-symbol">:key</span>)
+    parent = Keyword.fetch!(opts, <span class="hljs-symbol">:parent</span>)
+
+    encrypt_key = CryptoS3.random_bytes(<span class="hljs-number">32</span>)
+    encrypt_iv = CryptoS3.random_bytes(<span class="hljs-number">16</span>)
+
+    if key != <span class="hljs-keyword">nil</span> <span class="hljs-keyword">do</span>
+      iv = Keyword.fetch!(opts, <span class="hljs-symbol">:iv</span>)
+      mac = Keyword.fetch!(opts, <span class="hljs-symbol">:mac</span>)
+
+      with {<span class="hljs-symbol">:ok</span>, path} &lt;- Plug.Upload.random_file(<span class="hljs-string">"live_view_upload"</span>),
+           {<span class="hljs-symbol">:ok</span>, file} &lt;- File.open(path, [<span class="hljs-symbol">:binary</span>, <span class="hljs-symbol">:write</span>]),
+           {<span class="hljs-symbol">:ok</span>, decrypt_state} &lt;- Crypto.decrypt_init(key, iv),
+           {<span class="hljs-symbol">:ok</span>, mac_state} &lt;- Crypto.mac_init(key),
+           {<span class="hljs-symbol">:ok</span>, encrypt_state} &lt;- CryptoS3.encrypt_init(encrypt_key, encrypt_iv, <span class="hljs-keyword">true</span>),
+           {<span class="hljs-symbol">:ok</span>, encrypt_mac_state} &lt;- CryptoS3.mac_init(encrypt_key) <span class="hljs-keyword">do</span>
+        {<span class="hljs-symbol">:ok</span>,
+         %{
+           <span class="hljs-symbol">path:</span> path,
+           <span class="hljs-symbol">file:</span> file,
+           <span class="hljs-symbol">mac:</span> mac,
+           <span class="hljs-symbol">decrypt_state:</span> decrypt_state,
+           <span class="hljs-symbol">mac_state:</span> mac_state,
+           <span class="hljs-symbol">encrypt_state:</span> encrypt_state,
+           <span class="hljs-symbol">encrypt_mac_state:</span> encrypt_mac_state,
+           <span class="hljs-symbol">encrypt_key:</span> encrypt_key,
+           <span class="hljs-symbol">encrypt_iv:</span> encrypt_iv,
+           <span class="hljs-symbol">overflow:</span> <span class="hljs-string">""</span>,
+           <span class="hljs-symbol">parent:</span> parent
+         }}
+      <span class="hljs-keyword">end</span>
+    else
+      <span class="hljs-comment"># Defaults to no encryption, could be attack vector I guess ;(</span>
+      with {<span class="hljs-symbol">:ok</span>, path} &lt;- Plug.Upload.random_file(<span class="hljs-string">"live_view_upload"</span>),
+           {<span class="hljs-symbol">:ok</span>, file} &lt;- File.open(path, [<span class="hljs-symbol">:binary</span>, <span class="hljs-symbol">:write</span>]),
+           {<span class="hljs-symbol">:ok</span>, encrypt_state} &lt;- CryptoS3.encrypt_init(encrypt_key, encrypt_iv, <span class="hljs-keyword">true</span>),
+           {<span class="hljs-symbol">:ok</span>, encrypt_mac_state} &lt;- CryptoS3.mac_init(key) <span class="hljs-keyword">do</span>
+        {<span class="hljs-symbol">:ok</span>,
+         %{
+           <span class="hljs-symbol">path:</span> path,
+           <span class="hljs-symbol">file:</span> file,
+           <span class="hljs-symbol">default:</span> <span class="hljs-keyword">true</span>,
+           <span class="hljs-symbol">parent:</span> parent,
+           <span class="hljs-symbol">encrypt_state:</span> encrypt_state,
+           <span class="hljs-symbol">encrypt_mac_state:</span> encrypt_mac_state,
+           <span class="hljs-symbol">encrypt_key:</span> encrypt_key,
+           <span class="hljs-symbol">encrypt_iv:</span> encrypt_iv
+         }}
+      <span class="hljs-keyword">end</span>
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> meta(map()) <span class="hljs-symbol">:</span>: map()
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">meta</span></span>(state) <span class="hljs-keyword">do</span>
+    %{
+      <span class="hljs-symbol">path:</span> state.path,
+      <span class="hljs-symbol">key:</span> state.encrypt_key,
+      <span class="hljs-symbol">iv:</span> state.encrypt_iv,
+      <span class="hljs-symbol">mac:</span> state.encrypt_mac_state
+    }
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> write_chunk(binary(), map()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, map()} | {<span class="hljs-symbol">:error</span>, any()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">write_chunk</span></span>(data, %{<span class="hljs-symbol">default:</span> <span class="hljs-keyword">true</span>} = state) <span class="hljs-keyword">do</span>
+    <span class="hljs-keyword">case</span> encrypt_and_write_to_file(state, {<span class="hljs-symbol">:ok</span>, data}) <span class="hljs-keyword">do</span>
+      {<span class="hljs-symbol">:ok</span>, new_encrypt_mac_state} -&gt;
+        {<span class="hljs-symbol">:ok</span>, Map.put(state, <span class="hljs-symbol">:encrypt_mac_state</span>, new_encrypt_mac_state)}
+
+      {<span class="hljs-symbol">:error</span>, reason} -&gt;
+        notify_error_parent({<span class="hljs-symbol">:error</span>, reason}, state.parent)
+        {<span class="hljs-symbol">:error</span>, reason}
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">write_chunk</span></span>(encrypted_data, state) <span class="hljs-keyword">do</span>
+    {decoded, overflow} = decode64!(state.overflow &lt;&gt; encrypted_data)
+    decrypt_result = Crypto.decrypt_chunk(state.decrypt_state, decoded)
+
+    {<span class="hljs-symbol">:ok</span>, state} =
+      if(byte_size(overflow) &gt; <span class="hljs-number">0</span>, <span class="hljs-symbol">do:</span> Map.put(state, <span class="hljs-symbol">:overflow</span>, overflow), <span class="hljs-symbol">else:</span> state)
+      |&gt; update_mac_state(decoded)
+
+    <span class="hljs-keyword">case</span> encrypt_and_write_to_file(state, decrypt_result) <span class="hljs-keyword">do</span>
+      {<span class="hljs-symbol">:ok</span>, new_encrypt_mac_state} -&gt;
+        {<span class="hljs-symbol">:ok</span>, Map.put(state, <span class="hljs-symbol">:encrypt_mac_state</span>, new_encrypt_mac_state)}
+
+      {<span class="hljs-symbol">:error</span>, reason} -&gt;
+        notify_error_parent({<span class="hljs-symbol">:error</span>, reason}, state.parent)
+        {<span class="hljs-symbol">:error</span>, reason}
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> close(map(), <span class="hljs-symbol">:done</span> | <span class="hljs-symbol">:cancel</span> | {<span class="hljs-symbol">:error</span>, term}) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, map()} | {<span class="hljs-symbol">:error</span>, any()}
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">close</span></span>(state, reason) <span class="hljs-keyword">do</span>
+    <span class="hljs-keyword">case</span> reason <span class="hljs-keyword">do</span>
+      <span class="hljs-symbol">:cancel</span> -&gt; {<span class="hljs-symbol">:error</span>, <span class="hljs-symbol">:canceled</span>}
+      <span class="hljs-symbol">:done</span> -&gt; close(state)
+      {<span class="hljs-symbol">:error</span>, term} -&gt; {<span class="hljs-symbol">:error</span>, term}
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">close</span></span>(%{<span class="hljs-symbol">default:</span> <span class="hljs-keyword">true</span>} = state) <span class="hljs-keyword">do</span>
+    <span class="hljs-keyword">case</span> File.close(state.file) <span class="hljs-keyword">do</span>
+      <span class="hljs-symbol">:ok</span> -&gt;
+        {<span class="hljs-symbol">:ok</span>, state}
+
+      {<span class="hljs-symbol">:error</span>, reason} -&gt;
+        notify_error_parent({<span class="hljs-symbol">:error</span>, reason}, state.parent)
+        {<span class="hljs-symbol">:error</span>, reason}
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">close</span></span>(state) <span class="hljs-keyword">do</span>
+    <span class="hljs-comment"># Write to file overflow in state</span>
+    {<span class="hljs-symbol">:ok</span>, state} =
+      if byte_size(state.overflow) &gt; <span class="hljs-number">0</span>, <span class="hljs-symbol">do:</span> write_chunk(<span class="hljs-string">""</span>, state), <span class="hljs-symbol">else:</span> {<span class="hljs-symbol">:ok</span>, state}
+
+    <span class="hljs-comment"># Write to file decrypted bytes in decryptor state</span>
+    write_result = encrypt_and_write_to_file(state, Crypto.decrypt_finalize(state.decrypt_state))
+
+    if elem(write_result, <span class="hljs-number">0</span>) == <span class="hljs-symbol">:ok</span> <span class="hljs-keyword">and</span>
+         Crypto.mac_equals!(elem(Crypto.mac_digest(state.mac_state), <span class="hljs-number">1</span>), state.mac) <span class="hljs-keyword">do</span>
+      <span class="hljs-keyword">case</span> File.close(state.file) <span class="hljs-keyword">do</span>
+        <span class="hljs-symbol">:ok</span> -&gt;
+          {<span class="hljs-symbol">:ok</span>,
+           Map.put(
+             state,
+             <span class="hljs-symbol">:encrypt_mac_state</span>,
+             elem(write_result, <span class="hljs-number">1</span>) |&gt; CryptoS3.mac_digest() |&gt; elem(<span class="hljs-number">1</span>)
+           )}
+
+        {<span class="hljs-symbol">:error</span>, reason} -&gt;
+          notify_error_parent({<span class="hljs-symbol">:error</span>, reason}, state.parent)
+          {<span class="hljs-symbol">:error</span>, reason}
+      <span class="hljs-keyword">end</span>
+    else
+      File.close(state.file)
+
+      if elem(write_result, <span class="hljs-number">0</span>) == <span class="hljs-symbol">:ok</span> <span class="hljs-keyword">do</span>
+        notify_error_parent({<span class="hljs-symbol">:error</span>, <span class="hljs-string">"MACs did not match"</span>}, state.parent)
+        {<span class="hljs-symbol">:error</span>, <span class="hljs-string">"MACs did not match"</span>}
+      else
+        notify_error_parent(write_result, state.parent)
+        write_result
+      <span class="hljs-keyword">end</span>
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> encrypt_and_write_to_file(map(), {<span class="hljs-symbol">:ok</span>, binary()} | {<span class="hljs-symbol">:error</span>, term()}) <span class="hljs-symbol">:</span>:
+          {<span class="hljs-symbol">:ok</span>, reference()} | {<span class="hljs-symbol">:error</span>, term()}
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">encrypt_and_write_to_file</span></span>(state, {<span class="hljs-symbol">:ok</span>, data}) <span class="hljs-keyword">when</span> is_binary(data) <span class="hljs-keyword">do</span>
+    <span class="hljs-keyword">case</span> CryptoS3.encrypt_chunk(state.encrypt_state, data) <span class="hljs-keyword">do</span>
+      {<span class="hljs-symbol">:ok</span>, encrypted_data} -&gt;
+        write_to_file(state.file, encrypted_data)
+        |&gt; mac_chunk(state, encrypted_data)
+
+      {<span class="hljs-symbol">:error</span>, reason} -&gt;
+        {<span class="hljs-symbol">:error</span>, reason}
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">encrypt_and_write_to_file</span></span>(_state, {<span class="hljs-symbol">:error</span>, reason}) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:error</span>, reason}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> write_to_file(<span class="hljs-symbol">:file</span>.io_device(), binary()) <span class="hljs-symbol">:</span>:
+          <span class="hljs-symbol">:ok</span> | {<span class="hljs-symbol">:error</span>, any()}
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">write_to_file</span></span>(file, data) <span class="hljs-keyword">when</span> is_binary(data) <span class="hljs-keyword">do</span>
+    IO.binwrite(file, data)
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> decode64!(binary()) <span class="hljs-symbol">:</span>: {binary(), binary()}
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">decode64!</span></span>(data) <span class="hljs-keyword">do</span>
+    check_base64_data = String.trim_leading(data, <span class="hljs-string">","</span>) |&gt; String.split(<span class="hljs-string">","</span>)
+
+    {chunk, overflow} =
+      <span class="hljs-keyword">cond</span> <span class="hljs-keyword">do</span>
+        <span class="hljs-comment"># Unlikely this will ever happen</span>
+        length(check_base64_data) &gt; <span class="hljs-number">2</span> -&gt;
+          {first_chunk, rest_list} = List.pop_at(check_base64_data, <span class="hljs-number">0</span>)
+          {first_chunk, Enum.join(rest_list, <span class="hljs-string">""</span>)}
+
+        length(check_base64_data) == <span class="hljs-number">2</span> <span class="hljs-keyword">and</span> byte_size(List.last(check_base64_data)) &gt; <span class="hljs-number">0</span> -&gt;
+          [head | tail] = check_base64_data
+          {head, tail}
+
+        <span class="hljs-keyword">true</span> -&gt;
+          {List.first(check_base64_data), <span class="hljs-string">""</span>}
+      <span class="hljs-keyword">end</span>
+
+    {Base.decode64!(chunk), overflow}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-variable">@spec</span> update_mac_state(map(), binary()) <span class="hljs-symbol">:</span>: {<span class="hljs-symbol">:ok</span>, map()}
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">update_mac_state</span></span>(state, data) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:ok</span>, new_mac_state} = Crypto.mac_chunk(state.mac_state, data)
+    {<span class="hljs-symbol">:ok</span>, Map.put(state, <span class="hljs-symbol">:mac_state</span>, new_mac_state)}
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">notify_error_parent</span></span>({<span class="hljs-symbol">:error</span>, reason}, parent),
+    <span class="hljs-symbol">do:</span> send(parent, {__MODULE_<span class="hljs-number">_</span>, {<span class="hljs-symbol">:error</span>, reason}})
+
+  <span class="hljs-variable">@spec</span> mac_chunk(<span class="hljs-symbol">:ok</span> | {<span class="hljs-symbol">:error</span>, term()}, map(), binary()) <span class="hljs-symbol">:</span>:
+          {<span class="hljs-symbol">:ok</span>, reference()} | {<span class="hljs-symbol">:error</span>, term()}
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">mac_chunk</span></span>(<span class="hljs-symbol">:ok</span>, state, data) <span class="hljs-keyword">when</span> is_binary(data) <span class="hljs-keyword">do</span>
+    CryptoS3.mac_chunk(state.encrypt_mac_state, data)
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">defp</span> <span class="hljs-title">mac_chunk</span></span>({<span class="hljs-symbol">:error</span>, reason}, _state, _data) <span class="hljs-keyword">do</span>
+    {<span class="hljs-symbol">:error</span>, reason}
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>

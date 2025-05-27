@@ -1,0 +1,249 @@
+<h1 id="file-storage-part-1">File Storage: Part 1</h1>
+<p>
+  Improved TLS versions ensure secure data transport from client to server
+  without extra client-side encryption. In this note, I&#39;ll explain how to
+  add unnecessary encryption when uploading files in the Phoenix web framework.
+  In the rare case, a zero-day is discovered in the TLS protocol, causing data
+  to leak. Adding an additional layer of encryption and integrity could be the
+  solution. This note will explain how I set up client-side encryption and
+  server-side decryption using
+  <a href="https://github.com/digitalbazaar/forge">forge.js</a>,
+  <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API"
+    >the Web Crypto API</a
+  >
+  and Erlang&#39;s
+  <a href="https://www.erlang.org/doc/man/crypto">:crypto</a> and
+  <a href="https://www.erlang.org/doc/man/public_key">:public_key</a> libraries
+  <strong>NB!</strong> This solution increases the overhead of uploading files
+  and is only an example. I do not recommend it for direct production usage. It
+  is not Post-Quantum safe either, but a Post-Quantum Hybrid Key Exchange may be
+  future work.
+</p>
+<h2 id="the-idea">The idea</h2>
+<ul>
+  <li>
+    The client and server complete a secure key exchange, preferably using
+    ephemeral Diffie Hellman in elliptic curve format (not finite fields).
+    Recommended by TLS 1.3.
+  </li>
+  <li>
+    Encrypt files using the secret key generated from the exchange before users
+    transfer them to the Phoenix web server (hybrid encryption).
+  </li>
+  <li>
+    Decrypt the files on the server using the secret key generated from the
+    exchange.
+  </li>
+  <li>
+    Re-encrypt the files on the server using a randomly generated key before
+    transferring them to the S3 bucket (also unnecessary since S3, by default,
+    encrypts them).
+  </li>
+</ul>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/6c92de12-a2b2-4e14-bd3b-372f8a51a8aa/FileStorage.png"
+    alt=""
+  />
+</p>
+<h2 id="implementation">Implementation</h2>
+<p>
+  <strong
+    ><a
+      href="https://www.diderikk.dev/posts/08abea3e-240f-454e-aaa4-379900c4f605"
+      >Code implementation</a
+    ></strong
+  >
+</p>
+<h2 id="key-exchange">Key Exchange</h2>
+<p>
+  Server libraries: <strong>Erlang&#39;s public_key</strong><br />Client
+  libraries: <strong>Web Crypto API</strong>
+</p>
+<p>
+  Provided that the web page containing the file form is successfully loaded,
+  the subsequent series of operations can facilitate the key exchange protocol.
+  It is essential to execute each operation in the prescribed order to ensure
+  the successful completion of the exchange:
+</p>
+<ol>
+  <li>
+    The server generates an ephemeral elliptic curve key pair.
+    <ol>
+      <li>Base64 encodes the public key.</li>
+      <li>
+        DER encodes the encoded public key and signs the result with an existing
+        static elliptic curve private key
+        <ol>
+          <li>
+            Note. The public key is DER encoded in order for both the client and
+            server to read and use the public key sent from the opposing party.
+          </li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>
+    The public key and its signature are transferred to the client by inserting
+    them in the HTML of the webpage (unconventional but straightforward).
+    <ol>
+      <li>
+        The cryptographic data can be read when the client mounts the component.
+      </li>
+    </ol>
+  </li>
+  <li>
+    The client validates the public key and its signature.
+    <ol>
+      <li>
+        The client validates the signature of the server&#39;s ephemeral public
+        key using a public key corresponding to the static private key of the
+        server.
+      </li>
+    </ol>
+  </li>
+  <li>
+    The client generates an ephemeral elliptic curve key pair.
+    <ol>
+      <li>DER encodes the public key</li>
+      <li>Sends the encoded public key to the server.</li>
+    </ol>
+  </li>
+  <li>
+    The server and client compute the shared secret and derivates the secret key
+    (KDF: PBKDF2).
+  </li>
+</ol>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/6c92de12-a2b2-4e14-bd3b-372f8a51a8aa/KeyExchange.png"
+    alt=""
+  />
+</p>
+<h2 id="client-encryption">Client Encryption</h2>
+<p>Client libraries: <strong>forge.js</strong></p>
+<p>
+  The subsequent series of operations can facilitate the file encryption if the
+  client and server have successfully computed the same secret key:
+</p>
+<ol>
+  <li>
+    Initialize encryption
+    <ol>
+      <li>Generate random IV.</li>
+      <li>
+        Initialize AES encryption in CTR mode using the IV and shared secret
+        key.
+      </li>
+      <li>Initialize SHA512 HMAC using the shared secret key.</li>
+    </ol>
+  </li>
+  <li>
+    Iteratively encrypt the file content
+    <ol>
+      <li>
+        Read file content in chunks
+        <ol>
+          <li>Encrypt the chunk</li>
+          <li>Update the HMAC state</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>Concatenate the encrypted chunks and compute the HMAC digest.</li>
+  <li>
+    Send the encrypted file with HMAC and IV to the server
+    <ol>
+      <li>
+        HMAC and IV are concatenated the original filename and transferred as
+        the name of the file
+      </li>
+    </ol>
+  </li>
+</ol>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/6c92de12-a2b2-4e14-bd3b-372f8a51a8aa/ClientEncryption.png"
+    alt=""
+  />
+</p>
+<h2 id="server-decryption-and-re-encryption">
+  Server Decryption and Re-encryption
+</h2>
+<p>Server libraries: <strong>Erlang&#39;s public_key and crypto</strong></p>
+<p>
+  The subsequent series of operations can facilitate the file decryption if the
+  client and server have successfully computed the same secret key and the file
+  was correctly encrypted:
+</p>
+<ol>
+  <li>Decode filename to retrieve the HMAC and IV.</li>
+  <li>
+    Iteratively reads the file as chunks.
+    <ol>
+      <li>
+        Initialize the FileWriter -&gt; Phoenix&#39;s interface for reading the
+        file.
+        <ol>
+          <li>
+            Initialize the decryption in CTR mode using the retrieved IV and
+            shared secret.
+          </li>
+          <li>Initialize the SHA512 HMAC using the shared secret key.</li>
+          <li>Generate a new secret key and IV.</li>
+          <li>Initialize the re-encryption using the new secret key and IV.</li>
+          <li>
+            Initialize a re-encryption SHA512 HMAC using the new secret key.
+          </li>
+          <li>Open a temporary file.</li>
+        </ol>
+      </li>
+      <li>Decode Base64 file chunk.</li>
+      <li>
+        Decrypt the decoded chunk.
+        <ol>
+          <li>
+            Update the decrypt HMAC using the decoded chunk (not decrypted).
+          </li>
+        </ol>
+      </li>
+      <li>
+        Immediately re-encrypt the decrypted file chunk.
+        <ol>
+          <li>Update the re-encrypt HMAC using the re-encrypted chunk.</li>
+        </ol>
+      </li>
+      <li>Write the re-encrypted chunk to the temporary file.</li>
+    </ol>
+  </li>
+  <li>
+    Validate that the computed decrypt HMAC digest against the HMAC retrieved
+    from the client.
+    <ol>
+      <li>If they match continue.</li>
+      <li>Otherwise, throw an error.</li>
+    </ol>
+  </li>
+  <li>
+    Store the re-encryption metadata
+    <ol>
+      <li>Re-encryption HMAC digest</li>
+      <li>New IV</li>
+      <li>
+        New key
+        <ol>
+          <li>Is encrypted using the user/group&#39;s secret key.</li>
+          <li>
+            User/group&#39;s secret key is also encrypted by server-wide KEK
+            (Key Encryption Key).
+          </li>
+          <li>
+            It should be stored more securely than in a database (currently
+            not).
+          </li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>Transfer the re-encrypted file to the S3 bucket.</li>
+</ol>

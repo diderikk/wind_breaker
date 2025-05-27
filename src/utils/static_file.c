@@ -2,16 +2,55 @@
 #include "assert2.h"
 #include "logger.h"
 #include <sys/stat.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #define STATIC_PATH "static/"
 
-int find_static_file(const char *uri) {
-  char full_path[512 + sizeof(STATIC_PATH)];
-  snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, uri);
+int is_safe_path(const char *input) {
+    // Reject absolute paths
+    if (input[0] == '/' || strstr(input, "//")) return 0;
+    // Reject directory traversal
+    if (strstr(input, "..")) return 0;
+    // Optionally, reject backslashes (for Windows)
+    if (strchr(input, '\\')) return 0;
+    return 1;
+}
 
-  assert_log(access(full_path, F_OK) == 0, "Static file not found: %s",
-             full_path);
+int find_static_file(const char *uri) {
+  if (!is_safe_path(uri)) {
+      return 0;
+  }
+
+  char full_path[PATH_MAX];
+  int needed = snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, uri);
+  if (needed < 0 || needed >= sizeof(full_path)) {
+      return 0;
+  }
+
+  char static_root[PATH_MAX];
+  if (!realpath(STATIC_PATH, static_root)) {
+      return 0;
+  }
+
+  char resolved_path[PATH_MAX];
+  if (!realpath(full_path, resolved_path)) {
+      return 0;
+  }
+
+  size_t root_len = strlen(static_root);
+  if (strncmp(resolved_path, static_root, root_len) != 0 ||
+      (resolved_path[root_len] != '/' && resolved_path[root_len] != '\0')) {
+      return 0;
+  }
+
+  struct stat sb;
+  if (stat(resolved_path, &sb) != 0 || !S_ISREG(sb.st_mode) || access(resolved_path, R_OK) != 0) {
+      // log_warn("File not regular or unreadable");
+      return 0;
+  }
   log_trace("Found static file: %s", full_path);
   return 1;
 }

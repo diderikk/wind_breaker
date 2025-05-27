@@ -1,0 +1,142 @@
+<h1 id="raspberrypi-ebook-library">RaspberryPI eBook Library</h1>
+<p>
+  These notes were written after I configured my first RaspberryPI. It is a
+  RaspberryPI 4 Model B with 8GB RAM, a 64-bit processor, and a 32 GB SD card.
+  The main goal was to create a self-hosted library web application only
+  accessible to me.
+</p>
+<h2 id="cloudflare">Cloudflare</h2>
+<p>
+  If I understand correctly, there are two ways of displaying a private server
+  publicly. Either I have to set up port forwarding, in other words configuring
+  my router to forward external requests to a device inside the private network,
+  or employ tunnels between a provider and my RaspberryPI (purely software).
+  Tunnels, as
+  <a href="https://www.cloudflare.com/products/tunnel/">quoted by Cloudflare</a
+  >,
+  <em
+    >&quot;creates an encrypted tunnel between your origin web server and
+    Cloudflare&#39;s nearest data center, all without opening any public inbound
+    ports.&quot;.</em
+  >
+  It hides your public IP address, blocks direct attacks (DDoS, etc.), provides
+  authentication features (Zero Trust), and much more. Therefore, I decided to
+  use tunnels over port forwarding since it seemed too demanding to configure
+  securely.
+</p>
+<p>
+  To configure the tunnel, I followed this tutorial:
+  <a
+    href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/install-and-setup/tunnel-guide/"
+    >Set up your first tunnel</a
+  >. Following are my ingress rules in the
+  <a
+    href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/install-and-setup/tunnel-guide/local/local-management/"
+    >cloudflared configuration file</a
+  >:
+</p>
+<pre><code class="lang-yaml"><span class="hljs-attribute">ingress</span>:
+   - <span class="hljs-attribute">hostname</span>: diderikk.xyz
+      <span class="hljs-attribute">service</span>: <span class="hljs-attribute">http</span>:<span class="hljs-comment">//localhost:8080</span>
+   - <span class="hljs-attribute">hostname</span>: library.diderikk.xyz
+      <span class="hljs-attribute">service</span>: <span class="hljs-attribute">http</span>:<span class="hljs-comment">//localhost:3000</span>
+   - <span class="hljs-attribute">hostname</span>: ssh.diderikk.xyz
+      <span class="hljs-attribute">service</span>: <span class="hljs-attribute">ssh</span>:<span class="hljs-comment">//localhost:69</span>
+   - <span class="hljs-attribute">service</span>: <span class="hljs-attribute">http_status</span>:<span class="hljs-number">404</span>
+</code></pre>
+<p>
+  To add domains/subdomains to my tunnel I use the following command:<br /><code
+    >cloudflared tunnel route dns -f &lt;tunnel_id&gt; example.domain.com</code
+  >
+</p>
+<h3 id="applications">Applications</h3>
+<p>
+  After I configured the Cloudflare tunnel, I hosted my applications by running
+  Docker containers on the RaspberryPI and updating the configuration file to
+  match a domain/sub-domain to the local port, as defined above. However, I
+  aimed to have the applications only be accessed by me. Cloudflare has the
+  functionality to achieve this. For each application I host on the RaspberryPI,
+  I can create a
+  <a href="https://developers.cloudflare.com/cloudflare-one/applications/"
+    >Cloudflare application</a
+  >. Cloudflare applications have multiple security features, but in this case,
+  I only need
+  <a href="https://developers.cloudflare.com/cloudflare-one/policies/"
+    >policy settings</a
+  >
+  to define who will have access to the application. I require the user to have
+  my public IP address and access to my email addresses as follows:
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/ce163d0f-5c3c-4cca-9788-16871429b6b8/policy.png"
+    alt=""
+  />
+</p>
+<p>
+  Therefore, if you try to access
+  <a href="https://library.diderikk.xyz/">library.diderikk.xyz</a>, you will see
+  the following page:
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/ce163d0f-5c3c-4cca-9788-16871429b6b8/forbidden.png"
+    alt=""
+  />
+</p>
+<p>
+  Likewise, suppose you get access to my public IP address. In that case, you
+  will still need to receive a code only authorized to be sent to one of the
+  email addresses specified in the policies. If a separate one is used, access
+  won&#39;t be permitted.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/ce163d0f-5c3c-4cca-9788-16871429b6b8/authentication.png"
+    alt=""
+  />
+</p>
+<h2 id="tailscale">Tailscale</h2>
+<p>
+  As mentioned, I added a policy that causes Cloudflare to only authorized users
+  with an IP address equal to my public home address. However, this will prevent
+  me from accessing the hosted applications while away from my home network.
+  Therefore, I installed and created a
+  <a href="https://tailscale.com/use-cases/homelab/">Tailscale network</a>.
+  &quot;Tailscale is a VPN service that makes the devices and applications you
+  own accessible anywhere in the world, securely and effortlessly. It enables
+  encrypted point-to-point connections, which means only devices on your private
+  network can communicate with each other.&quot;. Additionally, it has received
+  great feedback and recommendations on the subreddit
+  <a href="https://www.reddit.com/r/selfhosted/">r/selfhosted</a>. As of writing
+  this note, I have added three nodes to my Tailscale network: my laptop, phone,
+  and the RaspberryPI, and assigned the RaspberryPi as an
+  <a href="https://tailscale.com/kb/1103/exit-nodes/">exit node</a>. As a
+  result, I can connect any of my nodes to the exit node and, from there, access
+  any applications hosted on the RaspberryPI/home network. Another option would
+  be to install a VPN service such as Wireguard onto the RasperryPI and connect
+  to the home network using the VPN.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/ce163d0f-5c3c-4cca-9788-16871429b6b8/tailscale.png"
+    alt=""
+  />
+</p>
+<h2 id="calibre-web">Calibre Web</h2>
+<p>
+  Lastly, the goal was to host a private library application. I selected Calibre
+  Web from this
+  <a
+    href="https://github.com/awesome-selfhosted/awesome-selfhosted#document-management---e-books"
+    >GitHub repo list of eBooks</a
+  >, primarily based on the number of GitHub stars. It provides a simple setup
+  with a docker image using environment variables to configure volumes storing
+  PDF/EPUB files.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/ce163d0f-5c3c-4cca-9788-16871429b6b8/calibre-web.png"
+    alt=""
+  />
+</p>

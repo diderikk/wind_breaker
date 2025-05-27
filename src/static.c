@@ -8,6 +8,9 @@ char *uri_to_file_name(const uri_token_t uri) {
   } else if (strcmp(uri[0], "projects") == 0 && strlen(uri[1]) > 0 &&
              uri[2][0] == 0) {
     return "project.html";
+  } else if (strcmp(uri[0], "posts") == 0 && strlen(uri[1]) > 0 &&
+             uri[2][0] == 0) {
+    return "post.html";
   } else if (strcmp(uri[0], "style.css") == 0) {
     return "style.css";
   } else if (strcmp(uri[0], "0975d534f3bf2b637270fa1ddf405661bbac3759a8dace84d0"

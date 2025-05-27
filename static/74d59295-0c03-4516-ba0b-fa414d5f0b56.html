@@ -1,0 +1,83 @@
+<h1 id="dependency-setup-for-kubeadm">Dependency setup for Kubeadm</h1>
+<p>
+  The setup consists of 3 EC2 instances of type t3.small (2 vCPU and 2 GiB
+  Memory) running on Ubuntu 22.10. The following script was executed on each
+  node to successfully initialize/join the Kubernetes cluster.
+</p>
+<h2 id="setup-script">Setup Script</h2>
+<p>
+  The script below is combined from separate tutorials linked under
+  <a href="#references">References</a>. In addition, a few inbound ports must be
+  reachable for the Control Panel to communicate with the worker nodes. These
+  are also specified in the mentioned tutorials.
+</p>
+<pre><code class="lang-bash">sudo swapoff -<span class="hljs-keyword">a</span>
+sudo sed -i <span class="hljs-string">'/ swap / s/^\(.*\)$/#\1/g'</span> /etc/fstab
+
+sudo tee /etc/modules-load.d/containerd.<span class="hljs-keyword">conf</span> &lt;&lt;EOF
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+sudo tee /etc/sysctl.d/kubernetes.<span class="hljs-keyword">conf</span> &lt;&lt;EOF
+net.bridge.bridge-nf-<span class="hljs-keyword">call</span>-ip6tables = <span class="hljs-number">1</span>
+net.bridge.bridge-nf-<span class="hljs-keyword">call</span>-iptables = <span class="hljs-number">1</span>
+net.ipv4.ip_forward = <span class="hljs-number">1</span>
+EOF
+
+sudo sysctl --<span class="hljs-built_in">system</span>
+
+sudo apt-<span class="hljs-built_in">get</span> <span class="hljs-keyword">update</span>
+
+ sudo apt-<span class="hljs-built_in">get</span> install \
+    <span class="hljs-keyword">ca</span>-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+sudo <span class="hljs-built_in">mkdir</span> -<span class="hljs-keyword">p</span> /etc/apt/keyrings
+curl -fsSL http<span class="hljs-variable">s:</span>//download.docker.<span class="hljs-keyword">com</span>/linux/ubuntu/gpg | sudo gpg --dearmor -<span class="hljs-keyword">o</span> /etc/apt/keyrings/docker.gpg
+
+<span class="hljs-keyword">echo</span> \
+  <span class="hljs-comment">"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \</span>
+  $(lsb_release -<span class="hljs-keyword">cs</span>) stable<span class="hljs-comment">" | sudo tee /etc/apt/sources.list.d/docker.list &gt; /dev/null</span>
+
+sudo apt-<span class="hljs-built_in">get</span> <span class="hljs-keyword">update</span>
+
+sudo apt-<span class="hljs-built_in">get</span> install docker-<span class="hljs-keyword">ce</span> docker-<span class="hljs-keyword">ce</span>-cli containerd.io docker-compose-plugin
+
+containerd config default | sudo tee /etc/containerd/config.toml &gt;/dev/null <span class="hljs-number">2</span>&gt;&amp;<span class="hljs-number">1</span>
+sudo sed -i <span class="hljs-string">'s/SystemdCgroup \= false/SystemdCgroup \= true/g'</span> /etc/containerd/config.toml
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+
+sudo apt-<span class="hljs-built_in">get</span> <span class="hljs-keyword">update</span>
+sudo apt-<span class="hljs-built_in">get</span> install -<span class="hljs-keyword">y</span> apt-transport-https <span class="hljs-keyword">ca</span>-certificates curl gpg
+
+curl -fsSL http<span class="hljs-variable">s:</span>//pkgs.k8s.io/core:/stable:/v1.<span class="hljs-number">28</span>/<span class="hljs-keyword">deb</span>/Release.key | sudo gpg --dearmor -<span class="hljs-keyword">o</span> /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+<span class="hljs-keyword">echo</span> <span class="hljs-string">'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /'</span> | sudo tee /etc/apt/sources.<span class="hljs-keyword">list</span>.d/kubernetes.<span class="hljs-keyword">list</span>
+
+sudo apt-<span class="hljs-built_in">get</span> <span class="hljs-keyword">update</span>
+sudo apt-<span class="hljs-built_in">get</span> install -<span class="hljs-keyword">y</span> kubelet kubeadm kubectl
+sudo apt-<span class="hljs-keyword">mark</span> hold kubelet kubeadm kubectl
+</code></pre>
+<h2 id="references">References</h2>
+<p>
+  <a
+    href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/"
+    >Install kubeadm</a
+  ><br /><a href="https://docs.docker.com/engine/install/ubuntu/"
+    >Install containerd</a
+  ><br /><a
+    href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/"
+    >Kube Config 1</a
+  ><br /><a href="https://devopscube.com/setup-kubernetes-cluster-kubeadm/"
+    >Kube Config 2</a
+  ><br /><a
+    href="https://www.linuxtechi.com/install-kubernetes-on-ubuntu-22-04/"
+    >Kube Config 3</a
+  >
+</p>

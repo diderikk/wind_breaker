@@ -1,0 +1,164 @@
+<h1 id="kubernetes-zero-to-hero-part-3">Kubernetes Zero to Hero: Part 3</h1>
+<p>
+  This series of notes is about my experience learning and configuring a
+  Kubernetes cluster. Previously, I used a single Virtual Machine to host all my
+  web applications. However, they have become cumbersome to keep track of and
+  are hard to deploy and update. In addition, cloud technologies are in trend
+  and something I want to get practical and theoretical experience on. This
+  article will explain my improvements from the last post, adding a
+  <strong>Proxy</strong> and implementing <strong>Grafana</strong> for
+  monitoring.
+</p>
+<h2 id="improvements">Improvements</h2>
+<p>
+  I have made some improvements and updates in the cluster. Firstly, I upgraded
+  the memory of the master virtual machine from 2 Gib to 4 Gib while keeping the
+  same number of virtual CPUs. The upgrade was necessary because it ran on
+  80-90% of the memory used at all times and even more when deploying
+  applications or other work. In addition, when I add more features to the
+  cluster, 2 Gib would likely be too little. Secondly, I increased the disk
+  space for both worker nodes. Previously, all nodes had 8 Gib of disk space
+  available. However, since Docker images and Persistent Volumes require a large
+  amount of space, it ended up preventing me from hosting more applications.
+  Therefore, I increased the disk space for all nodes to 16 Gib. The following
+  commands had to be used to utilize the newly added disk:
+</p>
+<pre><code class="lang-bash">sudo growpart <span class="hljs-regexp">/dev/</span>nvme0n1 <span class="hljs-number">1</span>  <span class="hljs-comment"># extend a partition</span>
+sudo resize2fs <span class="hljs-regexp">/dev/</span>nvme0n1p1 <span class="hljs-comment"># extends filesystem</span>
+</code></pre>
+<p>
+  After upgrading the cluster, I moved all my frontend applications to the
+  Kubernetes cluster. The effort of moving the apps was with the intention of
+  using the Proxy and Grafana. In simple terms, the Proxy feature enables me to
+  host applications on the default HTTPS port (port 443),
+  <a
+    href="https://www.diderikk.dev/portfolio/posts/dc034859-46bf-4d8c-8736-ad5b3c201021#ingress"
+    >which was not possible previously with just my cluster</a
+  >. Grafana serves as a monitoring platform, giving me more overview of the
+  applications.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/3f9e8f5f-263f-48d1-897b-2db50ea64561/argocd_applications.png"
+    alt=""
+  />
+</p>
+<h2 id="proxy">Proxy</h2>
+<p>
+  As mentioned in a
+  <a
+    href="https://www.diderikk.dev/portfolio/posts/dc034859-46bf-4d8c-8736-ad5b3c201021#ingress"
+    >previous note</a
+  >, I am not able to host my Ingress on port 443 or 80. Therefore, I saw it as
+  unfit to host my frontend applications since they would have a URL with a port
+  of 30000. To solve this issue, I looked into setting up a reverse proxy,
+  which, contrary to a proxy, forwards requests from the Internet to servers and
+  not from clients to the Internet.
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/3f9e8f5f-263f-48d1-897b-2db50ea64561/reverse_proxy_flow.png"
+    alt=""
+  />
+</p>
+<p>
+  This way, the proxy could listen for requests on port 443/80 and forward them
+  to the cluster, allowing for URLs without ports. In addition, proxies have the
+  functionality to add security measures such as DDoS protection. Without too
+  much research, I decided to use the Nginx Proxy. It had the necessary
+  functionality I was looking for. Later, I also found it had Certbot
+  integration, which made setting up SSL/TLS easy. The following code is the
+  proxy configuration for my Simple Chat frontend application:
+</p>
+<pre><code class="lang-nginx"><span class="hljs-section">server</span> {
+    <span class="hljs-attribute">listen</span> <span class="hljs-number">443</span> ssl; <span class="hljs-comment"># managed by Certbot</span>
+    <span class="hljs-attribute">server_name</span> chat.diderikk.dev www.chat.diderikk.dev;
+    <span class="hljs-attribute">ssl_certificate</span> /etc/letsencrypt/live/diderikk.dev/fullchain.pem; <span class="hljs-comment"># managed by Certbot</span>
+    <span class="hljs-attribute">ssl_certificate_key</span> /etc/letsencrypt/live/diderikk.dev/privkey.pem; <span class="hljs-comment"># managed by Certbot</span>
+    <span class="hljs-attribute">include</span> /etc/letsencrypt/options-ssl-nginx.conf; <span class="hljs-comment"># managed by Certbot</span>
+    <span class="hljs-attribute">ssl_dhparam</span> /etc/letsencrypt/ssl-dhparams.pem; <span class="hljs-comment"># managed by Certbot</span>
+
+    <span class="hljs-attribute">limit_conn</span> perip <span class="hljs-number">20</span>;
+    <span class="hljs-attribute">limit_req</span> zone=one burst=<span class="hljs-number">25</span> delay=<span class="hljs-number">20</span>;
+    <span class="hljs-attribute">proxy_cache</span> cache;
+    <span class="hljs-attribute">location</span> = / {
+        <span class="hljs-attribute">proxy_pass</span> https://chat.elixirapi.me:30000;
+    }
+
+    <span class="hljs-attribute">location</span> / {
+        <span class="hljs-attribute">proxy_pass</span> https://chat.elixirapi.me:30000<span class="hljs-variable">$request_uri</span>;
+    }
+}
+<span class="hljs-section">server</span> {
+    <span class="hljs-attribute">if</span> (<span class="hljs-variable">$host</span> = www.chat.diderikk.dev) {
+        <span class="hljs-attribute">return</span> <span class="hljs-number">301</span> https://<span class="hljs-variable">$host</span><span class="hljs-variable">$request_uri</span>;
+    } <span class="hljs-comment"># managed by Certbot</span>
+
+    <span class="hljs-attribute">if</span> (<span class="hljs-variable">$host</span> = chat.diderikk.dev) {
+        <span class="hljs-attribute">return</span> <span class="hljs-number">301</span> https://<span class="hljs-variable">$host</span><span class="hljs-variable">$request_uri</span>;
+    } <span class="hljs-comment"># managed by Certbot</span>
+
+    <span class="hljs-attribute">listen</span> <span class="hljs-number">80</span>;
+    <span class="hljs-attribute">server_name</span> chat.diderikk.dev www.chat.diderikk.dev;
+    <span class="hljs-attribute">return</span> <span class="hljs-number">404</span>; <span class="hljs-comment"># managed by Certbot</span>
+}
+</code></pre>
+<p>
+  The first two lines indicate that it listens for requests on port 443 with the
+  host chat.diderikk.dev or www.chat.diderikk.dev. Certbot generates the next
+  lines to add TLS using Let&#39;s Encrypt certificate and private key. After
+  that comes the security measurements:
+</p>
+<ul>
+  <li>
+    <strong>limit_conn perip 20</strong> prevents an IP from having more than 20
+    active connections to the proxy
+  </li>
+  <li>
+    <strong>limit_req zone=one burst=25 delay=20</strong> with
+    <strong>limit_req_zone $binary_remote_addr zone=one:10m rate=1r/s</strong>,
+    limits an IP from sending more than one request per second, but allowing
+    burst up to 20 before being delayed. If the number of requests reaches 25,
+    the subsequent requests from the IP are blocked. Zone=one:10m is the amount
+    of memory used for storing information about incoming requests, which the
+    proxy uses to invoke its ruleset.
+  </li>
+  <li>
+    <strong>proxy_cache</strong> cache with
+    <strong
+      >proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=cache:10m
+      max_size=1g inactive=30m use_temp_path=off</strong
+    >, is used to cache responses, which can be used by the proxy to instantly
+    return a response without forwarding to the Kubernetes cluster.
+  </li>
+</ul>
+<p>
+  Since I have multiple frontend applications, I split them up by using separate
+  subdomains for each application. As seen in the code above, all requests to
+  the Simple Chat have to use the host chat.diderikk.dev or
+  www.chat.diderikk.dev. Likewise, the cluster has to be mirrored by having
+  separate subdomains for each Service to which the proxy can forward requests:
+</p>
+<pre><code class="lang-nginx"><span class="hljs-attribute">location</span> / {
+   <span class="hljs-attribute">proxy_pass</span> https://chat.elixirapi.me:30000<span class="hljs-variable">$request_uri</span>;
+}
+</code></pre>
+<h2 id="grafana">Grafana</h2>
+<p>
+  <em
+    >&quot;Grafana allows you to query, visualize, alert on, and understand your
+    metrics no matter where they are stored. Create, explore, and share
+    dashboards with your team and foster a data-driven culture.&quot;</em
+  >
+  - <a href="https://github.com/grafana/grafana">Grafana</a>. In addition to
+  being open-source, they have integration with Kubernetes, being simple to set
+  up. I use it to monitor all my applications by querying logs from the running
+  pods. Lately, I also added some visualization, resulting in the given
+  dashboard:
+</p>
+<p>
+  <img
+    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/3f9e8f5f-263f-48d1-897b-2db50ea64561/grafana_dashboard.png"
+    alt=""
+  />
+</p>

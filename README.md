@@ -2,11 +2,9 @@
 ![CI](https://github.com/diderikk/wind_breaker/actions/workflows/ci.yml/badge.svg)
 
 ## TODO
-* Stack trace
 * State diagram
 * Fix session to use assert and logger
 * SSL/TLS
-* Caching
 * SQLite
     * Images referencing
 * Metrics (See tcp(7) man page, and tcp_info struct) 
@@ -15,6 +13,7 @@
 * Memory optimization, data-oriented design (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
 * Performance optimization (assembly understanding, cache optimization?)
 * A thread that listens to console input and can send commands to the server (e.g. reload config, shutdown, etc.)
+* Basic Auth
 
 ## Try to remember
 * Clean up includes
@@ -27,9 +26,11 @@
 * zlib
 * Threads
 * OpenSSL 
+* SQLite3
 
 ## Testing
-* Simulation testing (based on the [Tiger Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md))
+* Simulation testing 
+* Unit testing
 * Valgrind (memory leak testing)
 
 ## Resources
