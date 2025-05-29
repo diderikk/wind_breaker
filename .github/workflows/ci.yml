@@ -25,6 +25,7 @@ jobs:
             make \
             libssl-dev \
             zlib1g-dev \
+            libcurl4-openssl-dev \
 
       - name: Create build directory
         run: mkdir -p build

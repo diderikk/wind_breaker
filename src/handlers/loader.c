@@ -9,22 +9,25 @@
 #include <sqlite3.h>
 
 #define INDEX_PROJECTS_SQL "SELECT id, title FROM Project;"
-#define INDEX_POSTS_SQL "SELECT id, title FROM Post WHERE visibility = 'PUBLIC' ORDER BY created_at DESC;"
+#define INDEX_POSTS_SQL                                                        \
+  "SELECT id, title FROM Post WHERE visibility = 'PUBLIC' ORDER BY "           \
+  "created_at DESC;"
 #define PROJECT_SQL                                                            \
   "SELECT title,description,githubUrl,imageUrl,websiteUrl,githubReadme FROM "  \
   "Project WHERE id = ?;"
-#define POST_SQL "SELECT title, description, created_at FROM Post WHERE visibility = 'PUBLIC' AND id = ?;"
+#define POST_SQL "SELECT title, description, created_at FROM Post WHERE id = ?;"
 
 static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
                                char *in_out_buffer,
                                unsigned int *in_out_buffer_size,
                                char argument[HTTP_URI_TOKEN_SIZE]);
 static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
-                               char *in_out_buffer,
-                               unsigned int *in_out_buffer_size,
-                               char argument[HTTP_URI_TOKEN_SIZE]);
+                            char *in_out_buffer,
+                            unsigned int *in_out_buffer_size,
+                            char argument[HTTP_URI_TOKEN_SIZE]);
 static inline int load_index(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
-                             sqlite3_stmt **index_posts_stmt, char *in_out_buffer,
+                             sqlite3_stmt **index_posts_stmt,
+                             char *in_out_buffer,
                              unsigned int *in_out_buffer_size);
 static inline unsigned int str_replace(char *target, const char *needle,
                                        const char *replacement);
@@ -36,17 +39,20 @@ static inline unsigned int gen_error_body(http_status_code http_status_code,
                   status_code_str);
 }
 
-static inline int load(sqlite3 *db, sqlite3_stmt **index_projects_stmt, sqlite3_stmt **index_posts_stmt,
-                       sqlite3_stmt **project_stmt, sqlite3_stmt **post_stmt, const char *file_name,
-                       char *in_out_buffer, unsigned int *in_out_buffer_size,
+static inline int load(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
+                       sqlite3_stmt **index_posts_stmt,
+                       sqlite3_stmt **project_stmt, sqlite3_stmt **post_stmt,
+                       const char *file_name, char *in_out_buffer,
+                       unsigned int *in_out_buffer_size,
                        char argument[HTTP_URI_TOKEN_SIZE]) {
   if (strcmp(file_name, "index.html") == 0) {
-    return load_index(db, index_projects_stmt, index_posts_stmt, in_out_buffer, in_out_buffer_size);
+    return load_index(db, index_projects_stmt, index_posts_stmt, in_out_buffer,
+                      in_out_buffer_size);
   } else if (strcmp(file_name, "project.html") == 0) {
     return load_project(db, project_stmt, in_out_buffer, in_out_buffer_size,
                         argument);
   } else if (strcmp(file_name, "post.html") == 0) {
-    return load_post(db, project_stmt, in_out_buffer, in_out_buffer_size,
+    return load_post(db, post_stmt, in_out_buffer, in_out_buffer_size,
                      argument);
   }
 
@@ -56,8 +62,8 @@ static inline int load(sqlite3 *db, sqlite3_stmt **index_projects_stmt, sqlite3_
 void *handle_b() {
 
   sqlite3 *db = NULL;
-  sqlite3_stmt *index_projects_stmt = NULL, *index_posts_stmt = NULL, *project_stmt = NULL, 
-               *post_stmt = NULL;
+  sqlite3_stmt *index_projects_stmt = NULL, *index_posts_stmt = NULL,
+               *project_stmt = NULL, *post_stmt = NULL;
   struct session_full_return session;
   assert_log(sqlite3_open_v2(get_db_url(), &db, WB_SQLITE_OPEN_FLAGS, NULL) ==
                  SQLITE_OK,
@@ -93,8 +99,9 @@ void *handle_b() {
             gen_error_body(session.response->status_code, session.buffer);
       } else {
         // Fetch and inject arguments
-        switch (load(db, &index_projects_stmt, &index_posts_stmt, &project_stmt, &post_stmt, file_name, session.buffer,
-                     session.buffer_size, session.request->uri[1])) {
+        switch (load(db, &index_projects_stmt, &index_posts_stmt, &project_stmt,
+                     &post_stmt, file_name, session.buffer, session.buffer_size,
+                     session.request->uri[1])) {
         case 0:
           break;
         case -1:
@@ -104,7 +111,7 @@ void *handle_b() {
               gen_error_body(session.response->status_code, session.buffer);
           break;
         case -2:
-          log_error("Failed to fetch and inject arguments");
+          log_error("Id not found in database: %s", session.request->uri[1]);
           session.response->status_code = HTTP_NOT_FOUND;
           *session.buffer_size =
               gen_error_body(session.response->status_code, session.buffer);
@@ -132,9 +139,9 @@ void *handle_b() {
 }
 
 static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
-                               char *in_out_buffer,
-                               unsigned int *in_out_buffer_size,
-                               char argument[HTTP_URI_TOKEN_SIZE]) {
+                            char *in_out_buffer,
+                            unsigned int *in_out_buffer_size,
+                            char argument[HTTP_URI_TOKEN_SIZE]) {
 
   int rc = 0;
   if (*stmt == NULL) {
@@ -147,6 +154,8 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
 
   // Maybe malloc
   char tmp_buffer[HTML_MAX_SIZE] = {0};
+  sqlite3_reset(*stmt);
+  sqlite3_clear_bindings(*stmt);
   sqlite3_bind_text(*stmt, 1, argument, -1, SQLITE_STATIC);
   rc = sqlite3_step(*stmt);
   if (rc == SQLITE_ROW) {
@@ -161,8 +170,7 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
     char html_file[HTTP_URI_TOKEN_SIZE + 5] = {0};
     snprintf(html_file, HTTP_URI_TOKEN_SIZE + 5, "%s.html", argument);
     read_static_file(html_file, tmp_buffer, HTML_MAX_SIZE);
-    *in_out_buffer_size =
-        str_replace(in_out_buffer, "%POST%", tmp_buffer);
+    *in_out_buffer_size = str_replace(in_out_buffer, "%POST%", tmp_buffer);
   }
 
   int reset_rc = sqlite3_reset(*stmt);
@@ -240,12 +248,13 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
   }
 }
 
-static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt, sqlite3_stmt **posts_stmt,
-                             char *in_out_buffer,
+static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
+                             sqlite3_stmt **posts_stmt, char *in_out_buffer,
                              unsigned int *in_out_buffer_size) {
   int rc_projects = 0, rc_posts = 0;
   if (*projects_stmt == NULL) {
-    rc_projects = sqlite3_prepare_v2(db, INDEX_PROJECTS_SQL, -1, projects_stmt, NULL);
+    rc_projects =
+        sqlite3_prepare_v2(db, INDEX_PROJECTS_SQL, -1, projects_stmt, NULL);
     if (rc_projects != SQLITE_OK) {
       log_error("Failed to prepare statement: %s", sqlite3_errmsg(db));
       return -1;
@@ -278,9 +287,9 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt, sqlite3_
     while ((rc_posts = sqlite3_step(*posts_stmt)) == SQLITE_ROW) {
       const char *id = (const char *)sqlite3_column_text(*posts_stmt, 0);
       const char *title = (const char *)sqlite3_column_text(*posts_stmt, 1);
-      offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
-                         "<li id=\"%s\"><a href=\"/posts/%s\">%s</a></li>", id,
-                         id, title);
+      offset += snprintf(
+          tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+          "<li id=\"%s\"><a href=\"/posts/%s\">%s</a></li>", id, id, title);
     }
     if (rc_posts == SQLITE_DONE) {
       *in_out_buffer_size = str_replace(in_out_buffer, "%NOTES%", tmp_buffer);

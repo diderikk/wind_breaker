@@ -11,6 +11,7 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(CURL REQUIRED)
 
 function(enable_compile_options target)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3 -rdynamic)
@@ -63,7 +64,7 @@ enable_compile_options(main)
 #enable_address_sanitizer(main)
 
 add_executable(client test/simulator/client.c)
-target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib stop_lib marked_fds_lib properties_lib static_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB)
+target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib stop_lib marked_fds_lib properties_lib static_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB CURL::libcurl SQLite::SQLite3)
 enable_compile_options(client)
 enable_address_sanitizer(client)
 

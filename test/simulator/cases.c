@@ -1,6 +1,7 @@
 #include "cases.h"
 #include "../../src/utils/assert2.h"
 #include "connection_cases.h"
+#include "curl_cases.c"
 #include "http_cases.h"
 #include <pthread.h>
 #include <stdio.h>
@@ -41,6 +42,10 @@ void run_cases(char *ip, char *port) {
              "start_http_get_request_deflate");
   start_case(start_http_get_request_not_found, &arg,
              "start_http_get_request_not_found");
+  sleep(1);
+  start_case(start_curl_get_request, &arg, "start_curl_get_request");
+  start_case(start_curl_get_all_posts, &arg, "start_curl_get_all_posts");
+  start_case(start_curl_get_all_projects, &arg, "start_curl_get_all_projects");
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);

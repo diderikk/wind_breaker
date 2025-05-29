@@ -1,14 +1,3 @@
-<h1 id="kubernetes-zero-to-hero-part-3">Kubernetes Zero to Hero: Part 3</h1>
-<p>
-  This series of notes is about my experience learning and configuring a
-  Kubernetes cluster. Previously, I used a single Virtual Machine to host all my
-  web applications. However, they have become cumbersome to keep track of and
-  are hard to deploy and update. In addition, cloud technologies are in trend
-  and something I want to get practical and theoretical experience on. This
-  article will explain my improvements from the last post, adding a
-  <strong>Proxy</strong> and implementing <strong>Grafana</strong> for
-  monitoring.
-</p>
 <h2 id="improvements">Improvements</h2>
 <p>
   I have made some improvements and updates in the cluster. Firstly, I upgraded
@@ -32,14 +21,14 @@ sudo resize2fs <span class="hljs-regexp">/dev/</span>nvme0n1p1 <span class="hljs
   using the Proxy and Grafana. In simple terms, the Proxy feature enables me to
   host applications on the default HTTPS port (port 443),
   <a
-    href="https://www.diderikk.dev/portfolio/posts/dc034859-46bf-4d8c-8736-ad5b3c201021#ingress"
+    href="/posts/dc034859-46bf-4d8c-8736-ad5b3c201021#ingress"
     >which was not possible previously with just my cluster</a
   >. Grafana serves as a monitoring platform, giving me more overview of the
   applications.
 </p>
 <p>
-  <img
-    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/3f9e8f5f-263f-48d1-897b-2db50ea64561/argocd_applications.png"
+  <img class="post-img"
+    src="/4fc0cac0e8a608b8622e6bf4265dfd29bf6c1584330a461a0d914f5b2a9c358b.png"
     alt=""
   />
 </p>
@@ -47,7 +36,7 @@ sudo resize2fs <span class="hljs-regexp">/dev/</span>nvme0n1p1 <span class="hljs
 <p>
   As mentioned in a
   <a
-    href="https://www.diderikk.dev/portfolio/posts/dc034859-46bf-4d8c-8736-ad5b3c201021#ingress"
+    href="/posts/dc034859-46bf-4d8c-8736-ad5b3c201021#ingress"
     >previous note</a
   >, I am not able to host my Ingress on port 443 or 80. Therefore, I saw it as
   unfit to host my frontend applications since they would have a URL with a port
@@ -56,8 +45,8 @@ sudo resize2fs <span class="hljs-regexp">/dev/</span>nvme0n1p1 <span class="hljs
   not from clients to the Internet.
 </p>
 <p>
-  <img
-    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/3f9e8f5f-263f-48d1-897b-2db50ea64561/reverse_proxy_flow.png"
+  <img class="post-img"
+    src="/3a7a9d67fc25b9320a3d9951ea173a704f4d709504ddb63e7b68ce32224af2a8.png"
     alt=""
   />
 </p>
@@ -157,8 +146,8 @@ sudo resize2fs <span class="hljs-regexp">/dev/</span>nvme0n1p1 <span class="hljs
   dashboard:
 </p>
 <p>
-  <img
-    src="https://yafxgqyvfrhuqxefmwvc.supabase.co/storage/v1/object/public/images/public/3f9e8f5f-263f-48d1-897b-2db50ea64561/grafana_dashboard.png"
+  <img class="post-img"
+    src="/145d91af1f648f5a56b13d18c19de330ad52b7657f6962c71de81042a0f5b4dc.png"
     alt=""
   />
 </p>
