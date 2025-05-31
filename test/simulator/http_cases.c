@@ -37,7 +37,8 @@ void *start_http_get_request(void *arg) {
 
   memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length =
+      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 
@@ -80,7 +81,8 @@ void *start_http_get_request_gzip(void *arg) {
 
   memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length =
+      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 
@@ -132,7 +134,8 @@ void *start_http_get_request_deflate(void *arg) {
 
   memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length =
+      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 
@@ -150,8 +153,8 @@ void *start_http_get_request_deflate(void *arg) {
   const char *body = strstr(buffer, "\r\n\r\n");
   body += 4;
 
-  int decompressed_length =
-      decompress_deflate(body, 1024, decompressed, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  int decompressed_length = decompress_deflate(body, 1024, decompressed,
+                                               TEST_REQUEST_RESPONSE_MAX_SIZE);
   // printf("Decompressed: %s\n", decompressed);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<head>") != NULL);
@@ -185,7 +188,8 @@ void *start_http_get_request_not_found(void *arg) {
 
   memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length =
+      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 

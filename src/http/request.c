@@ -94,6 +94,14 @@ int validate_request_headers(const http_request_t *http_request) {
       log_error("Accept Not Supported: %s", http_request->accept);
       return HTTP_NOT_ACCEPTABLE;
     }
+  } else if (strcasestr(file_name, ".gif") != NULL) {
+    if (strcasestr(http_request->accept, "image/gif") == NULL &&
+        strcasestr(http_request->accept, "image/*") == NULL &&
+        strcasestr(http_request->accept, "*/*") == NULL &&
+        strcmp(http_request->accept, "") != 0) {
+      log_error("Accept Not Supported: %s", http_request->accept);
+      return HTTP_NOT_ACCEPTABLE;
+    }
   } else {
     log_error("File Type Not Supported: %s", file_name);
     return HTTP_NOT_ACCEPTABLE;

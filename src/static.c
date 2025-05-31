@@ -45,10 +45,6 @@ char *uri_to_file_name(const uri_token_t uri) {
                             "ebbdee108c7d52.png") == 0) {
     return "8648ad9cbe5bd20a40d762c8e3d7f1b91c8d431dd916e17e4eebbdee108c7d52."
            "png";
-  } else if (strcmp(uri[0], "26c7ab4a629604976bca2a4e3ff28d85b3155c479c5abeb478"
-                            "5ea1e2ee7de0af.png") == 0) {
-    return "26c7ab4a629604976bca2a4e3ff28d85b3155c479c5abeb4785ea1e2ee7de0af."
-           "png";
   } else if (strcmp(uri[0], "8c740dc36c91eceffb6c253223a539daf9183f221e2797ebae"
                             "cdd1460ad34004.gif") == 0) {
     return "8c740dc36c91eceffb6c253223a539daf9183f221e2797ebaecdd1460ad34004."
