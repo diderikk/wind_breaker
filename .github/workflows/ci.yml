@@ -47,7 +47,8 @@ jobs:
 
       - name: Run simulations
         run: |
-          touch /tmp/logs /tmp/logs_client
+          touch /tmp/logs 
+          touch /tmp/logs_client
           (./build/main &> /tmp/logs) & echo "MAIN_PID=$!" >> $GITHUB_ENV
           sleep 3
           ./build/client &> tmp/logs_client
