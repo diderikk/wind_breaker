@@ -26,6 +26,7 @@ jobs:
             libssl-dev \
             zlib1g-dev \
             libcurl4-openssl-dev \
+            curl \
 
       - name: Create build directory
         run: mkdir -p build
@@ -48,16 +49,14 @@ jobs:
       - name: Run simulations
         run: |
           touch /tmp/logs 
-          touch /tmp/logs_client
           (./build/main &> /tmp/logs) & echo "MAIN_PID=$!" >> $GITHUB_ENV
           sleep 3
-          ./build/client &> /tmp/logs_client
+          ./build/client
 
       - name: Print logs
         if: always()
-        run: |
-          cat /tmp/logs
-          cat /tmp/logs_client
+        run: cat /tmp/logs
 
       - name: Stop server
+        if: always()
         run: kill $MAIN_PID
