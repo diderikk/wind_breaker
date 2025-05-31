@@ -8,7 +8,6 @@
 #define LOG_BUFFER_SIZE 4096
 
 static int session_max_size = 64;
-static int queue_max_size = 1024;
 static int worker_thread_max_size = 1;
 static int listen_backlog_max_size = 50;
 static char http_port[5] = "8080";
@@ -22,6 +21,7 @@ static char cert_chain_file[200] = "/etc/wind_breaker/cert.pem";
 static char private_key_file[200] = "/etc/wind_breaker/key.pem";
 static char db_url[200] = "/etc/wind_breaker/data.db";
 static char reset_db = 0;
+static char enable_https = 0;
 
 void init_properties(int argc, char *argv[]) {
   char log_buffer[LOG_BUFFER_SIZE + 1];
@@ -104,6 +104,11 @@ void init_properties(int argc, char *argv[]) {
                                     "Log type from args: %d\n", log_type);
     } else if (strcasecmp(argv[i], "--reset-db") == 0) {
       reset_db = 1;
+    } else if (strcasecmp(argv[i], "--enable-https") == 0) {
+      enable_https = 1;
+      log_buffer_offset +=
+          snprintf(log_buffer + log_buffer_offset,
+                   LOG_BUFFER_SIZE - log_buffer_offset, "Enabling HTTPS\n");
     }
   }
 
@@ -121,12 +126,6 @@ void init_properties(int argc, char *argv[]) {
         log_buffer_offset += snprintf(
             log_buffer + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset,
             "Session max size: %d\n", session_max_size);
-      } else if (strncasecmp(line, "queue_max_size", 14) == 0) {
-        assert(atoi(line + 15) > 0 && atoi(line + 15) < 65536);
-        queue_max_size = atoi(line + 15);
-        log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
-                                      LOG_BUFFER_SIZE - log_buffer_offset,
-                                      "Queue max size: %d\n", queue_max_size);
       } else if (strncasecmp(line, "worker_thread_max_size", 22) == 0) {
         assert(atoi(line + 23) > 0 && atoi(line + 23) < 65536);
         worker_thread_max_size = atoi(line + 23);
@@ -194,6 +193,21 @@ void init_properties(int argc, char *argv[]) {
         log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
                                       LOG_BUFFER_SIZE - log_buffer_offset,
                                       "Log type: %d\n", log_type);
+      } else if (strncasecmp(line, "cert_chain_file", 16) == 0) {
+        strcpy(cert_chain_file, line + 17);
+        log_buffer_offset += snprintf(
+            log_buffer + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset,
+            "Certificate chain file: %s\n", cert_chain_file);
+      } else if (strncasecmp(line, "private_key_file", 16) == 0) {
+        strcpy(private_key_file, line + 17);
+        log_buffer_offset += snprintf(
+            log_buffer + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset,
+            "Private key file: %s\n", private_key_file);
+      } else if (strncasecmp(line, "enable_https", 12) == 0) {
+        enable_https = atoi(line + 13) > 0;
+        log_buffer_offset += snprintf(log_buffer + log_buffer_offset,
+                                      LOG_BUFFER_SIZE - log_buffer_offset,
+                                      "Enable HTTPS: %d\n", enable_https);
       }
     }
 
@@ -216,10 +230,6 @@ void init_properties(int argc, char *argv[]) {
 int get_session_max_size() { return session_max_size; }
 
 void set_session_max_size(int size) { session_max_size = size; }
-
-int get_queue_max_size() { return queue_max_size; }
-
-void set_queue_max_size(int size) { queue_max_size = size; }
 
 int get_worker_thread_max_size() { return worker_thread_max_size; }
 
@@ -250,4 +260,6 @@ const char *get_key_file() { return private_key_file; }
 
 const char *get_db_url() { return db_url; }
 
-int get_reset_db() { return reset_db; }
+char get_reset_db() { return reset_db; }
+
+char get_enabled_ssl() { return enable_https; }

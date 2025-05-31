@@ -5,8 +5,6 @@
 * State diagram
 * Fix session to use assert and logger
 * SSL/TLS
-* SQLite
-    * Images referencing
 * Metrics (See tcp(7) man page, and tcp_info struct) 
     * TCP_INFO
 * Add more parsing for more HTTP headers.
@@ -37,3 +35,4 @@
 * [getaddrinfo](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html)
 * [Beej's Guide](https://beej.us/guide/bgnet/html/split/client-server-background.html)
 * [GeeksForGeeks's Guide](https://www.geeksforgeeks.org/socket-programming-cc/)
+* Man pages for most high level functions used

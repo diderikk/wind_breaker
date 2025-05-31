@@ -4,8 +4,6 @@
 void init_properties(int argc, char *argv[]);
 int get_session_max_size();
 void set_session_max_size(int size);
-int get_queue_max_size();
-void set_queue_max_size(int size);
 int get_worker_thread_max_size();
 int get_listen_backlog_max_size();
 const char *get_http_port();
@@ -18,6 +16,7 @@ int get_log_type();
 const char *get_cert_file();
 const char *get_key_file();
 const char *get_db_url();
-int get_reset_db();
+char get_reset_db();
+char get_enabled_ssl();
 
 #endif // PROPERTIES_H

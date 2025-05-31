@@ -54,9 +54,8 @@ int main(int argc, char *argv[]) {
   assert(get_log_type() == CONSOLE_ONLY || log_file != NULL);
   status = 3;
 
-  if (strcasecmp(get_env(), "dev") == 0) {
-    log_debug("PID: %d", getpid());
-  }
+  log_debug("PID: %d", getpid());
+
   assert(migrate_db() == 0);
   status = 4;
 
@@ -65,12 +64,13 @@ int main(int argc, char *argv[]) {
   assert(http_socket_fd >= 0);
   status = 5;
 
-  https_socket_fd =
-      get_listener_socket(get_https_port(), get_listen_backlog_max_size());
-  status = 6;
-
-  //  if (https_socket_fd >= 0)
-  //    ctx = init_ssl_ctx();
+  if (get_enabled_ssl() == 1) {
+    https_socket_fd =
+        get_listener_socket(get_https_port(), get_listen_backlog_max_size());
+    status = 6;
+    //  if (https_socket_fd >= 0)
+    //    ctx = init_ssl_ctx();
+  }
 
   init_marked_fds();
   status = 7;
@@ -80,10 +80,6 @@ int main(int argc, char *argv[]) {
   status = 9;
   assert(init_workers(get_worker_thread_max_size(), NULL) == 0);
   status = 10;
-
-  //  if (ctx != NULL) {
-  //    listen_async_ssl(&https_socket_fd);
-  //  }
 
   listen_async(http_socket_fd);
 
