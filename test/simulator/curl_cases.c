@@ -26,7 +26,7 @@ void *start_curl_get_request(void *arg) {
 
   curl = curl_easy_init();
   if (curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, data->ip);
+    curl_easy_setopt(curl, CURLOPT_URL, address);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
