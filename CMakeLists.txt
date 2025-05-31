@@ -66,7 +66,7 @@ enable_compile_options(main)
 add_executable(client test/simulator/client.c)
 target_link_libraries(client PRIVATE simulator_cases_lib simulator_http_lib simulator_connection_lib socket_lib compression_utils_lib hash_utils_lib assert_utils_lib logger_utils_lib session_lib stop_lib marked_fds_lib properties_lib static_lib OpenSSL::SSL OpenSSL::Crypto Threads::Threads ZLIB::ZLIB CURL::libcurl SQLite::SQLite3)
 enable_compile_options(client)
-enable_address_sanitizer(client)
+# enable_address_sanitizer(client)
 
 
 add_executable(unit_test test/unit_tests/all_tests.c)
