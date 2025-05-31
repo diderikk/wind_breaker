@@ -7,12 +7,14 @@
 #include <string.h>
 #include <unistd.h>
 
+#define TEST_REQUEST_RESPONSE_MAX_SIZE 16 * 1024
+
 int http_request_to_string(const http_request_t *request, char *buffer);
 char *http_method_to_string(http_method method);
 
 void *start_http_get_request(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
+  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
 
   socket_fd = connect_to_server(data->ip, data->port);
@@ -33,9 +35,9 @@ void *start_http_get_request(void *arg) {
   request_length = http_request_to_string(&request, buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
-  memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 
@@ -54,8 +56,8 @@ void *start_http_get_request(void *arg) {
 
 void *start_http_get_request_gzip(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[REQUEST_RESPONSE_MAX_SIZE],
-      decompressed[REQUEST_RESPONSE_MAX_SIZE];
+  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE],
+      decompressed[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
 
   socket_fd = connect_to_server(data->ip, data->port);
@@ -76,9 +78,9 @@ void *start_http_get_request_gzip(void *arg) {
   request_length = http_request_to_string(&request, buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
-  memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 
@@ -97,7 +99,7 @@ void *start_http_get_request_gzip(void *arg) {
   body += 4;
 
   int decompressed_length =
-      decompress_gzip(body, 1024, decompressed, REQUEST_RESPONSE_MAX_SIZE);
+      decompress_gzip(body, 1024, decompressed, TEST_REQUEST_RESPONSE_MAX_SIZE);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<body>") != NULL);
 
@@ -106,8 +108,8 @@ void *start_http_get_request_gzip(void *arg) {
 
 void *start_http_get_request_deflate(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[REQUEST_RESPONSE_MAX_SIZE],
-      decompressed[REQUEST_RESPONSE_MAX_SIZE];
+  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE],
+      decompressed[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
 
   socket_fd = connect_to_server(data->ip, data->port);
@@ -128,9 +130,9 @@ void *start_http_get_request_deflate(void *arg) {
   request_length = http_request_to_string(&request, buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
-  memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 
@@ -149,7 +151,7 @@ void *start_http_get_request_deflate(void *arg) {
   body += 4;
 
   int decompressed_length =
-      decompress_deflate(body, 1024, decompressed, REQUEST_RESPONSE_MAX_SIZE);
+      decompress_deflate(body, 1024, decompressed, TEST_REQUEST_RESPONSE_MAX_SIZE);
   // printf("Decompressed: %s\n", decompressed);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<head>") != NULL);
@@ -159,8 +161,8 @@ void *start_http_get_request_deflate(void *arg) {
 
 void *start_http_get_request_not_found(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[REQUEST_RESPONSE_MAX_SIZE],
-      decompressed[REQUEST_RESPONSE_MAX_SIZE];
+  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE],
+      decompressed[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
 
   socket_fd = connect_to_server(data->ip, data->port);
@@ -181,9 +183,9 @@ void *start_http_get_request_not_found(void *arg) {
   request_length = http_request_to_string(&request, buffer);
   assert(send_socket(socket_fd, buffer, request_length) > 0);
 
-  memset(buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
-  response_length = recv_socket(socket_fd, buffer, REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
 
   close(socket_fd);
 

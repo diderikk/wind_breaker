@@ -26,5 +26,7 @@ int main(int argc, char *argv[]) {
     run_cases(SERVER_IP, SERVER_PORT);
   }
 
+  destroy_logger();
+
   return 0;
 }

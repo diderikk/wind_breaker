@@ -50,6 +50,7 @@ void run_cases(char *ip, char *port) {
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);
     printf(GRN "Case: %s passed\n" RESET, case_names[i]);
+    free(case_names[i]);
   }
   free(cases);
   cases = NULL;
