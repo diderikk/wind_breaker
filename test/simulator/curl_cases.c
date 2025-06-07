@@ -88,14 +88,16 @@ void *start_curl_get_all_posts(void *arg) {
   while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
     const char *project_id = (const char *)sqlite3_column_text(stmt, 0);
     const char *project_name = (const char *)sqlite3_column_text(stmt, 1);
-    snprintf(address, HTTP_HEADER_SIZE, "http://%s:%s/posts/%s", data->ip,
-             data->port, project_id);
+    snprintf(address, HTTP_HEADER_SIZE, "https://%s:%s/posts/%s", data->ip,
+             get_https_port(), project_id);
 
     curl_easy_setopt(curl, CURLOPT_URL, address);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "gzip");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
     res = curl_easy_perform(curl);
     assert(res == CURLE_OK);
@@ -141,14 +143,16 @@ void *start_curl_get_all_projects(void *arg) {
   while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
     const char *project_id = (const char *)sqlite3_column_text(stmt, 0);
     const char *project_name = (const char *)sqlite3_column_text(stmt, 1);
-    snprintf(address, HTTP_HEADER_SIZE, "http://%s:%s/projects/%s", data->ip,
-             data->port, project_id);
+    snprintf(address, HTTP_HEADER_SIZE, "https://%s:%s/projects/%s", data->ip,
+             get_https_port(), project_id);
 
     curl_easy_setopt(curl, CURLOPT_URL, address);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "gzip");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
     res = curl_easy_perform(curl);
     assert(res == CURLE_OK);
@@ -189,8 +193,8 @@ void *start_curl_get_all_images(void *arg) {
   while ((entry = readdir(dir)) != NULL) {
     struct stat file_stat;
     if (strstr(entry->d_name, ".png") || strstr(entry->d_name, ".gif")) {
-      snprintf(address, HTTP_HEADER_SIZE + 100, "http://%s:%s/%s", data->ip,
-               data->port, entry->d_name);
+      snprintf(address, HTTP_HEADER_SIZE + 100, "https://%s:%s/%s", data->ip,
+               get_https_port(), entry->d_name);
       snprintf(file_path, HTTP_HEADER_SIZE + 100, "static/%s", entry->d_name);
 
       stat(file_path, &file_stat);
@@ -199,6 +203,8 @@ void *start_curl_get_all_images(void *arg) {
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback_with_len);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &wdata);
       curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
+      curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+      curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
       res = curl_easy_perform(curl);
       assert(res == CURLE_OK);
@@ -217,4 +223,44 @@ void *start_curl_get_all_images(void *arg) {
   closedir(dir);
 
   return NULL;
+}
+
+void *start_curl_get_ssl_request(void *arg) {
+  struct connection_data *data = (struct connection_data *)arg;
+  CURL *curl;
+  CURLcode res;
+  char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+  char address[HTTP_HEADER_SIZE];
+  snprintf(address, HTTP_HEADER_SIZE, "https://%s:%s", data->ip,
+           get_https_port());
+
+  curl = curl_easy_init();
+  if (curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, address);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "gzip");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+    res = curl_easy_perform(curl);
+    assert(res == CURLE_OK);
+
+    char *content_type;
+    long response_long;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_long);
+    assert(response_long == 200);
+    curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &content_type);
+    assert(content_type != NULL);
+    assert(strstr(content_type, "text/html") != NULL);
+    assert(response[0] != '\0');
+    assert(strstr(response, "<body>") != NULL);
+    assert(strstr(response, "</body>") != NULL);
+    assert(strstr(response, "</html>") != NULL);
+
+    curl_easy_cleanup(curl);
+  }
+
+  return 0;
 }

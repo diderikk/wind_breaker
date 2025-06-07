@@ -30,6 +30,31 @@ void init_poll_array(int listen_fd) {
   last_in_index = 1;
 }
 
+void init_poll_array_ssl(int listen_fd, int listen_fd_ssl) {
+  assert(listen_fd > 0);
+  assert(listen_fd < 16384);
+  assert(fds == NULL);
+  assert(listen_fd_ssl > 0);
+  assert(listen_fd_ssl < 16384);
+  assert(listen_fd != listen_fd_ssl);
+  assert(get_enabled_ssl() == 1);
+  max_count = get_session_max_size();
+
+  assert(max_count > 0);
+  assert(max_count < 16384);
+
+  fds = calloc(max_count, sizeof(struct pollfd));
+  assert(fds != NULL);
+
+  log_info("Initialized poll array with count %d", max_count);
+  fds[0].fd = listen_fd;
+  fds[0].events = POLLIN; // Report ready to read on incoming connection
+  fds[1].fd = listen_fd_ssl;
+  fds[1].events = POLLIN; // Report ready to read on incoming connection
+  count = 2;
+  last_in_index = 2;
+}
+
 void destroy_poll_array() {
   free(fds);
   fds = NULL;
@@ -75,7 +100,7 @@ int add_poll_fd_sync(int fd) {
   else {
     last_in_index = (last_in_index + 1) % max_count;
     // Dont overwrite the listen_fd
-    if (last_in_index == 0)
+    if (last_in_index == 0 || (get_enabled_ssl() == 1 && last_in_index == 1))
       last_in_index++;
   }
 

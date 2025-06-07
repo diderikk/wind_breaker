@@ -24,11 +24,8 @@ void *handle_c() {
     assert(session.response != NULL);
     assert(session.buffer != NULL);
 
-    char is_ssl =
-        (session.ssl != NULL && SSL_is_init_finished(session.ssl)) ? 1 : 0;
-    char should_be_ssl = (session.ssl != NULL && !is_ssl) ? 1 : 0;
-
-    if (should_be_ssl) {
+    // Deprecated
+    if (session.response->status_code == HTTP_MOVED_PERMANENTLY) {
       *session.buffer_size = construct_upgrade_to_https_response(
           session.request->uri, session.request->host, session.buffer);
     } else {

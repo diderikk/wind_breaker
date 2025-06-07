@@ -23,9 +23,7 @@ void *handle_d() {
     assert(session.response != NULL);
     assert(session.buffer != NULL);
 
-    char is_ssl =
-        (session.ssl != NULL && SSL_is_init_finished(session.ssl)) ? 1 : 0;
-
+    char is_ssl = session.request->is_ssl;
     log_info("Sending response to session %d:\n%s", session.session->id,
              session.buffer);
 

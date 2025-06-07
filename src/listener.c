@@ -11,44 +11,68 @@
 #include "utils/logger.h"
 #include "worker.h"
 #include <errno.h>
+#include <openssl/err.h>
 
 extern int count;
 extern struct pollfd *fds;
-void *worker_function(void *_arg);
 POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
 
-int new_connection_handler() { return 0; }
-void close_connection_handler(int fd) {}
+void _listen(int listener, int listener_ssl, int (*request_handler)(int));
+
 int handle_request_async(int fd) {
+  int recv_return;
   struct session_full_return session = pop_request_by_fd(fd);
   if (session.session == NULL) {
-    log_debug("Session is NULL for fd %d. Waiting for next cycle", fd);
-    return 0;
-  }
-
-  int recv_return =
-      recv_bio(session.bio, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
-  if (recv_return > 0) {
-    push_request(fd, WORK_STATUS_REQUEST_READ);
-    return 0;
-  } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1) {
-    push_request(fd, WORK_STATUS_INITIAL);
-    return 0;
-  } else {
-    // Got error or connection closed by client
-    if (recv_return == 0) {
-      // Connection closed
-      log_trace("Socket %d hung up", fd);
-    }
+    log_debug("Session is NULL for fd %d", fd);
     return -1;
+  }
+  assert(session.bio != NULL);
+
+  if (session.request->is_ssl) {
+    log_debug("Reading SSL request for fd %d", fd);
+    assert(session.ssl != NULL);
+    int recv_return =
+        recv_ssl(session.ssl, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
+    if (recv_return > 0) {
+      push_request(fd, WORK_STATUS_REQUEST_READ);
+      return 0;
+    } else if (recv_return == -1 &&
+               SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ) {
+      push_request(fd, WORK_STATUS_INITIAL);
+      return 0;
+    } else {
+      // Got error or connection closed by client
+      if (recv_return == 0) {
+        // Connection closed
+        log_trace("Socket %d hung up", fd);
+      }
+      return -1;
+    }
+  } else {
+    log_debug("Reading plain request for fd %d", fd);
+    recv_return =
+        recv_bio(session.bio, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
+    if (recv_return > 0) {
+      push_request(fd, WORK_STATUS_REQUEST_READ);
+      return 0;
+    } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1) {
+      push_request(fd, WORK_STATUS_INITIAL);
+      return 0;
+    } else {
+      // Got error or connection closed by client
+      if (recv_return == 0) {
+        // Connection closed
+        log_trace("Socket %d hung up", fd);
+      }
+      return -1;
+    }
   }
 }
 
-void listen_async(int listener) {
-  _listen(listener, new_connection_handler, close_connection_handler,
-          handle_request_async);
+void listen_async(int listener, int listener_ssl) {
+  _listen(listener, listener_ssl, handle_request_async);
 }
 
 int get_listener_socket(const char *port, int backlog) {
@@ -101,9 +125,7 @@ int get_listener_socket(const char *port, int backlog) {
   return socket_fd;
 }
 
-void _listen(int listener, int (*new_connection_handler)(),
-             void (*close_connection_handler)(int),
-             int (*request_handler)(int)) {
+void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
   assert(listener > 0);
   assert(request_handler != NULL);
 
@@ -150,7 +172,6 @@ void _listen(int listener, int (*new_connection_handler)(),
 
       if (check_for_socket_error(poll->fd) == -1) {
         log_debug("Socket %d is invalid, removing...", poll->fd);
-        close_connection_handler(poll->fd);
         push_request(poll->fd, WORK_STATUS_REJECTED);
         remove_poll_fd_by_index_sync(&i);
         continue;
@@ -162,7 +183,6 @@ void _listen(int listener, int (*new_connection_handler)(),
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
           log_debug("Socket %d error event, removing...", poll->fd);
-          close_connection_handler(poll->fd);
           push_request(poll->fd, WORK_STATUS_REJECTED);
           remove_poll_fd_by_index_sync(&i);
           continue;
@@ -176,7 +196,6 @@ void _listen(int listener, int (*new_connection_handler)(),
         else if (poll->revents & POLLNVAL)
           log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
-          close_connection_handler(poll->fd);
           push_request(poll->fd, WORK_STATUS_REJECTED);
           remove_poll_fd_by_index_sync(&i);
           continue;
@@ -191,41 +210,37 @@ void _listen(int listener, int (*new_connection_handler)(),
       // HANDLES NEW SOCKET EVENTS
       if (poll->revents & POLLIN) {
         // New connection wants to connect from the accept.
-        if (poll->fd == listener) {
+        if (poll->fd == listener || poll->fd == listener_ssl) {
 
           log_debug("Polling for new client to connect...");
           client_socket_fd =
-              accept_socket(listener, (struct sockaddr *)&client_addr);
+              accept_socket(poll->fd, (struct sockaddr *)&client_addr);
 
           if (client_socket_fd < 0)
             continue;
 
           get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
                           sizeof(ip_str));
-          log_info("Client connect %s:%d", ip_str,
-                   get_in_addr_port((struct sockaddr *)&client_addr));
-          push_request(client_socket_fd, WORK_STATUS_INITIAL);
-          int poll_array_index = add_poll_fd_sync(client_socket_fd);
-          new_conn_ret = new_connection_handler();
-          if (new_conn_ret == -1) {
-            log_trace("New connection handler failed for fd %d",
-                      client_socket_fd);
-            push_request(client_socket_fd, WORK_STATUS_REJECTED);
-            remove_poll_fd_by_index_sync(&poll_array_index);
+          if (poll->fd == listener) {
+            log_debug("New client connected on HTTP socket %s:%d", ip_str,
+                      get_in_addr_port((struct sockaddr *)&client_addr));
+            push_request(client_socket_fd, WORK_STATUS_INITIAL);
+          } else {
+            log_debug("New client connected on HTTPS socket %s:%d", ip_str,
+                      get_in_addr_port((struct sockaddr *)&client_addr));
+            push_request(client_socket_fd, WORK_STATUS_INITIAL_SSL);
           }
+          int poll_array_index = add_poll_fd_sync(client_socket_fd);
           continue;
         } else {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 
           if (request_handler(poll->fd) != -1) {
             memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
-            continue;
+          } else {
+            push_request(poll->fd, WORK_STATUS_REJECTED);
+            remove_poll_fd_by_index_sync(&i);
           }
-
-          close_connection_handler(poll->fd);
-          push_request(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(&i);
-          continue;
         }
       }
     }

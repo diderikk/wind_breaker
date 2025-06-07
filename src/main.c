@@ -2,17 +2,17 @@
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
 #include "listener.h"
-#include "listener_ssl.h"
 #include "properties.h"
 #include "shutdown/signal2.h"
 #include "shutdown/stop.h"
 #include "utils/assert2.h"
 #include "utils/db_migration.h"
 #include "utils/logger.h"
+#include "utils/ssl.h"
 #include "worker.h"
 #include <unistd.h>
 
-static int http_socket_fd, https_socket_fd;
+static int http_socket_fd = -1, https_socket_fd = -1;
 static FILE *log_file;
 static SSL_CTX *ctx;
 static int status = 0;
@@ -68,20 +68,24 @@ int main(int argc, char *argv[]) {
     https_socket_fd =
         get_listener_socket(get_https_port(), get_listen_backlog_max_size());
     status = 6;
-    //  if (https_socket_fd >= 0)
-    //    ctx = init_ssl_ctx();
+    if (https_socket_fd >= 0)
+      ctx = init_ssl_ctx();
   }
 
   init_marked_fds();
   status = 7;
   init_session_cache(ctx);
   status = 8;
-  init_poll_array(http_socket_fd);
+  if (get_enabled_ssl() == 1) {
+    init_poll_array_ssl(http_socket_fd, https_socket_fd);
+  } else {
+    init_poll_array(http_socket_fd);
+  }
   status = 9;
   assert(init_workers(get_worker_thread_max_size(), NULL) == 0);
   status = 10;
 
-  listen_async(http_socket_fd);
+  listen_async(http_socket_fd, https_socket_fd);
 
   return 0;
 }

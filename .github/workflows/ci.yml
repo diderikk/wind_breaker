@@ -48,7 +48,7 @@ jobs:
       - name: Run simulations
         run: |
           touch /tmp/logs 
-          (./build/main &> /tmp/logs) & echo "MAIN_PID=$!" >> $GITHUB_ENV
+          (./build/main --enable-https &> /tmp/logs) & echo "MAIN_PID=$!" >> $GITHUB_ENV
           sleep 3
           stdbuf -oL -eL ./build/client
 

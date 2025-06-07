@@ -269,9 +269,23 @@ static inline void reset_session_at_index(int index) {
     assert(ret != -1);
   }
   BIO_set_fd(bio_array[index], -1, BIO_NOCLOSE);
+
+  if (ssl_array != NULL) {
+    SSL *ssl = ssl_array[index];
+    if (ssl != NULL) {
+      SSL_set_bio(ssl, bio_array[index], bio_array[index]);
+      ret = SSL_clear(ssl);
+      if (ret != 1) {
+        printf("SSL_clear failed: %s\n",
+               ERR_error_string(ERR_get_error(), NULL));
+        assert(ret == 1);
+      }
+    }
+  }
 }
 
 static inline void reset_request_at_index(int index) {
+  char is_ssl = request_array[index]->is_ssl;
   // Buffer array
   memset(buffer_array[index], 0, REQUEST_RESPONSE_MAX_SIZE);
 
@@ -280,6 +294,7 @@ static inline void reset_request_at_index(int index) {
 
   // Request array
   memset(request_array[index], 0, sizeof(http_request_t));
+  request_array[index]->is_ssl = is_ssl;
 }
 
 // Get the session for a given thread id
@@ -299,7 +314,36 @@ int get_session_id_for_thread() {
   return session_id;
 }
 
-static inline void add_to_session(int related_fd) {
+static inline int init_session_connection(int index) {
+  assert(session_array != NULL);
+  assert(bio_array != NULL);
+  assert(ssl_array != NULL);
+
+  SSL *ssl = ssl_array[index];
+  BIO *bio = bio_array[index];
+
+  SSL_set_bio(ssl, bio, bio);
+
+  int ret = SSL_accept(ssl);
+  if (ret <= 0 || ret == 2) {
+    int err = SSL_get_error(ssl, ret);
+    // According to the SSL_accept, non-blocking socket must be handled
+    if (err == SSL_ERROR_WANT_READ) {
+      printf("SSL_ERROR_WANT_READ");
+      return 1;
+    } else if (ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST) {
+      printf("SSL_R_HTTP_REQUEST\n");
+      return -1;
+    } else {
+      printf("SSL_accept failed, %s\n",
+             ERR_error_string(ERR_get_error(), NULL));
+      return -1;
+    }
+  }
+  return ret;
+}
+
+static inline int add_to_session(int related_fd) {
   int next = session_count < max_size ? session_count : session_last_index;
   assert(next < max_size);
 
@@ -316,6 +360,8 @@ static inline void add_to_session(int related_fd) {
   } else {
     session_last_index = (session_last_index + 1) % max_size;
   }
+
+  return next;
 }
 
 static inline void del_from_session(int i) {
@@ -383,6 +429,9 @@ void push_request(int related_fd, WORK_STATUS status) {
       *status_array[i] |= status;
 
       switch (status) {
+      case WORK_STATUS_INITIAL_SSL:
+        *status_array[i] |= WORK_STATUS_INITIAL;
+        break;
       case WORK_STATUS_INITIAL:
         break;
       case WORK_STATUS_REQUEST_READ:
@@ -421,8 +470,23 @@ void push_request(int related_fd, WORK_STATUS status) {
     }
   }
 
-  if (found != 1 && status == WORK_STATUS_INITIAL) {
-    add_to_session(related_fd);
+  if (found != 1 &&
+      (status == WORK_STATUS_INITIAL || status == WORK_STATUS_INITIAL_SSL)) {
+    int index = add_to_session(related_fd);
+    if (status == WORK_STATUS_INITIAL_SSL) {
+      switch (init_session_connection(index)) {
+      case 1:
+        request_array[index]->is_ssl = 1;
+        break;
+      case -1:
+        del_from_session(index);
+        mark(related_fd);
+        break;
+      default:
+        assert(0);
+        break;
+      }
+    }
   }
   pthread_mutex_unlock(&session_mutex);
 }

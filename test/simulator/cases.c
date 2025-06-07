@@ -47,6 +47,7 @@ void run_cases(char *ip, char *port) {
   start_case(start_curl_get_all_posts, &arg, "start_curl_get_all_posts");
   start_case(start_curl_get_all_projects, &arg, "start_curl_get_all_projects");
   start_case(start_curl_get_all_images, &arg, "start_curl_get_all_images");
+  start_case(start_curl_get_ssl_request, &arg, "start_curl_get_ssl_request");
 
   for (int i = 0; i < case_count; i++) {
     pthread_join(cases[i], NULL);

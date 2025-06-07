@@ -60,7 +60,8 @@ typedef enum {
   WORK_STATUS_SEND_FAILED = 1 << 5,
   WORK_STATUS_SENT = 1 << 6,
   WORK_STATUS_PROCESSING = 1 << 7,
-  WORK_STATUS_REJECTED = 1 << 8
+  WORK_STATUS_REJECTED = 1 << 8,
+  WORK_STATUS_INITIAL_SSL = 1 << 9
 } WORK_STATUS;
 
 typedef struct {
@@ -98,6 +99,7 @@ typedef char uri_token_t[HTTP_URI_TOKEN_COUNT][HTTP_URI_TOKEN_SIZE];
 typedef struct {
   uri_token_t uri;
   http_method method;
+  char is_ssl;
   char version[HTTP_VERSION_SIZE];
   char host[HTTP_HEADER_SIZE];
   char user_agent[HTTP_HEADER_SIZE];

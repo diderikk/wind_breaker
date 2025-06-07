@@ -4,6 +4,7 @@
 #include "../static.h"
 
 void init_poll_array(int listen_fd);
+void init_poll_array_ssl(int listen_fd, int listen_fd_ssl);
 void destroy_poll_array();
 
 int add_poll_fd_sync(int fd);
