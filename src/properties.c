@@ -17,7 +17,7 @@ static char log_file[200] = "/tmp/app.log";
 static int log_level = 0;
 static int log_type = 0;
 static char properties_file[200] = "/etc/wind_breaker/properties.conf";
-static char cert_chain_file[200] = "/etc/wind_breaker/cert.pem";
+static char cert_file[200] = "/etc/wind_breaker/cert.pem";
 static char private_key_file[200] = "/etc/wind_breaker/key.pem";
 static char db_url[200] = "/etc/wind_breaker/data.db";
 static char reset_db = 0;
@@ -194,10 +194,10 @@ void init_properties(int argc, char *argv[]) {
                                       LOG_BUFFER_SIZE - log_buffer_offset,
                                       "Log type: %d\n", log_type);
       } else if (strncasecmp(line, "cert_chain_file", 16) == 0) {
-        strcpy(cert_chain_file, line + 17);
+        strcpy(cert_file, line + 17);
         log_buffer_offset += snprintf(
             log_buffer + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset,
-            "Certificate chain file: %s\n", cert_chain_file);
+            "Certificate chain file: %s\n", cert_file);
       } else if (strncasecmp(line, "private_key_file", 16) == 0) {
         strcpy(private_key_file, line + 17);
         log_buffer_offset += snprintf(
@@ -254,7 +254,7 @@ int get_log_level() { return log_level; }
 
 int get_log_type() { return log_type; }
 
-const char *get_cert_file() { return cert_chain_file; }
+const char *get_cert_file() { return cert_file; }
 
 const char *get_key_file() { return private_key_file; }
 

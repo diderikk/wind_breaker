@@ -86,6 +86,7 @@ typedef struct {
   http_status_code status_code;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
+  long offset;
   char content_language[HTTP_HEADER_SMALL_SIZE];
   char content_encoding[HTTP_HEADER_SMALL_SIZE];
   char last_modified[HTTP_HEADER_SMALL_SIZE];

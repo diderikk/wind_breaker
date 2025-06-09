@@ -37,11 +37,9 @@ SSL_CTX *init_ssl_ctx() {
 
   SSL_CTX_set_options(ctx, opts);
 
-  if (SSL_CTX_use_certificate_file(ctx, get_cert_file(), SSL_FILETYPE_PEM) <=
-      0) {
+  if (SSL_CTX_use_certificate_chain_file(ctx, get_cert_file()) <= 0) {
     SSL_CTX_free(ctx);
-    assert(SSL_CTX_use_certificate_file(ctx, get_cert_file(),
-                                        SSL_FILETYPE_PEM) > 0);
+    assert(SSL_CTX_use_certificate_chain_file(ctx, get_cert_file()) > 0);
   }
 
   if (SSL_CTX_use_PrivateKey_file(ctx, get_key_file(), SSL_FILETYPE_PEM) <= 0) {

@@ -1,8 +1,9 @@
-FROM debian:bookworm-slim
+FROM debian:bookworm-20250520-slim
 
 
 RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
-    wget \
+    curl \
+    libcurl4-openssl-dev \
     ca-certificates \
     gcc \
     make \
@@ -36,4 +37,5 @@ RUN cmake --build .
 USER 1001:1001
 
 # Specify the command to run the main executable by default
-CMD ["./main"]
+CMD ["stdbuf", "-oL", "-eL", "./main"]
+

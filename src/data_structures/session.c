@@ -269,6 +269,7 @@ static inline void reset_session_at_index(int index) {
     assert(ret != -1);
   }
   BIO_set_fd(bio_array[index], -1, BIO_NOCLOSE);
+  BIO_set_nbio(bio_array[index], 1);
 
   if (ssl_array != NULL) {
     SSL *ssl = ssl_array[index];
@@ -354,6 +355,7 @@ static inline int add_to_session(int related_fd) {
   session_array[next]->thread_id = 0;
   *status_array[next] &= WORK_STATUS_INITIAL;
   BIO_set_fd(bio_array[next], related_fd, BIO_NOCLOSE);
+  BIO_set_nbio(bio_array[next], 1);
 
   if (session_count < max_size) {
     session_count++;
@@ -498,6 +500,8 @@ static inline int peek_next(WORK_STATUS status) {
       continue;
     if (*status_array[i] & WORK_STATUS_PROCESSING)
       continue;
+    if (*status_array[i] & WORK_STATUS_SEND_FAILED)
+      continue;
     for (int bit = 4; bit >= 0; bit--) {
       // All significant bits should NOT be set
       if ((1 << bit) > status && (1 << bit) & *status_array[i]) {
@@ -580,11 +584,12 @@ struct session_full_return pop_request_by_fd(int related_fd) {
   for (int i = 0; i < session_count; i++) {
     if (session_array[i]->related_fd == related_fd) {
 
-      if (*status_array[i] & WORK_STATUS_REQUEST_READ ||
-          *status_array[i] & WORK_STATUS_PARSED ||
-          *status_array[i] & WORK_STATUS_DATA_FETCHED ||
-          *status_array[i] & WORK_STATUS_PROCESSING ||
-          *status_array[i] & WORK_STATUS_READY_TO_SEND) {
+      if (((*status_array[i] & WORK_STATUS_SEND_FAILED) == 0) &&
+          (*status_array[i] & WORK_STATUS_REQUEST_READ ||
+           *status_array[i] & WORK_STATUS_PARSED ||
+           *status_array[i] & WORK_STATUS_DATA_FETCHED ||
+           *status_array[i] & WORK_STATUS_PROCESSING ||
+           *status_array[i] & WORK_STATUS_READY_TO_SEND)) {
         process = 1;
       } else {
         *status_array[i] |= WORK_STATUS_PROCESSING;

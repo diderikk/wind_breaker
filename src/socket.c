@@ -3,6 +3,7 @@
 #include "utils/logger.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <openssl/err.h>
 #include <string.h>
 
 static inline void disable_socket_blocking(int socket_fd);
@@ -84,7 +85,8 @@ int send_ssl(SSL *ssl, const char *buffer, size_t buffer_size) {
 
   assert(send_return != -2);
   if (send_return == -1) {
-    log_warn("SSL write error");
+    log_error("SSL write error: %d %s", SSL_get_error(ssl, send_return),
+              ERR_reason_error_string(SSL_get_error(ssl, send_return)));
   }
   return send_return;
 }

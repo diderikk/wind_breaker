@@ -204,40 +204,40 @@ int parse_header_field(http_request_t *http_request,
           matches[1].rm_eo - matches[1].rm_so);
   header_name[matches[1].rm_eo - matches[1].rm_so] = '\0';
 
-  if (strcmp(header_name, "Host") == 0) {
+  if (strcasecmp(header_name, "Host") == 0) {
     strncpy(http_request->host, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->host[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "User-Agent") == 0) {
+  } else if (strcasecmp(header_name, "User-Agent") == 0) {
     strncpy(http_request->user_agent, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->user_agent[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "Accept") == 0) {
+  } else if (strcasecmp(header_name, "Accept") == 0) {
     strncpy(http_request->accept, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->accept[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "Accept-Language") == 0) {
+  } else if (strcasecmp(header_name, "Accept-Language") == 0) {
     strncpy(http_request->accept_language, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->accept_language[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "Accept-Encoding") == 0) {
+  } else if (strcasecmp(header_name, "Accept-Encoding") == 0) {
     strncpy(http_request->accept_encoding, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->accept_encoding[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "Connection") == 0) {
-    if (strncmp(raw_header_field + matches[2].rm_so, "keep-alive", 10) == 0)
+  } else if (strcasecmp(header_name, "Connection") == 0) {
+    if (strncasecmp(raw_header_field + matches[2].rm_so, "keep-alive", 10) == 0)
       http_request->connection = KEEP_ALIVE;
-    else if (strncmp(raw_header_field + matches[2].rm_so, "close", 5) == 0)
+    else if (strncasecmp(raw_header_field + matches[2].rm_so, "close", 5) == 0)
       http_request->connection = CLOSE;
-  } else if (strcmp(header_name, "If-None-Match") == 0) {
+  } else if (strcasecmp(header_name, "If-None-Match") == 0) {
     strncpy(http_request->if_none_match, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->if_none_match[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "Content-Type") == 0) {
+  } else if (strcasecmp(header_name, "Content-Type") == 0) {
     strncpy(http_request->content_type, raw_header_field + matches[2].rm_so,
             matches[2].rm_eo - matches[2].rm_so);
     http_request->content_type[matches[2].rm_eo - matches[2].rm_so] = '\0';
-  } else if (strcmp(header_name, "Content-Length") == 0) {
+  } else if (strcasecmp(header_name, "Content-Length") == 0) {
     http_request->content_length =
         strtol(raw_header_field + matches[2].rm_so, NULL, 10);
   }
@@ -246,23 +246,23 @@ int parse_header_field(http_request_t *http_request,
 }
 
 http_method method_str_to_enum(const char *raw_method) {
-  if (strncmp(raw_method, "POST", 4) == 0)
+  if (strncasecmp(raw_method, "POST", 4) == 0)
     return HTTP_POST;
-  else if (strncmp(raw_method, "GET", 3) == 0)
+  else if (strncasecmp(raw_method, "GET", 3) == 0)
     return HTTP_GET;
-  else if (strncmp(raw_method, "PUT", 3) == 0)
+  else if (strncasecmp(raw_method, "PUT", 3) == 0)
     return HTTP_PUT;
-  else if (strncmp(raw_method, "DELETE", 6) == 0)
+  else if (strncasecmp(raw_method, "DELETE", 6) == 0)
     return HTTP_DELETE;
-  else if (strncmp(raw_method, "HEAD", 4) == 0)
+  else if (strncasecmp(raw_method, "HEAD", 4) == 0)
     return HTTP_HEAD;
-  else if (strncmp(raw_method, "OPTIONS", 7) == 0)
+  else if (strncasecmp(raw_method, "OPTIONS", 7) == 0)
     return HTTP_OPTIONS;
-  else if (strncmp(raw_method, "PATCH", 5) == 0)
+  else if (strncasecmp(raw_method, "PATCH", 5) == 0)
     return HTTP_PATCH;
-  else if (strncmp(raw_method, "CONNECT", 7) == 0)
+  else if (strncasecmp(raw_method, "CONNECT", 7) == 0)
     return HTTP_CONNECT;
-  else if (strncmp(raw_method, "TRACE", 5) == 0)
+  else if (strncasecmp(raw_method, "TRACE", 5) == 0)
     return HTTP_TRACE;
 
   return HTTP_BAD_METHOD;

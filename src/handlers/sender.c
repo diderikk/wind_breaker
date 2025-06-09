@@ -28,18 +28,37 @@ void *handle_d() {
              session.buffer);
 
     int send_return =
-        (is_ssl) ? send_ssl(session.ssl, session.buffer, *session.buffer_size)
-                 : send_bio(session.bio, session.buffer, *session.buffer_size);
+        (is_ssl)
+            ? send_ssl(session.ssl, session.buffer + session.response->offset,
+                       *session.buffer_size - session.response->offset)
+            : send_bio(session.bio, session.buffer + session.response->offset,
+                       *session.buffer_size - session.response->offset);
 
     WORK_STATUS next_status = WORK_STATUS_SENT;
-    if (is_ssl && send_return <= 0 &&
-        SSL_get_error(session.ssl, send_return) == SSL_ERROR_WANT_READ) {
-      log_debug("SSL should retry, pushing data back to queue...");
-      next_status = WORK_STATUS_SEND_FAILED;
+    log_debug("send_return: %d, buffer_size: %d", send_return,
+              *session.buffer_size);
+    if (is_ssl && send_return <= 0) {
+      int ssl_error = SSL_get_error(session.ssl, send_return);
+      if (ssl_error == SSL_ERROR_WANT_READ) {
+        log_debug("SSL should retry read, pushing data back to queue...");
+        next_status = WORK_STATUS_SEND_FAILED;
+      } else if (ssl_error == SSL_ERROR_WANT_WRITE) {
+        log_debug("SSL should retry write, pushing data back to queue...");
+        next_status = WORK_STATUS_READY_TO_SEND;
+      } else {
+        log_debug("Could not send data to fd %d, closing connection...",
+                  session.session->related_fd);
+        next_status = WORK_STATUS_REJECTED;
+      }
     } else if (!is_ssl && send_return <= 0 &&
                BIO_should_retry(session.bio) == 1) {
       log_debug("BIO should retry, pushing data back to queue...");
       next_status = WORK_STATUS_SEND_FAILED;
+    } else if ((send_return + session.response->offset) <
+               *session.buffer_size) {
+      log_debug("Partial send, pushing data back to sending queue... %d");
+      session.response->offset += send_return;
+      next_status = WORK_STATUS_READY_TO_SEND;
     } else if (send_return == -1) {
       log_debug("Could not send data to fd %d, closing connection...",
                 session.session->related_fd);

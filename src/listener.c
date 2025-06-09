@@ -38,7 +38,7 @@ int handle_request_async(int fd) {
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
-    } else if (recv_return == -1 &&
+    } else if (recv_return <= 0 &&
                SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ) {
       push_request(fd, WORK_STATUS_INITIAL);
       return 0;
@@ -57,7 +57,7 @@ int handle_request_async(int fd) {
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
-    } else if (recv_return == -1 && BIO_should_retry(session.bio) == 1) {
+    } else if (recv_return <= 0 && BIO_should_retry(session.bio)) {
       push_request(fd, WORK_STATUS_INITIAL);
       return 0;
     } else {
