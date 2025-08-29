@@ -1,7 +1,6 @@
 #include "../../src/properties.h"
 #include "../../src/static.h"
 #include "../../src/utils/assert2.h"
-#include "../../src/utils/logger.h"
 #include "connection_cases.h"
 #include <curl/curl.h>
 #include <dirent.h>

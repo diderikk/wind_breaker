@@ -1,11 +1,11 @@
 #include "../data_structures/session.h"
-#include "../http/request.h"
 #include "../http/response.h"
 #include "../properties.h"
 #include "../shutdown/stop.h"
 #include "../utils/assert2.h"
 #include "../utils/logger.h"
 #include "../utils/static_file.h"
+#include "../version.h"
 #include <sqlite3.h>
 
 #define INDEX_PROJECTS_SQL "SELECT id, title FROM Project;"
@@ -16,6 +16,7 @@
   "SELECT title,description,githubUrl,imageUrl,websiteUrl,githubReadme FROM "  \
   "Project WHERE id = ?;"
 #define POST_SQL "SELECT title, description, created_at FROM Post WHERE id = ?;"
+#define VERSION WIND_BREAKER_VERSION
 
 static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
                                char *in_out_buffer,
@@ -131,9 +132,8 @@ void *handle_b() {
   sqlite3_finalize(index_projects_stmt);
   sqlite3_finalize(index_posts_stmt);
   sqlite3_finalize(project_stmt);
-  if (db != NULL) {
-    sqlite3_close(db);
-  }
+  // Can be a null pointer
+  assert(sqlite3_close_v2(db) == SQLITE_OK);
 
   return NULL;
 }
@@ -280,6 +280,7 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
   }
   if (rc_projects == SQLITE_DONE) {
     *in_out_buffer_size = str_replace(in_out_buffer, "%PROJECTS%", tmp_buffer);
+    *in_out_buffer_size = str_replace(in_out_buffer, "%VERSION%", VERSION);
 
     // Do same for posts
     memset(tmp_buffer, 0, sizeof(tmp_buffer));

@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(CServer VERSION 0.0 LANGUAGES C)
+project(WindBreaker VERSION 1.1.1 LANGUAGES C)
+
+
+configure_file(src/version.h.in ../src/version.h)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+set(CMAKE_EXE_LINKER_FLAGS "-rdynamic")
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)

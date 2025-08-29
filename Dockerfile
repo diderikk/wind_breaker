@@ -1,5 +1,4 @@
-FROM debian:bookworm-20250520-slim
-
+FROM debian:bookworm-20250811-slim AS builder
 
 RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
     curl \
@@ -16,26 +15,35 @@ RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy the entire project into the container
 COPY . .
 
-# Create a build directory
-RUN mkdir -p build && mkdir -p /etc/wind_breaker && chown -R 1001:1001 /etc/wind_breaker
+RUN mkdir -p build 
 
-# Set the working directory to the build directory
 WORKDIR /app/build
 
-# Remove any existing CMake cache
 RUN rm -f CMakeCache.txt
 
-# Run CMake to configure the project
 RUN cmake ..
 
-# Build the project
-RUN cmake --build .
+RUN cmake --build . --target main
+
+
+
+FROM debian:bookworm-20250811-slim 
+
+# Does not have static libraries...
+RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
+    libssl-dev \
+    sqlite3
+    
+WORKDIR /app
+
+COPY --from=builder /app/build .
+
+RUN mkdir -p /etc/wind_breaker && chown -R 1001:1001 /etc/wind_breaker
 
 USER 1001:1001
 
-# Specify the command to run the main executable by default
+# Flush after every new line (for debugging purposes)
 CMD ["stdbuf", "-oL", "-eL", "./main"]
 

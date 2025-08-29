@@ -1,4 +1,3 @@
-#include "../data_structures/poll_array.h"
 #include "../data_structures/session.h"
 #include "../shutdown/stop.h"
 #include "../socket.h"

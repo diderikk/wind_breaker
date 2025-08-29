@@ -3,13 +3,10 @@
 #include "data_structures/marked_fds.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
-#include "http/request.h"
-#include "http/response.h"
 #include "shutdown/stop.h"
 #include "socket.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
-#include "worker.h"
 #include <errno.h>
 #include <openssl/err.h>
 
@@ -259,7 +256,7 @@ POLL_ERROR_CLASS classify_poll_error(int code) {
   case ENOMEM:
     return REMOVE_FD;
   default:
-    return CONTINUE;
+    return REMOVE_FD;
   }
 }
 

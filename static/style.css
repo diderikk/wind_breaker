@@ -4,6 +4,9 @@ body {
   padding: 0 5px;
   background-color: #f4f4f4;
   font-size: 1.2em;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .non-overflow-container {
@@ -17,6 +20,17 @@ pre {
   overflow-x: auto;
   white-space: pre-wrap; /* Allows wrapping */
   width: fit-content;
+}
+
+main {
+  flex: 1;
+}
+
+footer {
+  padding: 1em;
+  color: grey;
+  text-align: center;
+  border-top: 2px solid #e0e0e0;
 }
 
 h1 {

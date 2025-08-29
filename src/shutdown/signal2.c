@@ -1,5 +1,4 @@
 #include "signal2.h"
-#include "stop.h"
 #include <signal.h>
 #include <stddef.h>
 
