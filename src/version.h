@@ -7,4 +7,4 @@
 
 #define WIND_BREAKER_VERSION "1.1.1"
 
-#endif //MYAPP_VERSION_H
+#endif // MYAPP_VERSION_H

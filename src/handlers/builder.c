@@ -1,8 +1,8 @@
 #include "../data_structures/session.h"
 #include "../http/response.h"
 #include "../shutdown/stop.h"
-#include "../utils/logger.h"
 #include "../utils/assert2.h"
+#include "../utils/logger.h"
 
 void *handle_c() {
   struct session_full_return session;
