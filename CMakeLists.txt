@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(WindBreaker VERSION 1.1.1 LANGUAGES C)
+project(WindBreaker VERSION 1.2.1 LANGUAGES C)
 
 
 configure_file(src/version.h.in ../src/version.h)

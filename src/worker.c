@@ -4,7 +4,6 @@
 #include "handlers/loader.c"
 #include "handlers/parser.c"
 #include "handlers/sender.c"
-#include "utils/assert2.h"
 #include "utils/logger.h"
 #include <pthread.h>
 #include <stdlib.h>
