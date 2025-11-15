@@ -19,7 +19,8 @@ A single thread is used for listening on the TCP port. Worker threads handle req
 2. On the second POLLIN event, the listening thread reads the request into the session's buffer. 
 3. After succesfully handling these two events the worker threads, in order, each performs their task to create the response.  
 
-TODO - State diagram
+**Session state diagram**
+<img width="861" height="1161" alt="wind_breaker_state_diagram(1)" src="https://github.com/user-attachments/assets/77eeda87-9367-46a7-8569-3af4c8a55a38" />
 
 The workers are responsible for performing the handler functions (defined here [src/handlers](src/handlers)):
 1. **parser.c** - Responsible for parsing the session's buffer into a http_request_t structure, which is used by the remaining handlers.
