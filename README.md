@@ -2,28 +2,28 @@
 ![CI](https://github.com/diderikk/wind_breaker/actions/workflows/ci.yml/badge.svg)
 
 ## Introduction
-This is a hobby project implemented by (diderikk)[https://github.com/diderikk]. 
-Wind Breaker is a HTTP server written and implemented in C. Currently, it hosts my portfolio web page, which can be found on https://diderikk.dev. The implementation has gone through countless iterations, where strategy and implementation has changed numerous times. This is the final output ;). 
+This is a hobby project implemented by [diderikk](https://github.com/diderikk). 
+Wind Breaker is a HTTP server written and implemented in C. Currently, it hosts my portfolio web pages, which can be found on https://diderikk.dev. The implementation has gone through countless iterations, where arcitecture and implementation has changed numerous times. 
 
-The server uses mainly two data structures for handling requests: **poll_array** and **session**. Both uses the socket's file descriptor as the unique identifier. 
+The server uses mainly two data structures for handling requests: **poll_array** and **sessions**. Both uses the socket's file descriptor as the unique identifier. 
 
-* **poll_array** is a list of file descriptors that the server is expecting an event from. It used by the event handling thread that listenes on the TCP port. See implementation in [listener.c](src/listener.c). Since this structure is only used by a single thread all its functions are synchronous. 
-* **session** is a queue used to maintain the states of all open file descriptors. This is the cornerstone for handling request since it is used by all workers to fetch their next task. Functions are implemented to handle asynchronous access using semaphores (or mutex and conds). 
-* **marked_fds** is a list of failed file descriptors that must be removed from both poll_array and session.
+* **poll_array** is a list of file descriptors that the server is expecting an event from. It used by the event handling thread that listenes on the TCP port. See implementation in [listener.c](src/listener.c). Since this data structure is only used by a single thread all its functions are synchronous. 
+* **session** is a queue used to maintain the states of all open file descriptors. This is the cornerstone for handling request since it is used by all workers to fetch their next task. Functions for this data structure are implemented to handle asynchronous access using semaphores (or mutex and conds). 
+* **marked_fds** is a list of failed or completed file descriptors that must be removed from both poll_array and session.
 
 ## Functionality
 
 ### Asynchronous request handling (multithreaded)
 A single thread is used for listening on the TCP port. Worker threads handle request after it has been read. 
-1. On the first POLLIN event of a socket's file descriptor, the socket is added to poll_array and session. 
-2. On the second POLLIN event, the listening thread reads the request. 
-3. After succesfully handling these two events the worker threads in order each performs their task to create the response.  
+1. On the first POLLIN event of a socket's file descriptor, the socket is added to the poll_array and sessions data structures. 
+2. On the second POLLIN event, the listening thread reads the request into the session's buffer. 
+3. After succesfully handling these two events the worker threads, in order, each performs their task to create the response.  
 
 TODO - State diagram
 
 The workers are responsible for performing the handler functions (defined here [src/handlers](src/handlers)):
-1. **parser.c** - Responsible for parsing the HTTP request buffer into a http_request_t structure, which is used by the remaining handlers.
-2. **loader.c** - Responsible for loading static HTML/CSS/PNG files, data from the database and dynamically replacing variables in the HTML templates with dynamic values.  
+1. **parser.c** - Responsible for parsing the session's buffer into a http_request_t structure, which is used by the remaining handlers.
+2. **loader.c** - Responsible for loading static HTML/CSS/PNG files, data from the database and dynamically replacing variables in the HTML templates with dynamic values (usually from the database).  
 3. **builder.c** - Responsible for building the HTTP response by combining results from previous steps. If something went wrong in previous handlers, this handler will generate a static HTML error response.
 4. **sender.c** - Responsible for sending the response. 
 
@@ -34,19 +34,19 @@ The sender performs an optimistic send of the response. If this fails, the respo
     * Switched from send/recv to using BIO. Easier integration with OpenSSL.
 * Can handle both HTTPS and HTTP when enabling HTTPS.
     * Opens a port for HTTPS (8443) and one for HTTP (8080)
-* This took way longer than expected... :/
+* This implementation took way longer than expected... :/
 
 ### HTTP Protocol
 * Minimal implementation of the HTTP 1.1 protocol.
 * Main focus -> to validate all input.
-    * Ensures all files and path references are valid.
+    * Ensures all files and path references are valid. For example see [static.c](src/static.c)
 
 ### Static memory
 * Most of the memory used by the application is allocated at the start of the application (intentional). 
-* The size of this depends on the properties used (session_max_size).
+* The size of the memory depends on the properties used (mostly session_max_size).
 
 ### SQLite
-* Mainly used to host portfolio specific data.
+* Mainly used to contain portfolio specific data.
 * Uses a self-implemented migration system to load static data into database.
 * Files are stored as a reference given by their SHA256 sum... 
 
@@ -73,8 +73,8 @@ enable_https = 0 (binary value for enabling HTTPS)
 * Metrics (See tcp(7) man page, and tcp_info struct) 
     * TCP_INFO
 * Add more parsing for more HTTP headers.
-* Memory optimization, data-oriented design, spacial locality (maybe not necessary) (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
-* Performance optimization (assembly understanding, cache optimization?)
+* Memory optimization: data-oriented design, spacial locality (maybe not necessary) (based on [Andrew Kelley Practical Data Oriented Design (DoD)](https://www.youtube.com/watch?v=IroPQ150F6c) and [Handles are the better pointers](https://floooh.github.io/2018/06/17/handles-vs-pointers.html))
+* Performance optimization (spacial locality?)
 * A thread/path that listens to console/http input and can send commands to the server (e.g. reload config, shutdown, etc.)
 * Basic Auth
 
