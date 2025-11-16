@@ -39,7 +39,8 @@ Notes
 #### Session states
 
 **Simplified session state diagram**
-<img width="861" height="1161" alt="wind_breaker_state_diagram(1)" src="https://github.com/user-attachments/assets/77eeda87-9367-46a7-8569-3af4c8a55a38" />
+<img width="861" height="1161" alt="wind_breaker_state_diagram(2)" src="https://github.com/user-attachments/assets/53557ce8-2afd-4241-8179-96d5933c88cc" />
+
 
 - **PROCESSING**  
   - Transient lock state used to prevent concurrent handlers from operating on the same session.  
