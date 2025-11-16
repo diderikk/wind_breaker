@@ -14,21 +14,64 @@ The server uses mainly two data structures for handling requests: **poll_array**
 ## Functionality
 
 ### Asynchronous request handling (multithreaded)
-A single thread is used for listening on the TCP port. Worker threads handle request after it has been read. 
-1. On the first POLLIN event of a socket's file descriptor, the socket is added to the poll_array and sessions data structures. 
-2. On the second POLLIN event, the listening thread reads the request into the session's buffer. 
-3. After succesfully handling these two events the worker threads, in order, each performs their task to create the response.  
+One dedicated listener thread accepts connections and manages the poll event loop; worker threads perform request processing once request data has been read. 
+The design separates I/O (listener) from more heavy work (workers) using a small (but maybe complex) state machine.
 
-**Session state diagram**
+Event flow (high level)
+1. When the listener observes the first POLLIN event for a socket's file descriptor, it registers the fd in poll_array and creates (or initializes) a session entry for that connection.
+2. On the next POLLIN event for the same fd, the listener reads available bytes into the session's buffer and marks the session as ready for processing.
+3. Once the request has been successfully read, the session is advanced into the worker pipeline where a sequence of handler stages runs to produce the response.  
+
+Worker pipeline
+- Worker threads are organized as a pipeline. Each worker thread is assigned one handler function (see [src/handlers](src/handlers)) and repeatedly pulls sessions that are in its handler's state.
+- After a handler finishes its work, it advances the session to the next pipeline state (pushes the session to the next handler). This moves the session along the pipeline until the request is fully handled and the response is sent.
+
+Handlers (in order)
+1. parser.c — Parses the session buffer into an http_request_t structure used by subsequent handlers.
+2. loader.c — Loads static files (HTML/CSS/PNG), fetches data from the database, and performs template variable substitution.
+3. builder.c — Builds the final HTTP response from the results of previous handlers. If an earlier step failed, builder.c will generate a suitable error page/response (depends on the HTTP error code).
+4. sender.c — Sends the response over the socket. 
+
+Notes
+- The listener + worker pipeline forms a small state machine: handlers advance session states and the system routes sessions to workers responsible for those states.
+- The sender performs an optimistic send: if the response was not successfully sent (e.g., EAGAIN or partial write), the session is stored and is left waiting for a POLLOUT event so the listener can resume sending.
+
+#### Session states
+
+**Simplified session state diagram**
 <img width="861" height="1161" alt="wind_breaker_state_diagram(1)" src="https://github.com/user-attachments/assets/77eeda87-9367-46a7-8569-3af4c8a55a38" />
 
-The workers are responsible for performing the handler functions (defined here [src/handlers](src/handlers)):
-1. **parser.c** - Responsible for parsing the session's buffer into a http_request_t structure, which is used by the remaining handlers.
-2. **loader.c** - Responsible for loading static HTML/CSS/PNG files, data from the database and dynamically replacing variables in the HTML templates with dynamic values (usually from the database).  
-3. **builder.c** - Responsible for building the HTTP response by combining results from previous steps. If something went wrong in previous handlers, this handler will generate a static HTML error response.
-4. **sender.c** - Responsible for sending the response. 
+- **PROCESSING**  
+  - Transient lock state used to prevent concurrent handlers from operating on the same session.  
+  - Set when a worker pops a session for processing and cleared when that worker pushes the session (to another handler or back to the queue).  
 
-The sender performs an optimistic send of the response. If this fails, the response is stored and will be sent again on a POLLOUT event.
+- **INITIAL**  
+  - Listener-created state for a newly observed POLLIN on the HTTP socket (first POLLIN).  
+
+- **INITIAL_SSL**  
+  - Same as INITIAL but for new TLS connections (may include TLS handshake steps).  
+
+- **REQUEST_READ**  
+  - Request bytes are read into the session buffer (typically after the second POLLIN). The session is ready for parsing.  
+
+- **PARSED**  
+  - The session buffer has been parsed into an http_request_t (structured request).  
+
+- **DATA_FETCHED**  
+  - Static files, DB data and template substitutions have been fetched/applied and are available for response building.  
+
+- **READY_TO_SEND**  
+  - The HTTP response bytes have been built and the session is ready for network transmission.
+
+- **SENT**  
+  - Response successfully written to the socket. Session can be cleaned up and the FD closed/removed.
+
+- **SEND_FAILED**  
+  - Optimistic send did not complete (partial write, EAGAIN, or other non-fatal error). Session is stored and the session waits for POLLOUT.  
+
+- **REJECTED**  
+  - Terminal state indicating the request will not be handled (invalid request, permission error, unrecoverable I/O). File descriptors and session resources are closed/removed.  
+
 
 ### TLS/HTTPS
 * Uses OpenSSL for initializing and handling TLS/HTTPS
