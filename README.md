@@ -3,7 +3,7 @@
 
 ## Introduction
 This is a hobby project implemented by [diderikk](https://github.com/diderikk). 
-Wind Breaker is a HTTP server written and implemented in C. Currently, it hosts my portfolio web pages, which can be found on https://diderikk.dev. The implementation has gone through countless iterations, where arcitecture and implementation has changed numerous times. 
+Wind Breaker is a HTTP server written and implemented in C. Currently, it hosts my portfolio web pages, which can be found on https://diderikk.dev.
 
 The server uses mainly two data structures for handling requests: **poll_array** and **sessions**. Both uses the socket's file descriptor as the unique identifier. 
 
