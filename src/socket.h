@@ -1,6 +1,7 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
+#include "static.h"
 #include <netdb.h>
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
@@ -15,8 +16,8 @@ int connect_socket(int socket_fd, const struct sockaddr *in_addr,
 int send_ssl(SSL *ssl, const char *buffer, size_t buffer_size);
 int send_bio(BIO *bio, const char *buffer, size_t buffer_size);
 int send_socket(int socket_fd, const char *buffer, size_t buffer_size);
-int recv_ssl(SSL *ssl, char *buffer, size_t buffer_size);
-int recv_bio(BIO *bio, char *buffer, size_t buffer_size);
+int recv_ssl(SSL *ssl, buffer* buffer);
+int recv_bio(BIO *bio, buffer* buffer);
 int recv_socket(int socket_fd, char *buffer, size_t buffer_size);
 void *get_in_addr(const struct sockaddr *sa);
 int get_in_addr_port(const struct sockaddr *sa);

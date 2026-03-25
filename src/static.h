@@ -6,8 +6,8 @@
 #include <poll.h>
 #include <pthread.h>
 
-#define REQUEST_RESPONSE_MAX_SIZE 1024 * 1024 // 1 MB
-#define HTML_MAX_SIZE 70 * 1024               // 16 kB
+#define DEFAULT_BUFFER_SIZE 1024
+#define HTML_MAX_SIZE 70 * 1024               // 70 kB
 #define HTTP_HEADER_SIZE 256
 #define HTTP_URI_TOKEN_COUNT 4
 #define HTTP_URI_TOKEN_SIZE 200
@@ -20,6 +20,7 @@
 #define WB_SQLITE_OPEN_FLAGS                                                   \
   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI |               \
       SQLITE_OPEN_NOMUTEX
+#define ALLOCATE_MEMORY_ERROR -123
 
 typedef enum { RESET, REMOVE_FD, CONTINUE } POLL_ERROR_CLASS;
 
@@ -67,7 +68,7 @@ typedef enum {
 typedef struct {
   int fd;
   int size;
-  char data[REQUEST_RESPONSE_MAX_SIZE];
+  char* data;
 } worker_data;
 
 typedef struct {
@@ -120,6 +121,12 @@ typedef struct {
   pthread_cond_t cond;
 } queue_t;
 
+typedef struct {
+  unsigned long capacity;
+  unsigned long count;
+  char *data;
+} buffer;
+
 struct session {
   int id;
   int related_fd;
@@ -130,12 +137,15 @@ struct session_full_return {
   struct session *session;
   BIO *bio;
   SSL *ssl;
-  char *buffer;
-  unsigned int *buffer_size;
+  buffer *buffer;
   http_request_t *request;
   http_response_t *response;
 };
 
+#define ENSURE_CAPACITY(buffer, capacity) (__FILE__, buffer, capacity)
+
+int ensure_capacity_(const char* callee, buffer* buffer, unsigned long capacity);
 char *uri_to_file_name(const uri_token_t uri);
+
 
 #endif // STATIC_H

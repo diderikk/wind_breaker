@@ -1,9 +1,12 @@
 #include "socket.h"
+#include "static.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <openssl/bio.h>
 #include <openssl/err.h>
+#include <stdlib.h>
 #include <string.h>
 
 static inline void disable_socket_blocking(int socket_fd);
@@ -122,39 +125,53 @@ int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
   return send_return;
 }
 
-int recv_ssl(SSL *ssl, char *buffer, size_t buffer_size) {
+int recv_ssl(SSL *ssl, buffer* buffer) {
   int recv_return;
   assert(ssl != NULL);
   assert(buffer != NULL);
-  assert(buffer_size > 0);
+  assert(buffer->data == NULL || buffer->capacity > 0);
 
-  memset(buffer, 0, buffer_size);
-  recv_return = SSL_read(ssl, buffer, buffer_size - 1);
+  // Alloc more space for the data or any space at all :)
+  size_t pending = SSL_pending(ssl);
+  size_t old_count = buffer->count;
+  ENSURE_CAPACITY(buffer, old_count + pending + 1);
 
+  recv_return = SSL_read(ssl, buffer->data + old_count, pending - 1);
+  buffer->count = buffer->count + recv_return;
+
+  assert(recv_return <= pending);
   if (recv_return < 0) {
     log_error("SSL read error");
     return -1;
   }
 
-  buffer[buffer_size] = '\0';
+  buffer->data[buffer->count] = '\0';
+  buffer->count++;
   return recv_return;
 }
 
-int recv_bio(BIO *bio, char *buffer, size_t buffer_size) {
+int recv_bio(BIO *bio, buffer* buffer) {
   int recv_return;
   assert(bio != NULL);
   assert(buffer != NULL);
-  assert(buffer_size > 0);
+  assert(buffer->data == NULL || buffer->capacity > 0);
 
-  memset(buffer, 0, buffer_size);
-  recv_return = BIO_read(bio, buffer, buffer_size - 1);
+  // Alloc more space for the data or any space at all :)
+  size_t pending = BIO_ctrl_pending(bio);
+  size_t old_count = buffer->count;
+  ENSURE_CAPACITY(buffer, old_count + pending + 1);
 
+  recv_return = BIO_read(bio, buffer->data + old_count, pending - 1);
+  buffer->count = buffer->count + recv_return;
+
+  assert(recv_return <= pending);
   if (recv_return < 0) {
     log_error("BIO read error");
     return -1;
   }
 
-  buffer[buffer_size] = '\0';
+  buffer->data[buffer->count] = '\0';
+  buffer->count++;
   return recv_return;
 }
 

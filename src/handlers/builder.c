@@ -27,7 +27,7 @@ void *handle_c() {
     // Deprecated
     if (session.response->status_code == HTTP_MOVED_PERMANENTLY) {
       *session.buffer_size = construct_upgrade_to_https_response(
-          session.request->uri, session.request->host, session.buffer);
+          session.request->uri, session.request->host, *session.buffer);
     } else {
       *session.buffer_size = construct_response(
           session.response, session.request->uri,

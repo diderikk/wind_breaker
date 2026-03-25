@@ -5,11 +5,11 @@
 unsigned int construct_response(http_response_t *http_response,
                                 const uri_token_t uri,
                                 const char *accept_encoding,
-                                const char *if_none_match, char *body_buffer,
-                                unsigned int body_size,
-                                char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE]);
+                                const char *if_none_match, 
+                                buffer* body,
+                                char* tmp_buffer);
 unsigned int construct_upgrade_to_https_response(const uri_token_t uri,
                                                  const char *host,
-                                                 char *response);
+                                                 buffer* buffer);
 char *http_status_code_to_str(http_status_code status_code);
 #endif // HTTP_RESPONSE_H
