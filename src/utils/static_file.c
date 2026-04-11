@@ -71,7 +71,7 @@ int read_static_file(const char *file_path, buffer* buffer) {
   size_t size = ftell(file);
 
   if(buffer->capacity < size) {
-    ENSURE_CAPACITY(buffer, size);
+    assert(ENSURE_CAPACITY(buffer, size) > 0);
   }
 
   size_t read_size = fread(buffer->data, 1, size, file);

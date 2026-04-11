@@ -1,20 +1,6 @@
 #include "static.h"
 #include "stdlib.h"
 
-int ensure_capacity_(const char* callee, buffer* buffer, unsigned long capacity) {
-  unsigned long old_capacity = buffer->capacity;
-  while(buffer->capacity < capacity) {
-    buffer->capacity = (buffer->capacity < DEFAULT_BUFFER_SIZE) ? DEFAULT_BUFFER_SIZE : buffer->capacity * 2;
-  }
-  if(buffer->capacity > old_capacity) {
-    buffer->data = realloc(buffer->data, sizeof(char) * buffer->capacity);
-    if(buffer->data == NULL)
-      return -1;
-  }
-
-  return buffer->capacity;
-}
-
 char *uri_to_file_name(const uri_token_t uri) {
   if (strcmp(uri[0], "") == 0) {
     return "index.html";

@@ -1,6 +1,7 @@
 #include "session.h"
 #include "../properties.h"
 #include "../shutdown/stop.h"
+#include "buffer.h"
 #include "marked_fds.h"
 #include <execinfo.h>
 #include <openssl/err.h>
@@ -72,11 +73,7 @@ int init_session_cache(SSL_CTX *ctx) {
   assert(buffer_array != NULL);
 
   for (int i = 0; i < max_size; i++) {
-    *buffer_array[i] = (buffer) {
-      .data = NULL,
-      .count = 0,
-      .capacity = 0
-    };
+    buffer_array[i] = init_buffer(0);
     assert(buffer_array[i] == NULL);
   }
 
@@ -162,11 +159,7 @@ void destroy_session_cache() {
   // Buffer array
   for (int i = 0; i < max_size; i++) {
     if (buffer_array[i] != NULL) {
-      if(buffer_array[i]->data != NULL) {
-        free(buffer_array[i]->data);
-      }
-      free(buffer_array[i]);
-      buffer_array[i] = NULL;
+      deinit_buffer(buffer_array[i]);
     }
   }
   free(buffer_array);

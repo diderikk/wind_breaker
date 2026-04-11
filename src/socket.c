@@ -134,7 +134,7 @@ int recv_ssl(SSL *ssl, buffer* buffer) {
   // Alloc more space for the data or any space at all :)
   size_t pending = SSL_pending(ssl);
   size_t old_count = buffer->count;
-  ENSURE_CAPACITY(buffer, old_count + pending + 1);
+  assert(ENSURE_CAPACITY(buffer, old_count + pending + 1) > 0);
 
   recv_return = SSL_read(ssl, buffer->data + old_count, pending - 1);
   buffer->count = buffer->count + recv_return;
@@ -159,7 +159,7 @@ int recv_bio(BIO *bio, buffer* buffer) {
   // Alloc more space for the data or any space at all :)
   size_t pending = BIO_ctrl_pending(bio);
   size_t old_count = buffer->count;
-  ENSURE_CAPACITY(buffer, old_count + pending + 1);
+  assert(ENSURE_CAPACITY(buffer, old_count + pending + 1) > 0);
 
   recv_return = BIO_read(bio, buffer->data + old_count, pending - 1);
   buffer->count = buffer->count + recv_return;

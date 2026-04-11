@@ -27,12 +27,12 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
 static inline int load_index(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
                              sqlite3_stmt **index_posts_stmt,
                              buffer* buffer);
-static inline unsigned int str_replace(char *target, const char *needle,
+static inline void str_replace(buffer* target, const char *needle,
                                        const char *replacement);
 static inline unsigned int gen_error_body(http_status_code http_status_code,
                                           buffer *buffer) {
   const char *status_code_str = http_status_code_to_str(http_status_code);
-  ENSURE_CAPACITY(buffer, 512);
+  assert(ENSURE_CAPACITY(buffer, 512) > 0);
   return snprintf(buffer->data, buffer->capacity,
                   "<html><body><h1>%d %s</h1></body></html>", http_status_code,
                   status_code_str);
@@ -126,6 +126,7 @@ void *handle_b() {
     push_request(session.session->related_fd, WORK_STATUS_DATA_FETCHED);
   }
 
+  // TODO: Dangling pointers
   sqlite3_finalize(index_projects_stmt);
   sqlite3_finalize(index_posts_stmt);
   sqlite3_finalize(project_stmt);
@@ -156,17 +157,15 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
   rc = sqlite3_step(*stmt);
   if (rc == SQLITE_ROW) {
     const char *title = (const char *)sqlite3_column_text(*stmt, 0);
-    *in_out_buffer_size = str_replace(in_out_buffer, "%TITLE%", title);
+    str_replace(buffer, "%TITLE%", title);
     const char *description = (const char *)sqlite3_column_text(*stmt, 1);
-    *in_out_buffer_size =
-        str_replace(in_out_buffer, "%DESCRIPTION%", description);
+    str_replace(buffer, "%DESCRIPTION%", description);
     const char *created_at = (const char *)sqlite3_column_text(*stmt, 2);
-    *in_out_buffer_size =
-        str_replace(in_out_buffer, "%CREATED_AT%", created_at);
+    str_replace(buffer, "%CREATED_AT%", created_at);
     char html_file[HTTP_URI_TOKEN_SIZE + 5] = {0};
     snprintf(html_file, HTTP_URI_TOKEN_SIZE + 5, "%s.html", argument);
-    read_static_file(html_file, tmp_buffer, HTML_MAX_SIZE);
-    *in_out_buffer_size = str_replace(in_out_buffer, "%POST%", tmp_buffer);
+    read_static_file(html_file, buffer);
+    str_replace(buffer, "%POST%", tmp_buffer);
   }
 
   int reset_rc = sqlite3_reset(*stmt);
@@ -200,33 +199,30 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
   rc = sqlite3_step(*stmt);
   if (rc == SQLITE_ROW) {
     const char *title = (const char *)sqlite3_column_text(*stmt, 0);
-    *in_out_buffer_size = str_replace(in_out_buffer, "%TITLE%", title);
+    str_replace(buffer, "%TITLE%", title);
     const char *description = (const char *)sqlite3_column_text(*stmt, 1);
-    *in_out_buffer_size =
-        str_replace(in_out_buffer, "%DESCRIPTION%", description);
+    str_replace(buffer, "%DESCRIPTION%", description);
     const char *githubUrl = (const char *)sqlite3_column_text(*stmt, 2);
-    *in_out_buffer_size = str_replace(in_out_buffer, "%GITHUB_URL%", githubUrl);
+    str_replace(buffer, "%GITHUB_URL%", githubUrl);
     const char *imageUrl = (const char *)sqlite3_column_text(*stmt, 3);
-    *in_out_buffer_size = str_replace(in_out_buffer, "%IMAGE_URL%", imageUrl);
+    str_replace(buffer, "%IMAGE_URL%", imageUrl);
     const char *websiteUrl = (const char *)sqlite3_column_text(*stmt, 4);
     if (websiteUrl != NULL) {
       snprintf(tmp_buffer, sizeof(tmp_buffer), "<a href=\"%s\">Website</a>",
                websiteUrl);
-      *in_out_buffer_size =
-          str_replace(in_out_buffer, "%WEBSITE_LINK%", tmp_buffer);
+      str_replace(buffer, "%WEBSITE_LINK%", tmp_buffer);
       memset(tmp_buffer, 0, sizeof(tmp_buffer));
     } else {
-      *in_out_buffer_size = str_replace(in_out_buffer, "%WEBSITE_LINK%", "");
+      str_replace(buffer, "%WEBSITE_LINK%", "");
     }
     const char *githubReadme = (const char *)sqlite3_column_text(*stmt, 5);
     if (githubReadme != NULL) {
       snprintf(tmp_buffer, sizeof(tmp_buffer), "<a href=\"%s\">Readme</a>",
                githubReadme);
-      *in_out_buffer_size =
-          str_replace(in_out_buffer, "%README_LINK%", tmp_buffer);
+      str_replace(buffer, "%README_LINK%", tmp_buffer);
       memset(tmp_buffer, 0, sizeof(tmp_buffer));
     } else {
-      *in_out_buffer_size = str_replace(in_out_buffer, "%README_LINK%", "");
+      str_replace(buffer, "%README_LINK%", "");
     }
   }
 
@@ -263,31 +259,29 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
   }
 
   // Fetch and inject arguments
-  char tmp_buffer[REQUEST_RESPONSE_MAX_SIZE];
-  unsigned int offset = 0;
+  char tmp_buffer[1024];
   while ((rc_projects = sqlite3_step(*projects_stmt)) == SQLITE_ROW) {
     const char *id = (const char *)sqlite3_column_text(*projects_stmt, 0);
     const char *title = (const char *)sqlite3_column_text(*projects_stmt, 1);
-    offset += snprintf(tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+    snprintf(tmp_buffer, 1024,
                        "<li id=\"%s\"><a href=\"/projects/%s\">%s</a></li>", id,
                        id, title);
   }
   if (rc_projects == SQLITE_DONE) {
-    *in_out_buffer_size = str_replace(in_out_buffer, "%PROJECTS%", tmp_buffer);
-    *in_out_buffer_size = str_replace(in_out_buffer, "%VERSION%", VERSION);
+    str_replace(buffer, "%PROJECTS%", tmp_buffer);
+    str_replace(buffer, "%VERSION%", VERSION);
 
     // Do same for posts
     memset(tmp_buffer, 0, sizeof(tmp_buffer));
-    offset = 0;
     while ((rc_posts = sqlite3_step(*posts_stmt)) == SQLITE_ROW) {
       const char *id = (const char *)sqlite3_column_text(*posts_stmt, 0);
       const char *title = (const char *)sqlite3_column_text(*posts_stmt, 1);
-      offset += snprintf(
-          tmp_buffer + offset, REQUEST_RESPONSE_MAX_SIZE - offset,
+      snprintf(
+          tmp_buffer, 1024,
           "<li id=\"%s\"><a href=\"/posts/%s\">%s</a></li>", id, id, title);
     }
     if (rc_posts == SQLITE_DONE) {
-      *in_out_buffer_size = str_replace(in_out_buffer, "%NOTES%", tmp_buffer);
+      str_replace(buffer, "%NOTES%", tmp_buffer);
     } else {
       log_error("Failed to fetch posts: %s", sqlite3_errmsg(db));
     }
@@ -300,14 +294,13 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
   return (rc_projects != SQLITE_OK || rc_posts != SQLITE_OK) ? -1 : 0;
 }
 
-static inline unsigned int str_replace(buffer *target, const char *needle,
+static inline void str_replace(buffer *target, const char *needle,
                                        const char *replacement) {
-  // TODO: Maybe heap?
-  char buffer[target->capacity] = {0};
-  char *insert_point = &buffer[0];
-  const char *read_only_target = target;
   unsigned int needle_len = strlen(needle);
   unsigned int repl_len = strlen(replacement);
+  buffer* buffer = init_buffer(target->capacity + 1024);
+  char *insert_point = buffer->data;
+  const char *read_only_target = target->data;
 
   for (unsigned char occurrences = 0; occurrences < 10; occurrences++) {
     const char *hit = strstr(read_only_target, needle);
@@ -322,8 +315,7 @@ static inline unsigned int str_replace(buffer *target, const char *needle,
     occurrences++;
 
     assert(hit >= read_only_target);
-    assert(hit < target + HTML_MAX_SIZE);
-    assert(hit + repl_len < target + HTML_MAX_SIZE);
+    assert(ENSURE_CAPACITY(buffer, buffer->capacity + repl_len - needle_len) > 0);
 
     // copy part before needle
     memcpy(insert_point, read_only_target, hit - read_only_target);
@@ -337,9 +329,8 @@ static inline unsigned int str_replace(buffer *target, const char *needle,
     read_only_target = hit + needle_len;
   }
 
-  unsigned int bytes_to_copy = insert_point - buffer;
   // write altered string back to target
-  strcpy(target, buffer);
-
-  return bytes_to_copy;
+  buffer->count = insert_point - buffer->data;
+  copy_buffer(target, buffer);
+  assert(target->capacity >= buffer->count);
 }

@@ -1,6 +1,7 @@
 #ifndef STATIC_H
 #define STATIC_H
 
+#include "data_structures/buffer.h"
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <poll.h>
@@ -121,12 +122,6 @@ typedef struct {
   pthread_cond_t cond;
 } queue_t;
 
-typedef struct {
-  unsigned long capacity;
-  unsigned long count;
-  char *data;
-} buffer;
-
 struct session {
   int id;
   int related_fd;
@@ -142,9 +137,6 @@ struct session_full_return {
   http_response_t *response;
 };
 
-#define ENSURE_CAPACITY(buffer, capacity) (__FILE__, buffer, capacity)
-
-int ensure_capacity_(const char* callee, buffer* buffer, unsigned long capacity);
 char *uri_to_file_name(const uri_token_t uri);
 
 
