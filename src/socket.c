@@ -1,4 +1,5 @@
 #include "socket.h"
+#include "data_structures/buffer.h"
 #include "static.h"
 #include "utils/assert2.h"
 #include "utils/logger.h"
@@ -78,13 +79,14 @@ int connect_socket(int socket_fd, const struct sockaddr *in_addr,
   return connect_return;
 }
 
-int send_ssl(SSL *ssl, const char *buffer, size_t buffer_size) {
+int send_ssl(SSL *ssl, const buffer *buffer) {
   int send_return;
   assert(ssl != NULL);
   assert(buffer != NULL);
-  assert(buffer_size > 0);
+  assert(buffer->data != NULL);
+  assert(buffer->count > 0);
 
-  send_return = SSL_write(ssl, buffer, buffer_size);
+  send_return = SSL_write(ssl, buffer->data, buffer->count);
 
   assert(send_return != -2);
   if (send_return == -1) {
@@ -94,13 +96,14 @@ int send_ssl(SSL *ssl, const char *buffer, size_t buffer_size) {
   return send_return;
 }
 
-int send_bio(BIO *bio, const char *buffer, size_t buffer_size) {
+int send_bio(BIO *bio, const buffer *buffer) {
   int send_return;
   assert(bio != NULL);
   assert(buffer != NULL);
-  assert(buffer_size > 0);
+  assert(buffer->data != NULL);
+  assert(buffer->count > 0);
 
-  send_return = BIO_write(bio, buffer, buffer_size);
+  send_return = BIO_write(bio, buffer->data, buffer->count);
 
   assert(send_return != -2);
   if (send_return == -1) {
@@ -125,7 +128,7 @@ int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
   return send_return;
 }
 
-int recv_ssl(SSL *ssl, buffer* buffer) {
+int recv_ssl(SSL *ssl, buffer *buffer) {
   int recv_return;
   assert(ssl != NULL);
   assert(buffer != NULL);
@@ -150,29 +153,30 @@ int recv_ssl(SSL *ssl, buffer* buffer) {
   return recv_return;
 }
 
-int recv_bio(BIO *bio, buffer* buffer) {
+int recv_bio(BIO *bio, buffer *buffer) {
   int recv_return;
   assert(bio != NULL);
   assert(buffer != NULL);
   assert(buffer->data == NULL || buffer->capacity > 0);
+  unsigned char count = 0;
 
-  // Alloc more space for the data or any space at all :)
-  size_t pending = BIO_ctrl_pending(bio);
-  size_t old_count = buffer->count;
-  assert(ENSURE_CAPACITY(buffer, old_count + pending + 1) > 0);
+  while (recv_return > 0) {
+    assert(ENSURE_CAPACITY(buffer, (++count) * DEFAULT_BUFFER_SIZE) > 0);
 
-  recv_return = BIO_read(bio, buffer->data + old_count, pending - 1);
-  buffer->count = buffer->count + recv_return;
-
-  assert(recv_return <= pending);
-  if (recv_return < 0) {
-    log_error("BIO read error");
-    return -1;
+    recv_return = BIO_read(bio, buffer->data + buffer->count,
+                           buffer->capacity - buffer->count);
+    buffer->count += recv_return;
   }
 
-  buffer->data[buffer->count] = '\0';
-  buffer->count++;
-  return recv_return;
+  // TODO: Maybe buffer already has count > 0
+  if (buffer->count < 0) {
+    log_error("BIO read error");
+  } else {
+    buffer->data[buffer->count] = '\0';
+    buffer->count++;
+  }
+
+  return buffer->count;
 }
 
 // TODO: Deprecated

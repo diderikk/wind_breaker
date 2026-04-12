@@ -19,16 +19,16 @@
 #define VERSION WIND_BREAKER_VERSION
 
 static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
-                               buffer* buffer,
+                               buffer *tmp_buffer, buffer *buffer,
                                char argument[HTTP_URI_TOKEN_SIZE]);
 static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
-                            buffer* buffer,
+                            buffer *tmp_buffer, buffer *buffer,
                             char argument[HTTP_URI_TOKEN_SIZE]);
 static inline int load_index(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
                              sqlite3_stmt **index_posts_stmt,
-                             buffer* buffer);
-static inline void str_replace(buffer* target, const char *needle,
-                                       const char *replacement);
+                             buffer *tmp_buffer, buffer *buffer);
+static inline void str_replace(buffer *target, const char *needle,
+                               const char *replacement);
 static inline unsigned int gen_error_body(http_status_code http_status_code,
                                           buffer *buffer) {
   const char *status_code_str = http_status_code_to_str(http_status_code);
@@ -41,16 +41,15 @@ static inline unsigned int gen_error_body(http_status_code http_status_code,
 static inline int load(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
                        sqlite3_stmt **index_posts_stmt,
                        sqlite3_stmt **project_stmt, sqlite3_stmt **post_stmt,
-                       const char *file_name, buffer* buffer,
-                       char argument[HTTP_URI_TOKEN_SIZE]) {
+                       const char *file_name, buffer *tmp_buffer,
+                       buffer *buffer, char argument[HTTP_URI_TOKEN_SIZE]) {
   if (strcmp(file_name, "index.html") == 0) {
-    return load_index(db, index_projects_stmt, index_posts_stmt, buffer);
+    return load_index(db, index_projects_stmt, index_posts_stmt, tmp_buffer,
+                      buffer);
   } else if (strcmp(file_name, "project.html") == 0) {
-    return load_project(db, project_stmt, buffer,
-                        argument);
+    return load_project(db, project_stmt, tmp_buffer, buffer, argument);
   } else if (strcmp(file_name, "post.html") == 0) {
-    return load_post(db, post_stmt, buffer,
-                     argument);
+    return load_post(db, post_stmt, tmp_buffer, buffer, argument);
   }
 
   return 0;
@@ -58,6 +57,7 @@ static inline int load(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
 
 void *handle_b() {
 
+  buffer *tmp_buffer = init_buffer(DEFAULT_BUFFER_SIZE);
   sqlite3 *db = NULL;
   sqlite3_stmt *index_projects_stmt = NULL, *index_posts_stmt = NULL,
                *project_stmt = NULL, *post_stmt = NULL;
@@ -65,7 +65,6 @@ void *handle_b() {
   assert_log(sqlite3_open_v2(get_db_url(), &db, WB_SQLITE_OPEN_FLAGS, NULL) ==
                  SQLITE_OK,
              "Failed to open database: %s", sqlite3_errmsg(db));
-
 
   while (!stop()) {
     session = pop_request(WORK_STATUS_PARSED);
@@ -98,7 +97,7 @@ void *handle_b() {
       } else {
         // Fetch and inject arguments
         switch (load(db, &index_projects_stmt, &index_posts_stmt, &project_stmt,
-                     &post_stmt, file_name, session.buffer,
+                     &post_stmt, file_name, tmp_buffer, session.buffer,
                      session.request->uri[1])) {
         case 0:
           break;
@@ -124,6 +123,7 @@ void *handle_b() {
 
     session.session->thread_id = 0;
     push_request(session.session->related_fd, WORK_STATUS_DATA_FETCHED);
+    memset(tmp_buffer->data, 0, tmp_buffer->count);
   }
 
   // TODO: Dangling pointers
@@ -137,7 +137,7 @@ void *handle_b() {
 }
 
 static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
-                            buffer* buffer,
+                            buffer *tmp_buffer, buffer *buffer,
                             char argument[HTTP_URI_TOKEN_SIZE]) {
 
   int rc = 0;
@@ -150,7 +150,6 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
   }
 
   // Maybe malloc
-  char tmp_buffer[HTML_MAX_SIZE] = {0};
   sqlite3_reset(*stmt);
   sqlite3_clear_bindings(*stmt);
   sqlite3_bind_text(*stmt, 1, argument, -1, SQLITE_STATIC);
@@ -164,8 +163,8 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
     str_replace(buffer, "%CREATED_AT%", created_at);
     char html_file[HTTP_URI_TOKEN_SIZE + 5] = {0};
     snprintf(html_file, HTTP_URI_TOKEN_SIZE + 5, "%s.html", argument);
-    read_static_file(html_file, buffer);
-    str_replace(buffer, "%POST%", tmp_buffer);
+    read_static_file(html_file, tmp_buffer);
+    str_replace(buffer, "%POST%", tmp_buffer->data);
   }
 
   int reset_rc = sqlite3_reset(*stmt);
@@ -182,7 +181,7 @@ static inline int load_post(sqlite3 *db, sqlite3_stmt **stmt,
 }
 
 static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
-                               buffer* buffer,
+                               buffer *tmp_buffer, buffer *buffer,
                                char argument[HTTP_URI_TOKEN_SIZE]) {
 
   int rc = 0;
@@ -194,7 +193,6 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
     }
   }
 
-  char tmp_buffer[1024] = {0};
   sqlite3_bind_text(*stmt, 1, argument, -1, SQLITE_STATIC);
   rc = sqlite3_step(*stmt);
   if (rc == SQLITE_ROW) {
@@ -208,19 +206,19 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
     str_replace(buffer, "%IMAGE_URL%", imageUrl);
     const char *websiteUrl = (const char *)sqlite3_column_text(*stmt, 4);
     if (websiteUrl != NULL) {
-      snprintf(tmp_buffer, sizeof(tmp_buffer), "<a href=\"%s\">Website</a>",
-               websiteUrl);
-      str_replace(buffer, "%WEBSITE_LINK%", tmp_buffer);
-      memset(tmp_buffer, 0, sizeof(tmp_buffer));
+      snprintf(tmp_buffer->data, tmp_buffer->capacity,
+               "<a href=\"%s\">Website</a>", websiteUrl);
+      str_replace(buffer, "%WEBSITE_LINK%", tmp_buffer->data);
+      memset(tmp_buffer->data, 0, tmp_buffer->capacity);
     } else {
       str_replace(buffer, "%WEBSITE_LINK%", "");
     }
     const char *githubReadme = (const char *)sqlite3_column_text(*stmt, 5);
     if (githubReadme != NULL) {
-      snprintf(tmp_buffer, sizeof(tmp_buffer), "<a href=\"%s\">Readme</a>",
-               githubReadme);
-      str_replace(buffer, "%README_LINK%", tmp_buffer);
-      memset(tmp_buffer, 0, sizeof(tmp_buffer));
+      snprintf(tmp_buffer->data, tmp_buffer->capacity,
+               "<a href=\"%s\">Readme</a>", githubReadme);
+      str_replace(buffer, "%README_LINK%", tmp_buffer->data);
+      memset(tmp_buffer->data, 0, tmp_buffer->capacity);
     } else {
       str_replace(buffer, "%README_LINK%", "");
     }
@@ -240,7 +238,8 @@ static inline int load_project(sqlite3 *db, sqlite3_stmt **stmt,
 }
 
 static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
-                             sqlite3_stmt **posts_stmt, buffer* buffer) {
+                             sqlite3_stmt **posts_stmt, buffer *tmp_buffer,
+                             buffer *buffer) {
   int rc_projects = 0, rc_posts = 0;
   if (*projects_stmt == NULL) {
     rc_projects =
@@ -259,29 +258,34 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
   }
 
   // Fetch and inject arguments
-  char tmp_buffer[1024];
   while ((rc_projects = sqlite3_step(*projects_stmt)) == SQLITE_ROW) {
     const char *id = (const char *)sqlite3_column_text(*projects_stmt, 0);
     const char *title = (const char *)sqlite3_column_text(*projects_stmt, 1);
-    snprintf(tmp_buffer, 1024,
-                       "<li id=\"%s\"><a href=\"/projects/%s\">%s</a></li>", id,
-                       id, title);
+    assert(ENSURE_CAPACITY(tmp_buffer, tmp_buffer->count + 256) > 0);
+    int offset = snprintf(tmp_buffer->data + tmp_buffer->count,
+                          tmp_buffer->capacity - tmp_buffer->count,
+                          "<li id=\"%s\"><a href=\"/projects/%s\">%s</a></li>",
+                          id, id, title);
+    tmp_buffer->count += offset;
   }
   if (rc_projects == SQLITE_DONE) {
-    str_replace(buffer, "%PROJECTS%", tmp_buffer);
+    str_replace(buffer, "%PROJECTS%", tmp_buffer->data);
     str_replace(buffer, "%VERSION%", VERSION);
 
     // Do same for posts
-    memset(tmp_buffer, 0, sizeof(tmp_buffer));
+    memset(tmp_buffer->data, 0, tmp_buffer->capacity);
     while ((rc_posts = sqlite3_step(*posts_stmt)) == SQLITE_ROW) {
       const char *id = (const char *)sqlite3_column_text(*posts_stmt, 0);
       const char *title = (const char *)sqlite3_column_text(*posts_stmt, 1);
-      snprintf(
-          tmp_buffer, 1024,
-          "<li id=\"%s\"><a href=\"/posts/%s\">%s</a></li>", id, id, title);
+      assert(ENSURE_CAPACITY(tmp_buffer, tmp_buffer->count + 256) > 0);
+      int offset = snprintf(tmp_buffer->data + tmp_buffer->count,
+                            tmp_buffer->capacity - tmp_buffer->count,
+                            "<li id=\"%s\"><a href=\"/posts/%s\">%s</a></li>",
+                            id, id, title);
+      tmp_buffer->count += offset;
     }
     if (rc_posts == SQLITE_DONE) {
-      str_replace(buffer, "%NOTES%", tmp_buffer);
+      str_replace(buffer, "%NOTES%", tmp_buffer->data);
     } else {
       log_error("Failed to fetch posts: %s", sqlite3_errmsg(db));
     }
@@ -295,42 +299,41 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
 }
 
 static inline void str_replace(buffer *target, const char *needle,
-                                       const char *replacement) {
+                               const char *replacement) {
   unsigned int needle_len = strlen(needle);
   unsigned int repl_len = strlen(replacement);
-  buffer* buffer = init_buffer(target->capacity + 1024);
-  char *insert_point = buffer->data;
-  const char *read_only_target = target->data;
+  int diff = repl_len - needle_len;
+  unsigned long offset = 0;
 
   for (unsigned char occurrences = 0; occurrences < 10; occurrences++) {
-    const char *hit = strstr(read_only_target, needle);
+    char *hit = strstr(target->data + offset, needle);
+    unsigned long hit_offset = hit - target->data;
 
     assert(hit != NULL || occurrences > 0);
     if (hit == NULL) {
-      // no more occurrences, copy the rest of the string
-      strcpy(insert_point, read_only_target);
-      insert_point += strlen(read_only_target);
+      // no more occurrences
       break;
     }
     occurrences++;
 
-    assert(hit >= read_only_target);
-    assert(ENSURE_CAPACITY(buffer, buffer->capacity + repl_len - needle_len) > 0);
+    assert(hit >= target->data + offset);
+    // Capacity is greater than the difference between needle and replacement
+    // word
+    log_debug("Hello!, %d", target->count + diff);
+    assert(ENSURE_CAPACITY(target, target->count + diff) > 0);
 
-    // copy part before needle
-    memcpy(insert_point, read_only_target, hit - read_only_target);
-    insert_point += hit - read_only_target;
+    // If the target->data has been reallocated
+    hit = target->data + hit_offset;
+    char *after_needle = hit + needle_len;
+    // Copy all data after occurence the difference to the right
+    memmove(after_needle + diff, after_needle,
+            target->count - (hit_offset + needle_len));
 
     // copy replacement string
-    memcpy(insert_point, replacement, repl_len);
-    insert_point += repl_len;
+    memcpy(hit, replacement, repl_len);
+    target->count += diff;
 
     // adjust pointers, move on
-    read_only_target = hit + needle_len;
+    offset += (hit - target->data) + repl_len;
   }
-
-  // write altered string back to target
-  buffer->count = insert_point - buffer->data;
-  copy_buffer(target, buffer);
-  assert(target->capacity >= buffer->count);
 }

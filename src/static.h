@@ -7,8 +7,6 @@
 #include <poll.h>
 #include <pthread.h>
 
-#define DEFAULT_BUFFER_SIZE 1024
-#define HTML_MAX_SIZE 70 * 1024               // 70 kB
 #define HTTP_HEADER_SIZE 256
 #define HTTP_URI_TOKEN_COUNT 4
 #define HTTP_URI_TOKEN_SIZE 200
@@ -69,7 +67,7 @@ typedef enum {
 typedef struct {
   int fd;
   int size;
-  char* data;
+  char *data;
 } worker_data;
 
 typedef struct {
@@ -88,7 +86,6 @@ typedef struct {
   http_status_code status_code;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
-  long offset;
   char content_language[HTTP_HEADER_SMALL_SIZE];
   char content_encoding[HTTP_HEADER_SMALL_SIZE];
   char last_modified[HTTP_HEADER_SMALL_SIZE];
@@ -138,6 +135,5 @@ struct session_full_return {
 };
 
 char *uri_to_file_name(const uri_token_t uri);
-
 
 #endif // STATIC_H

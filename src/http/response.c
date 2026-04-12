@@ -9,7 +9,8 @@
 #include <time.h>
 
 char *http_status_code_to_str(http_status_code status_code);
-unsigned int to_string(const http_response_t *http_response, const buffer* body, buffer* dest);
+unsigned int to_string(const http_response_t *http_response, const buffer *body,
+                       buffer *dest);
 unsigned int set_content_length(http_response_t *http_response,
                                 const unsigned int content_length);
 int set_content_type(http_response_t *http_response, const uri_token_t uri);
@@ -20,17 +21,16 @@ unsigned int set_etag(http_response_t *http_response, const buffer *tmp_body);
 unsigned int set_location(http_response_t *http_response, const char *host,
                           const uri_token_t uri);
 unsigned int set_compression(http_response_t *http_response,
-                             const char *accept_encoding, const buffer* body,
+                             const char *accept_encoding, const buffer *body,
                              buffer *tmp_buffer);
 void handle_if_none_match(http_response_t *http_response,
-                          const char *if_none_match, buffer* tmp_buffer);
+                          const char *if_none_match, buffer *tmp_buffer);
 
 unsigned int construct_response(http_response_t *http_response,
                                 const uri_token_t uri,
                                 const char *accept_encoding,
-                                const char *if_none_match, 
-                                buffer* body,
-                                buffer* tmp_buffer) {
+                                const char *if_none_match, buffer *body,
+                                buffer *tmp_buffer) {
   assert(body != NULL);
 
   unsigned int return_value;
@@ -54,8 +54,8 @@ unsigned int construct_response(http_response_t *http_response,
 
   if (http_response->status_code != HTTP_NOT_MODIFIED) {
     // Set compression
-    unsigned int compressed_size = set_compression(
-        http_response, accept_encoding, body, tmp_buffer);
+    unsigned int compressed_size =
+        set_compression(http_response, accept_encoding, body, tmp_buffer);
     // Update content length
     set_content_length(http_response, compressed_size);
   }
@@ -155,7 +155,8 @@ unsigned int set_etag(http_response_t *http_response, const buffer *tmp_body) {
     strcpy(http_response->etag, "");
     return 0;
   } else {
-    return sha256_hash_hex(tmp_body->data, tmp_body->count, http_response->etag);
+    return sha256_hash_hex(tmp_body->data, tmp_body->count,
+                           http_response->etag);
   }
 }
 
@@ -177,7 +178,7 @@ void handle_if_none_match(http_response_t *http_response,
 }
 
 unsigned int set_compression(http_response_t *http_response,
-                             const char *accept_encoding, const buffer* body,
+                             const char *accept_encoding, const buffer *body,
                              buffer *tmp_buffer) {
   unsigned int return_value = http_response->content_length;
   int header_count = 0;
@@ -191,12 +192,10 @@ unsigned int set_compression(http_response_t *http_response,
 
   if (header_count == 1 || header_count == 3) {
     strcpy(http_response->content_encoding, "gzip");
-    return_value =
-        compress_gzip(body->data, body->count, tmp_buffer->data);
+    return_value = compress_gzip(body->data, body->count, tmp_buffer->data);
   } else if (header_count == 2) {
     strcpy(http_response->content_encoding, "deflate");
-    return_value = compress_deflate(body->data, body->count,
-                                    tmp_buffer->data);
+    return_value = compress_deflate(body->data, body->count, tmp_buffer->data);
   }
 
   // If compression fails, return the uncompressed data.
@@ -215,7 +214,8 @@ unsigned int set_content_length(http_response_t *http_response,
   return content_length;
 }
 
-unsigned int to_string(const http_response_t *http_response, const buffer* body, buffer* dest) {
+unsigned int to_string(const http_response_t *http_response, const buffer *body,
+                       buffer *dest) {
   char *status_code_str = http_status_code_to_str(http_response->status_code);
   unsigned int offset = 0;
 
@@ -226,9 +226,8 @@ unsigned int to_string(const http_response_t *http_response, const buffer* body,
                      http_response->status_code, status_code_str);
 
   if (strlen(http_response->content_type) > 0) {
-    offset +=
-        snprintf(dest->data + offset, dest->capacity - offset,
-                 "Content-Type: %s\r\n", http_response->content_type);
+    offset += snprintf(dest->data + offset, dest->capacity - offset,
+                       "Content-Type: %s\r\n", http_response->content_type);
   }
 
   if (http_response->content_length >= 0) {
@@ -244,27 +243,23 @@ unsigned int to_string(const http_response_t *http_response, const buffer* body,
   }
 
   if (strlen(http_response->date) > 0) {
-    offset +=
-        snprintf(dest->data + offset, dest->capacity - offset,
-                 "Date: %s\r\n", http_response->date);
+    offset += snprintf(dest->data + offset, dest->capacity - offset,
+                       "Date: %s\r\n", http_response->date);
   }
 
   if (strlen(http_response->etag) > 0) {
-    offset +=
-        snprintf(dest->data + offset, dest->capacity - offset,
-                 "ETag: %s\r\n", http_response->etag);
+    offset += snprintf(dest->data + offset, dest->capacity - offset,
+                       "ETag: %s\r\n", http_response->etag);
   }
 
   if (strlen(http_response->location) > 0) {
-    offset +=
-        snprintf(dest->data + offset, dest->capacity - offset,
-                 "Location: %s\r\n", http_response->location);
+    offset += snprintf(dest->data + offset, dest->capacity - offset,
+                       "Location: %s\r\n", http_response->location);
   }
 
   if (strlen(http_response->last_modified) > 0) {
-    offset +=
-        snprintf(dest->data + offset, dest->capacity - offset,
-                 "Last-Modified: %s\r\n", http_response->last_modified);
+    offset += snprintf(dest->data + offset, dest->capacity - offset,
+                       "Last-Modified: %s\r\n", http_response->last_modified);
   }
 
   if (strlen(http_response->content_encoding) > 0) {
@@ -273,8 +268,7 @@ unsigned int to_string(const http_response_t *http_response, const buffer* body,
                  "Content-Encoding: %s\r\n", http_response->content_encoding);
   }
 
-  offset += snprintf(dest->data + offset, dest->capacity - offset,
-                     "\r\n");
+  offset += snprintf(dest->data + offset, dest->capacity - offset, "\r\n");
 
   if (http_response->content_length > 0) {
     if (offset + http_response->content_length >= dest->capacity) {

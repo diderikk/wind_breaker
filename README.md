@@ -125,6 +125,8 @@ enable_https = 0 (binary value for enabling HTTPS)
 * One thread per request (Apache)
 * One list per state
 * ENSURE_CAPACITY use assert for checking for memory issues...
+* Request/response logger
+* Move session arrays to one struct
 
 ## Try to remember
 * Clean up includes

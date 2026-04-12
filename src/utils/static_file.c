@@ -60,7 +60,7 @@ int find_static_file(const char *uri) {
   return 1;
 }
 
-int read_static_file(const char *file_path, buffer* buffer) {
+int read_static_file(const char *file_path, buffer *buffer) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_path);
 
@@ -69,12 +69,11 @@ int read_static_file(const char *file_path, buffer* buffer) {
 
   fseek(file, 0L, SEEK_END);
   size_t size = ftell(file);
+  fseek(file, 0L, SEEK_SET);
 
-  if(buffer->capacity < size) {
-    assert(ENSURE_CAPACITY(buffer, size) > 0);
-  }
+  assert(ENSURE_CAPACITY(buffer, size) > 0);
 
-  size_t read_size = fread(buffer->data, 1, size, file);
+  size_t read_size = fread(buffer->data, 1, buffer->capacity, file);
 
   buffer->count = read_size;
   assert_log(read_size > 0, "Failed to read file: %s", full_path);

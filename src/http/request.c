@@ -13,10 +13,11 @@ int parse_header_field(http_request_t *http_request, const char *char_data);
 // content_size);
 http_method method_str_to_enum(const char *raw_method);
 
-int parse_http_request(http_request_t *http_request, const buffer* raw_request) {
+int parse_http_request(http_request_t *http_request,
+                       const buffer *raw_request) {
   int return_value;
   char *raw_request_copy = malloc(sizeof(char) * raw_request->count);
-  if(raw_request_copy == NULL)
+  if (raw_request_copy == NULL)
     return ALLOCATE_MEMORY_ERROR;
   char *saveptr, *line;
 

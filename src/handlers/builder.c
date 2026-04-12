@@ -29,10 +29,10 @@ void *handle_c() {
       construct_upgrade_to_https_response(
           session.request->uri, session.request->host, session.buffer);
     } else {
-      construct_response(
-          session.response, session.request->uri,
-          session.request->accept_encoding, session.request->if_none_match,
-          session.buffer, tmp_buffer);
+      construct_response(session.response, session.request->uri,
+                         session.request->accept_encoding,
+                         session.request->if_none_match, session.buffer,
+                         tmp_buffer);
     }
 
     WORK_STATUS next_status = WORK_STATUS_READY_TO_SEND;

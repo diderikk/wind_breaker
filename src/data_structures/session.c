@@ -74,7 +74,7 @@ int init_session_cache(SSL_CTX *ctx) {
 
   for (int i = 0; i < max_size; i++) {
     buffer_array[i] = init_buffer(0);
-    assert(buffer_array[i] == NULL);
+    assert(buffer_array[i] != NULL);
   }
 
   // Request array
@@ -231,8 +231,8 @@ static inline void reset_session_at_index(int index) {
   *status_array[index] = 0;
 
   // Buffer array
-  buffer* buffer = buffer_array[index];
-  if(buffer->data != NULL) {
+  buffer *buffer = buffer_array[index];
+  if (buffer->data != NULL) {
     free(buffer->data);
     buffer->data = NULL;
   }
@@ -272,8 +272,8 @@ static inline void reset_request_at_index(int index) {
   char is_ssl = request_array[index]->is_ssl;
 
   // Buffer array
-  buffer* buffer = buffer_array[index];
-  if(buffer->data != NULL) {
+  buffer *buffer = buffer_array[index];
+  if (buffer->data != NULL) {
     free(buffer->data);
     buffer->data = NULL;
   }
@@ -506,8 +506,7 @@ struct session_full_return pop_request(WORK_STATUS status) {
   assert(request_array != NULL);
   assert(response_array != NULL);
   assert(bio_array != NULL);
-  struct session_full_return result = {NULL, NULL, NULL, NULL,
-                                       NULL, NULL, NULL};
+  struct session_full_return result = {NULL, NULL, NULL, NULL, NULL, NULL};
   pthread_mutex_lock(&session_mutex);
   int index = -1;
   while ((index = peek_next(status)) == -1 && !stop()) {
@@ -558,8 +557,7 @@ struct session_full_return pop_request_by_fd(int related_fd) {
   assert(related_fd < 16384);
 
   pthread_mutex_lock(&session_mutex);
-  struct session_full_return result = {NULL, NULL, NULL, NULL,
-                                       NULL, NULL, NULL};
+  struct session_full_return result = {NULL, NULL, NULL, NULL, NULL, NULL};
   int process = 0;
   for (int i = 0; i < session_count; i++) {
     if (session_array[i]->related_fd == related_fd) {
