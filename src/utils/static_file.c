@@ -67,14 +67,16 @@ int read_static_file(const char *file_path, buffer *buffer) {
   FILE *file = fopen(full_path, "rb");
   assert_log(file != NULL, "Failed to open file: %s", full_path);
 
-  fseek(file, 0L, SEEK_END);
+  assert(fseek(file, 0L, SEEK_END) == 0);
   size_t size = ftell(file);
-  fseek(file, 0L, SEEK_SET);
+  assert(fseek(file, 0L, SEEK_SET) == 0);
 
-  assert(ENSURE_CAPACITY(buffer, size) > 0);
+  assert(size > 0);
+  assert(ENSURE_CAPACITY(buffer, size + 1) > 0);
 
   size_t read_size = fread(buffer->data, 1, buffer->capacity, file);
 
+  buffer->data[read_size] = '\0';
   buffer->count = read_size;
   assert_log(read_size > 0, "Failed to read file: %s", full_path);
   fclose(file);

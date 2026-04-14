@@ -14,7 +14,7 @@ typedef struct {
 buffer *init_buffer(unsigned long initial_capacity);
 void deinit_buffer(buffer *buffer_);
 
-void copy_buffer(buffer *dest, buffer *src);
+int copy_buffer(buffer *dest, buffer *src);
 
 int ensure_capacity_(const char *callee, buffer *buffer,
                      unsigned long capacity);

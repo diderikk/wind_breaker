@@ -38,7 +38,7 @@ unsigned int construct_response(http_response_t *http_response,
   // Set content language
   strcpy(http_response->content_language, "en-US");
   // Set body
-  copy_buffer(tmp_buffer, body);
+  assert(copy_buffer(tmp_buffer, body) >= 0);
   // Set content length
   set_content_length(http_response, body->count);
   // Set content type
@@ -219,64 +219,69 @@ unsigned int to_string(const http_response_t *http_response, const buffer *body,
   char *status_code_str = http_status_code_to_str(http_response->status_code);
   unsigned int offset = 0;
 
-  assert(ENSURE_CAPACITY(dest, http_response->content_length + 1024) > 0);
+  assert(ENSURE_CAPACITY(dest, 128) > 0);
 
   offset += snprintf(dest->data + offset, dest->capacity - offset,
                      "HTTP/%s %d %s\r\n", HTTP_VERSION,
                      http_response->status_code, status_code_str);
 
   if (strlen(http_response->content_type) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 348) > 0);
     offset += snprintf(dest->data + offset, dest->capacity - offset,
                        "Content-Type: %s\r\n", http_response->content_type);
   }
 
   if (http_response->content_length >= 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 128) > 0);
     offset +=
         snprintf(dest->data + offset, dest->capacity - offset,
                  "Content-Length: %ld\r\n", http_response->content_length);
   }
 
   if (strlen(http_response->content_language) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 256) > 0);
     offset +=
         snprintf(dest->data + offset, dest->capacity - offset,
                  "Content-Language: %s\r\n", http_response->content_language);
   }
 
   if (strlen(http_response->date) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 256) > 0);
     offset += snprintf(dest->data + offset, dest->capacity - offset,
                        "Date: %s\r\n", http_response->date);
   }
 
   if (strlen(http_response->etag) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 128) > 0);
     offset += snprintf(dest->data + offset, dest->capacity - offset,
                        "ETag: %s\r\n", http_response->etag);
   }
 
   if (strlen(http_response->location) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 348) > 0);
     offset += snprintf(dest->data + offset, dest->capacity - offset,
                        "Location: %s\r\n", http_response->location);
   }
 
   if (strlen(http_response->last_modified) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 256) > 0);
     offset += snprintf(dest->data + offset, dest->capacity - offset,
                        "Last-Modified: %s\r\n", http_response->last_modified);
   }
 
   if (strlen(http_response->content_encoding) > 0) {
+    assert(ENSURE_CAPACITY(dest, offset + 128) > 0);
     offset +=
         snprintf(dest->data + offset, dest->capacity - offset,
                  "Content-Encoding: %s\r\n", http_response->content_encoding);
   }
 
+  assert(ENSURE_CAPACITY(dest, offset + http_response->content_length + 2) > 0);
+
   offset += snprintf(dest->data + offset, dest->capacity - offset, "\r\n");
 
   if (http_response->content_length > 0) {
-    if (offset + http_response->content_length >= dest->capacity) {
-      log_error("Response Buffer Overflow");
-      return -1;
-    }
-
-    memcpy(dest->data + offset, body->data, body->count);
+    memcpy(dest->data + offset, body->data, http_response->content_length);
     offset += http_response->content_length;
   }
 

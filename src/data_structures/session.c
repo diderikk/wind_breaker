@@ -233,10 +233,8 @@ static inline void reset_session_at_index(int index) {
   // Buffer array
   buffer *buffer = buffer_array[index];
   if (buffer->data != NULL) {
-    free(buffer->data);
-    buffer->data = NULL;
+    memset(buffer->data, 0, buffer->capacity);
   }
-  buffer->capacity = 0;
   buffer->count = 0;
 
   // Request array

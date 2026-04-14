@@ -89,31 +89,24 @@ void *handle_b() {
       const char *file_name = uri_to_file_name(session.request->uri);
       read_static_file(file_name, session.buffer);
 
-      if (session.buffer->count == 0) {
-        log_error("Failed to read static file: %s", file_name);
+      // Fetch and inject arguments
+      switch (load(db, &index_projects_stmt, &index_posts_stmt, &project_stmt,
+                   &post_stmt, file_name, tmp_buffer, session.buffer,
+                   session.request->uri[1])) {
+      case 0:
+        break;
+      case -1:
+        log_error("Failed to fetch and inject arguments");
+        session.response->status_code = HTTP_INTERNAL_SERVER_ERROR;
+        session.buffer->count =
+            gen_error_body(session.response->status_code, session.buffer);
+        break;
+      case -2:
+        log_error("Id not found in database: %s", session.request->uri[1]);
         session.response->status_code = HTTP_NOT_FOUND;
         session.buffer->count =
             gen_error_body(session.response->status_code, session.buffer);
-      } else {
-        // Fetch and inject arguments
-        switch (load(db, &index_projects_stmt, &index_posts_stmt, &project_stmt,
-                     &post_stmt, file_name, tmp_buffer, session.buffer,
-                     session.request->uri[1])) {
-        case 0:
-          break;
-        case -1:
-          log_error("Failed to fetch and inject arguments");
-          session.response->status_code = HTTP_INTERNAL_SERVER_ERROR;
-          session.buffer->count =
-              gen_error_body(session.response->status_code, session.buffer);
-          break;
-        case -2:
-          log_error("Id not found in database: %s", session.request->uri[1]);
-          session.response->status_code = HTTP_NOT_FOUND;
-          session.buffer->count =
-              gen_error_body(session.response->status_code, session.buffer);
-          break;
-        }
+        break;
       }
 
     } else {
@@ -124,6 +117,7 @@ void *handle_b() {
     session.session->thread_id = 0;
     push_request(session.session->related_fd, WORK_STATUS_DATA_FETCHED);
     memset(tmp_buffer->data, 0, tmp_buffer->count);
+    tmp_buffer->count = 0;
   }
 
   // TODO: Dangling pointers
@@ -132,6 +126,7 @@ void *handle_b() {
   sqlite3_finalize(project_stmt);
   // Can be a null pointer
   assert(sqlite3_close_v2(db) == SQLITE_OK);
+  deinit_buffer(tmp_buffer);
 
   return NULL;
 }
@@ -322,8 +317,7 @@ static inline void str_replace(buffer *target, const char *needle,
     assert(hit >= target->data + offset);
     // Capacity is greater than the difference between needle and replacement
     // word
-    log_debug("Hello!, %d", target->count + diff);
-    assert(ENSURE_CAPACITY(target, target->count + diff) > 0);
+    assert(ENSURE_CAPACITY(target, target->count + diff + 1) > 0);
 
     // If the target->data has been reallocated
     hit = target->data + hit_offset;
@@ -335,6 +329,7 @@ static inline void str_replace(buffer *target, const char *needle,
     // copy replacement string
     memcpy(hit, replacement, repl_len);
     target->count += diff;
+    target->data[target->count] = '\0';
 
     // adjust pointers, move on
     offset += (hit - target->data) + repl_len;

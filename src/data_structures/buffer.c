@@ -1,6 +1,6 @@
 #include "buffer.h"
-#include "stdio.h"
-#include "stdlib.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 buffer *init_buffer(unsigned long initial_capacity) {
@@ -8,9 +8,10 @@ buffer *init_buffer(unsigned long initial_capacity) {
   if (b == NULL)
     return b;
 
-  b->capacity = initial_capacity;
+  b->capacity = (initial_capacity < DEFAULT_BUFFER_SIZE) ? DEFAULT_BUFFER_SIZE
+                                                         : initial_capacity;
   b->count = 0;
-  b->data = calloc(initial_capacity, sizeof(char));
+  b->data = calloc(b->capacity, sizeof(char));
   if (b->data == NULL) {
     free(b);
     return NULL;
@@ -24,13 +25,14 @@ void deinit_buffer(buffer *buffer) {
   free(buffer);
 }
 
-void copy_buffer(buffer *dest, buffer *src) {
+int copy_buffer(buffer *dest, buffer *src) {
   int result = ENSURE_CAPACITY(dest, src->count);
   if (result < 0)
-    printf("Failed to ENSURE_CAPACITY in copy_buffer");
+    return -1;
 
   memcpy(dest->data, src->data, src->count);
   dest->count = src->count;
+  return dest->count;
 }
 
 int ensure_capacity_(const char *callee, buffer *buffer,

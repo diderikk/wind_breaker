@@ -79,6 +79,7 @@ int connect_socket(int socket_fd, const struct sockaddr *in_addr,
   return connect_return;
 }
 
+// To be removed and functionality merged with BIO
 int send_ssl(SSL *ssl, const buffer *buffer) {
   int send_return;
   assert(ssl != NULL);
@@ -128,6 +129,7 @@ int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
   return send_return;
 }
 
+// To be removed and functionality merged with BIO
 int recv_ssl(SSL *ssl, buffer *buffer) {
   int recv_return;
   assert(ssl != NULL);
@@ -160,13 +162,14 @@ int recv_bio(BIO *bio, buffer *buffer) {
   assert(buffer->data == NULL || buffer->capacity > 0);
   unsigned char count = 0;
 
-  while (recv_return > 0) {
+  do {
     assert(ENSURE_CAPACITY(buffer, (++count) * DEFAULT_BUFFER_SIZE) > 0);
 
     recv_return = BIO_read(bio, buffer->data + buffer->count,
                            buffer->capacity - buffer->count);
-    buffer->count += recv_return;
-  }
+    if (recv_return >= 0 || buffer->count == 0)
+      buffer->count += recv_return;
+  } while (recv_return > 0);
 
   // TODO: Maybe buffer already has count > 0
   if (buffer->count < 0) {
