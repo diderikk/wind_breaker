@@ -258,6 +258,8 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
   }
 
   // Fetch and inject arguments
+  memset(tmp_buffer->data, 0, tmp_buffer->capacity);
+  tmp_buffer->count = 0;
   while ((rc_projects = sqlite3_step(*projects_stmt)) == SQLITE_ROW) {
     const char *id = (const char *)sqlite3_column_text(*projects_stmt, 0);
     const char *title = (const char *)sqlite3_column_text(*projects_stmt, 1);
@@ -274,6 +276,7 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
 
     // Do same for posts
     memset(tmp_buffer->data, 0, tmp_buffer->capacity);
+    tmp_buffer->count = 0;
     while ((rc_posts = sqlite3_step(*posts_stmt)) == SQLITE_ROW) {
       const char *id = (const char *)sqlite3_column_text(*posts_stmt, 0);
       const char *title = (const char *)sqlite3_column_text(*posts_stmt, 1);
