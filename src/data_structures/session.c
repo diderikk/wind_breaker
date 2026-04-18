@@ -7,14 +7,9 @@
 #include <openssl/err.h>
 #include <stdlib.h>
 
-static struct session **session_array = NULL;
+static session_t *session_array = NULL;
 // Eight states (8 bits)
 static char **status_array = NULL;
-static buffer **buffer_array = NULL;
-static http_request_t **request_array = NULL;
-static http_response_t **response_array = NULL;
-static SSL **ssl_array = NULL;
-static BIO **bio_array = NULL;
 static int max_size = 0;
 static unsigned int session_count = 0;
 static unsigned int session_last_index = 0;
@@ -50,14 +45,19 @@ int init_session_cache(SSL_CTX *ctx) {
   assert(session_array == NULL);
 
   max_size = get_session_max_size();
-  // Static array of sessions, should not be resized... Tiger style
-
-  // Session array
-  session_array = calloc(max_size, sizeof(struct session *));
-  assert(session_array != NULL);
-  for (int i = 0; i < max_size; i++) {
-    session_array[i] = calloc(1, sizeof(struct session));
-    assert(session_array[i] != NULL);
+  session_array = calloc(get_session_max_size(), sizeof(session_t *));
+  for (int i = 0; i < get_session_max_size(); i++) {
+    session_t *session = &session_array[i];
+    session->buffer = init_buffer(0);
+    assert(session->buffer != NULL);
+    session->bio = BIO_new(BIO_s_socket());
+    assert(session->bio != NULL);
+    if (ctx != NULL) {
+      session->ssl = SSL_new(ctx);
+      assert(session->ssl != NULL);
+      assert(SSL_is_server(session->ssl));
+    }
+    // meta_t, http_request_t, http_response_t should be zeroed
   }
 
   // Status array
@@ -68,65 +68,12 @@ int init_session_cache(SSL_CTX *ctx) {
     assert(status_array[i] != NULL);
   }
 
-  // Buffer array
-  buffer_array = calloc(max_size, sizeof(*buffer_array));
-  assert(buffer_array != NULL);
-
-  for (int i = 0; i < max_size; i++) {
-    buffer_array[i] = init_buffer(0);
-    assert(buffer_array[i] != NULL);
-  }
-
-  // Request array
-  request_array = calloc(max_size, sizeof(http_request_t *));
-  assert(request_array != NULL);
-
-  for (int i = 0; i < max_size; i++) {
-    request_array[i] = calloc(1, sizeof(http_request_t));
-    assert(request_array[i] != NULL);
-  }
-
-  // Response array
-  response_array = calloc(max_size, sizeof(http_response_t *));
-  assert(response_array != NULL);
-
-  for (int i = 0; i < max_size; i++) {
-    response_array[i] = calloc(1, sizeof(http_response_t));
-    assert(response_array[i] != NULL);
-  }
-
-  // BIO array
-  bio_array = malloc(max_size * sizeof(BIO *));
-  assert(bio_array != NULL);
-
-  for (int i = 0; i < max_size; i++) {
-    bio_array[i] = BIO_new(BIO_s_socket());
-    BIO_set_nbio(bio_array[i], 1);
-    assert(bio_array[i] != NULL);
-  }
-
-  // SSL array
-  if (ctx != NULL) {
-    ssl_array = malloc(max_size * sizeof(SSL *));
-    assert(ssl_array != NULL);
-
-    for (int i = 0; i < max_size; i++) {
-      ssl_array[i] = SSL_new(ctx);
-      assert(ssl_array[i] != NULL);
-      assert(SSL_is_server(ssl_array[i]));
-    }
-  }
-
   return 0;
 }
 
 void destroy_session_cache() {
   assert(session_array != NULL);
   assert(status_array != NULL);
-  assert(buffer_array != NULL);
-  assert(request_array != NULL);
-  assert(response_array != NULL);
-  assert(bio_array != NULL);
 
   assert(pthread_mutex_destroy(&session_mutex) == 0);
   assert(pthread_cond_destroy(&request_read_cond) == 0);
@@ -137,11 +84,24 @@ void destroy_session_cache() {
   session_last_index = 0;
 
   // Session array
-  for (int i = 0; i < max_size; i++) {
-    if (session_array[i] != NULL) {
-      free(session_array[i]);
-      session_array[i] = NULL;
+  for (int i = 0; i < get_session_max_size(); i++) {
+    session_t *session = &session_array[i];
+    if (session->buffer != NULL) {
+      deinit_buffer(session->buffer);
+      session->buffer = NULL;
     }
+    if (session->ssl != NULL) {
+
+      if (SSL_get_rbio(session->ssl) == NULL &&
+          SSL_get_wbio(session->ssl) == NULL) {
+        BIO_free(session->bio);
+      }
+      SSL_free(session->ssl);
+      session->ssl = NULL;
+    } else {
+      BIO_free(session->bio);
+    }
+    session->bio = NULL;
   }
   free(session_array);
   session_array = NULL;
@@ -155,65 +115,11 @@ void destroy_session_cache() {
   }
   free(status_array);
   status_array = NULL;
-
-  // Buffer array
-  for (int i = 0; i < max_size; i++) {
-    if (buffer_array[i] != NULL) {
-      deinit_buffer(buffer_array[i]);
-    }
-  }
-  free(buffer_array);
-  buffer_array = NULL;
-
-  // Request array
-  for (int i = 0; i < max_size; i++) {
-    if (request_array[i] != NULL) {
-      free(request_array[i]);
-      request_array[i] = NULL;
-    }
-  }
-  free(request_array);
-  request_array = NULL;
-
-  // Response array
-  for (int i = 0; i < max_size; i++) {
-    if (response_array[i] != NULL) {
-      free(response_array[i]);
-      response_array[i] = NULL;
-    }
-  }
-  free(response_array);
-  response_array = NULL;
-
-  // BIO array and SSL array
-  for (int i = 0; i < max_size; i++) {
-    if (ssl_array != NULL) {
-      if (SSL_get_rbio(ssl_array[i]) == NULL &&
-          SSL_get_wbio(ssl_array[i]) == NULL) {
-        BIO_free(bio_array[i]);
-      }
-      SSL_free(ssl_array[i]);
-      ssl_array[i] = NULL;
-    } else {
-      BIO_free(bio_array[i]);
-    }
-    bio_array[i] = NULL;
-  }
-  if (ssl_array != NULL) {
-    free(ssl_array);
-    ssl_array = NULL;
-  }
-  free(bio_array);
-  bio_array = NULL;
 }
 
 void broadcast_session() {
   assert(session_array != NULL);
   assert(status_array != NULL);
-  assert(buffer_array != NULL);
-  assert(request_array != NULL);
-  assert(response_array != NULL);
-  assert(bio_array != NULL);
 
   pthread_mutex_lock(&session_mutex);
   pthread_cond_broadcast(&request_read_cond);
@@ -224,38 +130,39 @@ void broadcast_session() {
 }
 
 static inline void reset_session_at_index(int index) {
-  // Session array
-  memset(session_array[index], 0, sizeof(struct session));
+  session_t *session = &session_array[index];
+  // Meta
+  memset(&session->meta, 0, sizeof(meta_t));
 
   // Status array
   *status_array[index] = 0;
 
-  // Buffer array
-  buffer *buffer = buffer_array[index];
+  // Buffer
+  buffer *buffer = session->buffer;
   if (buffer->data != NULL) {
     memset(buffer->data, 0, buffer->capacity);
   }
   buffer->count = 0;
 
-  // Request array
-  memset(request_array[index], 0, sizeof(http_request_t));
+  // Request
+  memset(&session->request, 0, sizeof(http_request_t));
 
-  // Response array
-  memset(response_array[index], 0, sizeof(http_response_t));
+  // Response
+  memset(&session->response, 0, sizeof(http_response_t));
 
-  // BIO array
-  int ret = BIO_reset(bio_array[index]);
+  // BIO
+  int ret = BIO_reset(session->bio);
   if (ret == -1) {
     printf("BIO_reset failed: %s\n", ERR_error_string(ERR_get_error(), NULL));
     assert(ret != -1);
   }
-  BIO_set_fd(bio_array[index], -1, BIO_NOCLOSE);
-  BIO_set_nbio(bio_array[index], 1);
+  BIO_set_fd(session->bio, -1, BIO_NOCLOSE);
+  BIO_set_nbio(session->bio, 1);
 
-  if (ssl_array != NULL) {
-    SSL *ssl = ssl_array[index];
+  if (session->ssl != NULL) {
+    SSL *ssl = session->ssl;
     if (ssl != NULL) {
-      SSL_set_bio(ssl, bio_array[index], bio_array[index]);
+      SSL_set_bio(ssl, session->bio, session->bio);
       ret = SSL_clear(ssl);
       if (ret != 1) {
         printf("SSL_clear failed: %s\n",
@@ -267,10 +174,11 @@ static inline void reset_session_at_index(int index) {
 }
 
 static inline void reset_request_at_index(int index) {
-  char is_ssl = request_array[index]->is_ssl;
+  session_t *session = &session_array[index];
+  char is_ssl = session->request.is_ssl;
 
-  // Buffer array
-  buffer *buffer = buffer_array[index];
+  // Buffer
+  buffer *buffer = session->buffer;
   if (buffer->data != NULL) {
     free(buffer->data);
     buffer->data = NULL;
@@ -278,9 +186,9 @@ static inline void reset_request_at_index(int index) {
   buffer->capacity = 0;
   buffer->count = 0;
 
-  // Request array
-  memset(request_array[index], 0, sizeof(http_request_t));
-  request_array[index]->is_ssl = is_ssl;
+  // Request
+  memset(&session->request, 0, sizeof(http_request_t));
+  session->request.is_ssl = is_ssl;
 }
 
 // Get the session for a given thread id
@@ -290,8 +198,8 @@ int get_session_id_for_thread() {
     pthread_mutex_lock(&session_mutex);
     unsigned long thread_id = (unsigned long)pthread_self();
     for (int i = 0; i < session_count; i++) {
-      if (session_array[i]->thread_id == thread_id) {
-        session_id = session_array[i]->id;
+      if (session_array[i].meta.thread_id == thread_id) {
+        session_id = session_array[i].meta.id;
         break;
       }
     }
@@ -302,11 +210,9 @@ int get_session_id_for_thread() {
 
 static inline int init_session_connection(int index) {
   assert(session_array != NULL);
-  assert(bio_array != NULL);
-  assert(ssl_array != NULL);
 
-  SSL *ssl = ssl_array[index];
-  BIO *bio = bio_array[index];
+  SSL *ssl = session_array[index].ssl;
+  BIO *bio = session_array[index].bio;
 
   SSL_set_bio(ssl, bio, bio);
 
@@ -335,12 +241,14 @@ static inline int add_to_session(int related_fd) {
 
   reset_session_at_index(next);
 
-  session_array[next]->id = rand();
-  session_array[next]->related_fd = related_fd;
-  session_array[next]->thread_id = 0;
+  session_t *session = &session_array[next];
+
+  session->meta.id = rand();
+  session->meta.related_fd = related_fd;
+  session->meta.thread_id = 0;
   *status_array[next] &= WORK_STATUS_INITIAL;
-  BIO_set_fd(bio_array[next], related_fd, BIO_NOCLOSE);
-  BIO_set_nbio(bio_array[next], 1);
+  BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
+  BIO_set_nbio(session->bio, 1);
 
   if (session_count < max_size) {
     session_count++;
@@ -352,14 +260,8 @@ static inline int add_to_session(int related_fd) {
 }
 
 static inline void del_from_session(int i) {
-  struct session *session = session_array[i];
+  session_t session = session_array[i];
   char *status = status_array[i];
-  buffer *buffer = buffer_array[i];
-  http_request_t *request = request_array[i];
-  http_response_t *response = response_array[i];
-  BIO *bio = bio_array[i];
-  SSL *ssl = (ssl_array != NULL) ? ssl_array[i] : NULL;
-  assert(ssl == NULL || ssl_array != NULL);
 
   reset_session_at_index(i);
 
@@ -367,22 +269,10 @@ static inline void del_from_session(int i) {
     // Shift all existing sessions to the left
     session_array[i] = session_array[i + 1];
     status_array[i] = status_array[i + 1];
-    buffer_array[i] = buffer_array[i + 1];
-    request_array[i] = request_array[i + 1];
-    response_array[i] = response_array[i + 1];
-    bio_array[i] = bio_array[i + 1];
-    if (ssl_array != NULL)
-      ssl_array[i] = ssl_array[i + 1];
 
     // Replace the left shifted session with the to-be-deleted session
     session_array[i + 1] = session;
     status_array[i + 1] = status;
-    buffer_array[i + 1] = buffer;
-    request_array[i + 1] = request;
-    response_array[i + 1] = response;
-    if (ssl_array != NULL)
-      ssl_array[i + 1] = ssl;
-    bio_array[i + 1] = bio;
   }
 
   if (session_count > 0)
@@ -395,17 +285,13 @@ static inline void del_from_session(int i) {
 void push_request(int related_fd, WORK_STATUS status) {
   assert(session_array != NULL);
   assert(status_array != NULL);
-  assert(buffer_array != NULL);
-  assert(request_array != NULL);
-  assert(response_array != NULL);
-  assert(bio_array != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
 
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
-    if (session_array[i]->related_fd == related_fd) {
+    if (session_array[i].meta.related_fd == related_fd) {
       found = 1;
       assert(*status_array[i] & WORK_STATUS_PROCESSING);
       *status_array[i] &= ~WORK_STATUS_PROCESSING;
@@ -459,7 +345,7 @@ void push_request(int related_fd, WORK_STATUS status) {
     if (status == WORK_STATUS_INITIAL_SSL) {
       switch (init_session_connection(index)) {
       case 1:
-        request_array[index]->is_ssl = 1;
+        session_array[index].request.is_ssl = 1;
         break;
       case -1:
         del_from_session(index);
@@ -498,13 +384,8 @@ static inline int peek_next(WORK_STATUS status) {
   return index;
 }
 
-struct session_full_return pop_request(WORK_STATUS status) {
+session_t *pop_request(WORK_STATUS status) {
   assert(session_array != NULL);
-  assert(buffer_array != NULL);
-  assert(request_array != NULL);
-  assert(response_array != NULL);
-  assert(bio_array != NULL);
-  struct session_full_return result = {NULL, NULL, NULL, NULL, NULL, NULL};
   pthread_mutex_lock(&session_mutex);
   int index = -1;
   while ((index = peek_next(status)) == -1 && !stop()) {
@@ -529,36 +410,24 @@ struct session_full_return pop_request(WORK_STATUS status) {
   }
   if (index > -1) {
     *status_array[index] |= WORK_STATUS_PROCESSING;
-
-    result.session = session_array[index];
-    result.buffer = buffer_array[index];
-    result.request = request_array[index];
-    result.response = response_array[index];
-    result.bio = bio_array[index];
-    if (ssl_array != NULL) {
-      result.ssl = ssl_array[index];
-    }
   }
 
   pthread_mutex_unlock(&session_mutex);
-  return result;
+  return &session_array[index];
 }
 
-struct session_full_return pop_request_by_fd(int related_fd) {
+session_t *pop_request_by_fd(int related_fd) {
   assert(session_array != NULL);
   assert(status_array != NULL);
-  assert(buffer_array != NULL);
-  assert(request_array != NULL);
-  assert(response_array != NULL);
-  assert(bio_array != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
 
   pthread_mutex_lock(&session_mutex);
-  struct session_full_return result = {NULL, NULL, NULL, NULL, NULL, NULL};
+  session_t *result = NULL;
   int process = 0;
   for (int i = 0; i < session_count; i++) {
-    if (session_array[i]->related_fd == related_fd) {
+    session_t *session = &session_array[i];
+    if (session->meta.related_fd == related_fd) {
 
       if (((*status_array[i] & WORK_STATUS_SEND_FAILED) == 0) &&
           (*status_array[i] & WORK_STATUS_REQUEST_READ ||
@@ -569,14 +438,7 @@ struct session_full_return pop_request_by_fd(int related_fd) {
         process = 1;
       } else {
         *status_array[i] |= WORK_STATUS_PROCESSING;
-        result.session = session_array[i];
-        result.buffer = buffer_array[i];
-        result.request = request_array[i];
-        result.response = response_array[i];
-        result.bio = bio_array[i];
-        if (ssl_array != NULL) {
-          result.ssl = ssl_array[i];
-        }
+        result = session;
       }
       break;
     }

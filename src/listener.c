@@ -20,23 +20,23 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int));
 
 int handle_request_async(int fd) {
   int recv_return;
-  struct session_full_return session = pop_request_by_fd(fd);
-  if (session.session == NULL) {
+  session_t *session = pop_request_by_fd(fd);
+  if (session == NULL) {
     log_debug("Session is NULL for fd %d", fd);
     return -1;
   }
-  assert(session.bio != NULL);
+  assert(session->bio != NULL);
 
-  if (session.request->is_ssl) {
+  if (session->request.is_ssl) {
     log_debug("Reading SSL request for fd %d", fd);
-    assert(session.ssl != NULL);
+    assert(session->ssl != NULL);
     // Alloc more space for the data
-    int recv_return = recv_ssl(session.ssl, session.buffer);
+    int recv_return = recv_ssl(session->ssl, session->buffer);
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
-    } else if (recv_return <= 0 &&
-               SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ) {
+    } else if (recv_return <= 0 && SSL_get_error(session->ssl, recv_return) ==
+                                       SSL_ERROR_WANT_READ) {
       push_request(fd, WORK_STATUS_INITIAL);
       return 0;
     } else {
@@ -49,11 +49,11 @@ int handle_request_async(int fd) {
     }
   } else {
     log_debug("Reading plain request for fd %d", fd);
-    recv_return = recv_bio(session.bio, session.buffer);
+    recv_return = recv_bio(session->bio, session->buffer);
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
-    } else if (recv_return <= 0 && BIO_should_retry(session.bio)) {
+    } else if (recv_return <= 0 && BIO_should_retry(session->bio)) {
       push_request(fd, WORK_STATUS_INITIAL);
       return 0;
     } else {

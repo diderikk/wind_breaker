@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-char *http_status_code_to_str(http_status_code status_code);
+char *http_status_code_to_str(HTTP_STATUS_CODE status_code);
 unsigned int to_string(const http_response_t *http_response, const buffer *body,
                        buffer *dest);
 unsigned int set_content_length(http_response_t *http_response,
@@ -61,7 +61,7 @@ unsigned int construct_response(http_response_t *http_response,
   }
 
   return_value = to_string(http_response, tmp_buffer, body);
-  if(return_value >= 0)
+  if (return_value >= 0)
     body->count = return_value;
 
   return return_value;
@@ -289,7 +289,7 @@ unsigned int to_string(const http_response_t *http_response, const buffer *body,
   return offset;
 }
 
-char *http_status_code_to_str(http_status_code status_code) {
+char *http_status_code_to_str(HTTP_STATUS_CODE status_code) {
   switch (status_code) {
   case HTTP_OK:
     return "OK";
