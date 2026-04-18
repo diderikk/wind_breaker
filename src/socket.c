@@ -167,12 +167,12 @@ int recv_bio(BIO *bio, buffer *buffer) {
 
     recv_return = BIO_read(bio, buffer->data + buffer->count,
                            buffer->capacity - buffer->count);
-    if (recv_return >= 0 || buffer->count == 0)
+    if (recv_return >= 0)
       buffer->count += recv_return;
   } while (recv_return > 0);
 
   // TODO: Maybe buffer already has count > 0
-  if (buffer->count < 0) {
+  if (recv_return < 0 && buffer->count == 0) {
     log_error("BIO read error");
   } else {
     buffer->data[buffer->count] = '\0';

@@ -61,7 +61,8 @@ unsigned int construct_response(http_response_t *http_response,
   }
 
   return_value = to_string(http_response, tmp_buffer, body);
-  body->count = return_value;
+  if(return_value >= 0)
+    body->count = return_value;
 
   return return_value;
 }

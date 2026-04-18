@@ -312,12 +312,12 @@ static inline void str_replace(buffer *target, const char *needle,
       // no more occurrences
       break;
     }
-    occurrences++;
 
     assert(hit >= target->data + offset);
     // Capacity is greater than the difference between needle and replacement
     // word
-    assert(ENSURE_CAPACITY(target, target->count + diff + 1) > 0);
+    if(diff >= 0)
+      assert(ENSURE_CAPACITY(target, target->count + diff + 1) > 0);
 
     // If the target->data has been reallocated
     hit = target->data + hit_offset;
