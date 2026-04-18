@@ -10,5 +10,5 @@ unsigned int construct_response(http_response_t *http_response,
 unsigned int construct_upgrade_to_https_response(const uri_token_t uri,
                                                  const char *host,
                                                  buffer *buffer);
-char *http_status_code_to_str(http_status_code status_code);
+char *http_status_code_to_str(HTTP_STATUS_CODE status_code);
 #endif // HTTP_RESPONSE_H
