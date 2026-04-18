@@ -6,9 +6,9 @@
 
 void *handle_c() {
   struct session_full_return session;
-  char *tmp_buffer = malloc(REQUEST_RESPONSE_MAX_SIZE);
+  buffer *tmp_buffer = init_buffer(0);
   while (!stop()) {
-    memset(tmp_buffer, 0, REQUEST_RESPONSE_MAX_SIZE);
+    memset(tmp_buffer->data, 0, tmp_buffer->capacity);
     session = pop_request(WORK_STATUS_DATA_FETCHED);
 
     if (session.session == NULL) {
@@ -26,13 +26,13 @@ void *handle_c() {
 
     // Deprecated
     if (session.response->status_code == HTTP_MOVED_PERMANENTLY) {
-      *session.buffer_size = construct_upgrade_to_https_response(
+      construct_upgrade_to_https_response(
           session.request->uri, session.request->host, session.buffer);
     } else {
-      *session.buffer_size = construct_response(
-          session.response, session.request->uri,
-          session.request->accept_encoding, session.request->if_none_match,
-          session.buffer, *session.buffer_size, tmp_buffer);
+      construct_response(session.response, session.request->uri,
+                         session.request->accept_encoding,
+                         session.request->if_none_match, session.buffer,
+                         tmp_buffer);
     }
 
     WORK_STATUS next_status = WORK_STATUS_READY_TO_SEND;
@@ -40,7 +40,8 @@ void *handle_c() {
     push_request(session.session->related_fd, next_status);
   }
 
-  free(tmp_buffer);
+  deinit_buffer(tmp_buffer);
+  tmp_buffer = NULL;
 
   return NULL;
 }

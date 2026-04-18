@@ -1,15 +1,16 @@
 #include "session.h"
 #include "../properties.h"
 #include "../shutdown/stop.h"
+#include "buffer.h"
 #include "marked_fds.h"
 #include <execinfo.h>
 #include <openssl/err.h>
+#include <stdlib.h>
 
 static struct session **session_array = NULL;
 // Eight states (8 bits)
 static char **status_array = NULL;
-static char **buffer_array = NULL;
-static unsigned int **buffer_size_array = NULL;
+static buffer **buffer_array = NULL;
 static http_request_t **request_array = NULL;
 static http_response_t **response_array = NULL;
 static SSL **ssl_array = NULL;
@@ -68,20 +69,12 @@ int init_session_cache(SSL_CTX *ctx) {
   }
 
   // Buffer array
-  buffer_array = calloc(max_size, sizeof(char *));
+  buffer_array = calloc(max_size, sizeof(*buffer_array));
   assert(buffer_array != NULL);
 
   for (int i = 0; i < max_size; i++) {
-    buffer_array[i] = calloc(REQUEST_RESPONSE_MAX_SIZE, sizeof(char));
+    buffer_array[i] = init_buffer(0);
     assert(buffer_array[i] != NULL);
-  }
-
-  // Buffer size array
-  buffer_size_array = calloc(max_size, sizeof(unsigned int *));
-  assert(buffer_size_array != NULL);
-  for (int i = 0; i < max_size; i++) {
-    buffer_size_array[i] = calloc(1, sizeof(unsigned int));
-    assert(buffer_size_array[i] != NULL);
   }
 
   // Request array
@@ -127,28 +120,10 @@ int init_session_cache(SSL_CTX *ctx) {
   return 0;
 }
 
-void broadcast_session() {
-  assert(session_array != NULL);
-  assert(status_array != NULL);
-  assert(buffer_array != NULL);
-  assert(buffer_size_array != NULL);
-  assert(request_array != NULL);
-  assert(response_array != NULL);
-  assert(bio_array != NULL);
-
-  pthread_mutex_lock(&session_mutex);
-  pthread_cond_broadcast(&request_read_cond);
-  pthread_cond_broadcast(&parsed_cond);
-  pthread_cond_broadcast(&data_fetched_cond);
-  pthread_cond_broadcast(&response_generated_cond);
-  pthread_mutex_unlock(&session_mutex);
-}
-
 void destroy_session_cache() {
   assert(session_array != NULL);
   assert(status_array != NULL);
   assert(buffer_array != NULL);
-  assert(buffer_size_array != NULL);
   assert(request_array != NULL);
   assert(response_array != NULL);
   assert(bio_array != NULL);
@@ -184,22 +159,11 @@ void destroy_session_cache() {
   // Buffer array
   for (int i = 0; i < max_size; i++) {
     if (buffer_array[i] != NULL) {
-      free(buffer_array[i]);
-      buffer_array[i] = NULL;
+      deinit_buffer(buffer_array[i]);
     }
   }
   free(buffer_array);
   buffer_array = NULL;
-
-  // Buffer size array
-  for (int i = 0; i < max_size; i++) {
-    if (buffer_size_array[i] != NULL) {
-      free(buffer_size_array[i]);
-      buffer_size_array[i] = NULL;
-    }
-  }
-  free(buffer_size_array);
-  buffer_size_array = NULL;
 
   // Request array
   for (int i = 0; i < max_size; i++) {
@@ -243,6 +207,22 @@ void destroy_session_cache() {
   bio_array = NULL;
 }
 
+void broadcast_session() {
+  assert(session_array != NULL);
+  assert(status_array != NULL);
+  assert(buffer_array != NULL);
+  assert(request_array != NULL);
+  assert(response_array != NULL);
+  assert(bio_array != NULL);
+
+  pthread_mutex_lock(&session_mutex);
+  pthread_cond_broadcast(&request_read_cond);
+  pthread_cond_broadcast(&parsed_cond);
+  pthread_cond_broadcast(&data_fetched_cond);
+  pthread_cond_broadcast(&response_generated_cond);
+  pthread_mutex_unlock(&session_mutex);
+}
+
 static inline void reset_session_at_index(int index) {
   // Session array
   memset(session_array[index], 0, sizeof(struct session));
@@ -251,10 +231,11 @@ static inline void reset_session_at_index(int index) {
   *status_array[index] = 0;
 
   // Buffer array
-  memset(buffer_array[index], 0, REQUEST_RESPONSE_MAX_SIZE);
-
-  // Buffer size array
-  *buffer_size_array[index] = 0;
+  buffer *buffer = buffer_array[index];
+  if (buffer->data != NULL) {
+    memset(buffer->data, 0, buffer->capacity);
+  }
+  buffer->count = 0;
 
   // Request array
   memset(request_array[index], 0, sizeof(http_request_t));
@@ -287,11 +268,15 @@ static inline void reset_session_at_index(int index) {
 
 static inline void reset_request_at_index(int index) {
   char is_ssl = request_array[index]->is_ssl;
-  // Buffer array
-  memset(buffer_array[index], 0, REQUEST_RESPONSE_MAX_SIZE);
 
-  // Buffer size array
-  *buffer_size_array[index] = 0;
+  // Buffer array
+  buffer *buffer = buffer_array[index];
+  if (buffer->data != NULL) {
+    free(buffer->data);
+    buffer->data = NULL;
+  }
+  buffer->capacity = 0;
+  buffer->count = 0;
 
   // Request array
   memset(request_array[index], 0, sizeof(http_request_t));
@@ -369,8 +354,7 @@ static inline int add_to_session(int related_fd) {
 static inline void del_from_session(int i) {
   struct session *session = session_array[i];
   char *status = status_array[i];
-  char *buffer = buffer_array[i];
-  unsigned int *buffer_size = buffer_size_array[i];
+  buffer *buffer = buffer_array[i];
   http_request_t *request = request_array[i];
   http_response_t *response = response_array[i];
   BIO *bio = bio_array[i];
@@ -384,7 +368,6 @@ static inline void del_from_session(int i) {
     session_array[i] = session_array[i + 1];
     status_array[i] = status_array[i + 1];
     buffer_array[i] = buffer_array[i + 1];
-    buffer_size_array[i] = buffer_size_array[i + 1];
     request_array[i] = request_array[i + 1];
     response_array[i] = response_array[i + 1];
     bio_array[i] = bio_array[i + 1];
@@ -395,7 +378,6 @@ static inline void del_from_session(int i) {
     session_array[i + 1] = session;
     status_array[i + 1] = status;
     buffer_array[i + 1] = buffer;
-    buffer_size_array[i + 1] = buffer_size;
     request_array[i + 1] = request;
     response_array[i + 1] = response;
     if (ssl_array != NULL)
@@ -414,7 +396,6 @@ void push_request(int related_fd, WORK_STATUS status) {
   assert(session_array != NULL);
   assert(status_array != NULL);
   assert(buffer_array != NULL);
-  assert(buffer_size_array != NULL);
   assert(request_array != NULL);
   assert(response_array != NULL);
   assert(bio_array != NULL);
@@ -520,12 +501,10 @@ static inline int peek_next(WORK_STATUS status) {
 struct session_full_return pop_request(WORK_STATUS status) {
   assert(session_array != NULL);
   assert(buffer_array != NULL);
-  assert(buffer_size_array != NULL);
   assert(request_array != NULL);
   assert(response_array != NULL);
   assert(bio_array != NULL);
-  struct session_full_return result = {NULL, NULL, NULL, NULL,
-                                       NULL, NULL, NULL};
+  struct session_full_return result = {NULL, NULL, NULL, NULL, NULL, NULL};
   pthread_mutex_lock(&session_mutex);
   int index = -1;
   while ((index = peek_next(status)) == -1 && !stop()) {
@@ -553,7 +532,6 @@ struct session_full_return pop_request(WORK_STATUS status) {
 
     result.session = session_array[index];
     result.buffer = buffer_array[index];
-    result.buffer_size = buffer_size_array[index];
     result.request = request_array[index];
     result.response = response_array[index];
     result.bio = bio_array[index];
@@ -570,7 +548,6 @@ struct session_full_return pop_request_by_fd(int related_fd) {
   assert(session_array != NULL);
   assert(status_array != NULL);
   assert(buffer_array != NULL);
-  assert(buffer_size_array != NULL);
   assert(request_array != NULL);
   assert(response_array != NULL);
   assert(bio_array != NULL);
@@ -578,8 +555,7 @@ struct session_full_return pop_request_by_fd(int related_fd) {
   assert(related_fd < 16384);
 
   pthread_mutex_lock(&session_mutex);
-  struct session_full_return result = {NULL, NULL, NULL, NULL,
-                                       NULL, NULL, NULL};
+  struct session_full_return result = {NULL, NULL, NULL, NULL, NULL, NULL};
   int process = 0;
   for (int i = 0; i < session_count; i++) {
     if (session_array[i]->related_fd == related_fd) {
@@ -595,7 +571,6 @@ struct session_full_return pop_request_by_fd(int related_fd) {
         *status_array[i] |= WORK_STATUS_PROCESSING;
         result.session = session_array[i];
         result.buffer = buffer_array[i];
-        result.buffer_size = buffer_size_array[i];
         result.request = request_array[i];
         result.response = response_array[i];
         result.bio = bio_array[i];

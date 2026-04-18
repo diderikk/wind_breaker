@@ -1,8 +1,9 @@
 #include "../data_structures/session.h"
 #include "../shutdown/stop.h"
 #include "../socket.h"
+#include "../utils/assert2.h"
 #include "../utils/logger.h"
-#include "helpers.h"
+#include <string.h>
 
 void *handle_d() {
   struct session_full_return session;
@@ -23,19 +24,15 @@ void *handle_d() {
     assert(session.buffer != NULL);
 
     char is_ssl = session.request->is_ssl;
-    log_info("Sending response to session %d:\n%s", session.session->id,
-             session.buffer);
+    log_info("Sending response to session %d:\n%.*s", session.session->id,
+             session.buffer->count, session.buffer->data);
 
-    int send_return =
-        (is_ssl)
-            ? send_ssl(session.ssl, session.buffer + session.response->offset,
-                       *session.buffer_size - session.response->offset)
-            : send_bio(session.bio, session.buffer + session.response->offset,
-                       *session.buffer_size - session.response->offset);
+    int send_return = (is_ssl) ? send_ssl(session.ssl, session.buffer)
+                               : send_bio(session.bio, session.buffer);
 
     WORK_STATUS next_status = WORK_STATUS_SENT;
-    log_debug("send_return: %d, buffer_size: %d", send_return,
-              *session.buffer_size);
+    log_debug("send_return: %d, buffer_size: %lu", send_return,
+              session.buffer->count);
     if (is_ssl && send_return <= 0) {
       int ssl_error = SSL_get_error(session.ssl, send_return);
       if (ssl_error == SSL_ERROR_WANT_READ) {
@@ -53,10 +50,11 @@ void *handle_d() {
                BIO_should_retry(session.bio) == 1) {
       log_debug("BIO should retry, pushing data back to queue...");
       next_status = WORK_STATUS_SEND_FAILED;
-    } else if ((send_return + session.response->offset) <
-               *session.buffer_size) {
-      log_debug("Partial send, pushing data back to sending queue... %d");
-      session.response->offset += send_return;
+    } else if (send_return < session.buffer->count) {
+      log_debug("Partial send, pushing data back to sending queue...");
+      memmove(session.buffer->data, session.buffer->data + send_return,
+              session.buffer->count - send_return);
+      session.buffer->count -= send_return;
       next_status = WORK_STATUS_READY_TO_SEND;
     } else if (send_return == -1) {
       log_debug("Could not send data to fd %d, closing connection...",

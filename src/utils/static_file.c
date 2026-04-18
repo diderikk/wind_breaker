@@ -2,6 +2,7 @@
 #include "assert2.h"
 #include "logger.h"
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -59,15 +60,24 @@ int find_static_file(const char *uri) {
   return 1;
 }
 
-int read_static_file(const char *file_path, char *buffer,
-                     unsigned int buffer_size) {
+int read_static_file(const char *file_path, buffer *buffer) {
   char full_path[512 + sizeof(STATIC_PATH)];
   snprintf(full_path, sizeof(full_path), "%s%s", STATIC_PATH, file_path);
 
   FILE *file = fopen(full_path, "rb");
   assert_log(file != NULL, "Failed to open file: %s", full_path);
 
-  size_t read_size = fread(buffer, 1, buffer_size, file);
+  assert(fseek(file, 0L, SEEK_END) == 0);
+  size_t size = ftell(file);
+  assert(fseek(file, 0L, SEEK_SET) == 0);
+
+  assert(size > 0);
+  assert(ENSURE_CAPACITY(buffer, size + 1) > 0);
+
+  size_t read_size = fread(buffer->data, 1, buffer->capacity, file);
+
+  buffer->data[read_size] = '\0';
+  buffer->count = read_size;
   assert_log(read_size > 0, "Failed to read file: %s", full_path);
   fclose(file);
 

@@ -23,12 +23,16 @@ void *handle_a() {
     assert(session.response != NULL);
     assert(session.buffer != NULL);
 
-    log_trace("Parsing request:\n%s", session.buffer);
+    log_trace("Parsing request:\n%s", session.buffer->data);
 
-    parse_http_request(session.request, session.buffer);
-    session.response->status_code = validate_request_headers(session.request);
-
-    // char full_uri[HTTP_URI_TOKEN_COUNT * (HTTP_URI_TOKEN_SIZE + 1)];
+    int result = parse_http_request(session.request, session.buffer);
+    if (result == ALLOCATE_MEMORY_ERROR) {
+      session.response->status_code = HTTP_INTERNAL_SERVER_ERROR;
+    } else if (result < 0) {
+      session.response->status_code = HTTP_NOT_ACCEPTABLE;
+    } else {
+      session.response->status_code = validate_request_headers(session.request);
+    }
 
     log_info("Parsed:\nmethod: %d, uri_tokens: %s %s %s %s, version: %s, "
              "host: %s, user_agent: %s, accept: %s, "

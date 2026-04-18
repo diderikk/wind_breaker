@@ -1,13 +1,12 @@
 #ifndef STATIC_H
 #define STATIC_H
 
+#include "data_structures/buffer.h"
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <poll.h>
 #include <pthread.h>
 
-#define REQUEST_RESPONSE_MAX_SIZE 1024 * 1024 // 1 MB
-#define HTML_MAX_SIZE 70 * 1024               // 16 kB
 #define HTTP_HEADER_SIZE 256
 #define HTTP_URI_TOKEN_COUNT 4
 #define HTTP_URI_TOKEN_SIZE 200
@@ -20,6 +19,7 @@
 #define WB_SQLITE_OPEN_FLAGS                                                   \
   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI |               \
       SQLITE_OPEN_NOMUTEX
+#define ALLOCATE_MEMORY_ERROR -123
 
 typedef enum { RESET, REMOVE_FD, CONTINUE } POLL_ERROR_CLASS;
 
@@ -67,7 +67,7 @@ typedef enum {
 typedef struct {
   int fd;
   int size;
-  char data[REQUEST_RESPONSE_MAX_SIZE];
+  char *data;
 } worker_data;
 
 typedef struct {
@@ -86,7 +86,6 @@ typedef struct {
   http_status_code status_code;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
-  long offset;
   char content_language[HTTP_HEADER_SMALL_SIZE];
   char content_encoding[HTTP_HEADER_SMALL_SIZE];
   char last_modified[HTTP_HEADER_SMALL_SIZE];
@@ -130,8 +129,7 @@ struct session_full_return {
   struct session *session;
   BIO *bio;
   SSL *ssl;
-  char *buffer;
-  unsigned int *buffer_size;
+  buffer *buffer;
   http_request_t *request;
   http_response_t *response;
 };

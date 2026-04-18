@@ -30,8 +30,8 @@ int handle_request_async(int fd) {
   if (session.request->is_ssl) {
     log_debug("Reading SSL request for fd %d", fd);
     assert(session.ssl != NULL);
-    int recv_return =
-        recv_ssl(session.ssl, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
+    // Alloc more space for the data
+    int recv_return = recv_ssl(session.ssl, session.buffer);
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
@@ -49,8 +49,7 @@ int handle_request_async(int fd) {
     }
   } else {
     log_debug("Reading plain request for fd %d", fd);
-    recv_return =
-        recv_bio(session.bio, session.buffer, REQUEST_RESPONSE_MAX_SIZE);
+    recv_return = recv_bio(session.bio, session.buffer);
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
@@ -58,6 +57,7 @@ int handle_request_async(int fd) {
       push_request(fd, WORK_STATUS_INITIAL);
       return 0;
     } else {
+      log_error("BIO read error");
       // Got error or connection closed by client
       if (recv_return == 0) {
         // Connection closed
@@ -126,7 +126,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
   assert(listener > 0);
   assert(request_handler != NULL);
 
-  char ip_str[INET6_ADDRSTRLEN], data[REQUEST_RESPONSE_MAX_SIZE];
+  char ip_str[INET6_ADDRSTRLEN];
   char event_count;
   int client_socket_fd, new_conn_ret;
   sigset_t sigmask;
@@ -135,7 +135,6 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
   POLL_ERROR_CLASS error_class;
 
   event_count = 0;
-  memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
   memset(ip_str, 0, INET6_ADDRSTRLEN);
   sigemptyset(&sigmask);
 
@@ -232,9 +231,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
         } else {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 
-          if (request_handler(poll->fd) != -1) {
-            memset(data, 0, REQUEST_RESPONSE_MAX_SIZE);
-          } else {
+          if (request_handler(poll->fd) == -1) {
             push_request(poll->fd, WORK_STATUS_REJECTED);
             remove_poll_fd_by_index_sync(&i);
           }

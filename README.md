@@ -122,6 +122,11 @@ enable_https = 0 (binary value for enabling HTTPS)
 * Performance optimization (spacial locality?)
 * A thread/path that listens to console/http input and can send commands to the server (e.g. reload config, shutdown, etc.)
 * Basic Auth
+* One thread per request (Apache)
+* One list per state
+* ENSURE_CAPACITY use assert for checking for memory issues...
+* Request/response logger
+* Move session arrays to one struct
 
 ## Try to remember
 * Clean up includes

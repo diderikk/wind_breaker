@@ -13,21 +13,27 @@ int parse_header_field(http_request_t *http_request, const char *char_data);
 // content_size);
 http_method method_str_to_enum(const char *raw_method);
 
-int parse_http_request(http_request_t *http_request, const char *raw_request) {
+int parse_http_request(http_request_t *http_request,
+                       const buffer *raw_request) {
   int return_value;
-  char raw_request_copy[REQUEST_RESPONSE_MAX_SIZE];
+  char *raw_request_copy = malloc(sizeof(char) * raw_request->count);
+  if (raw_request_copy == NULL)
+    return ALLOCATE_MEMORY_ERROR;
   char *saveptr, *line;
 
-  memcpy(raw_request_copy, raw_request, REQUEST_RESPONSE_MAX_SIZE);
+  memcpy(raw_request_copy, raw_request->data, raw_request->count);
   line = strtok_r(raw_request_copy, "\r\n", &saveptr);
   return_value = parse_control_data(http_request, line);
 
   while ((line = strtok_r(NULL, "\r\n", &saveptr)) != NULL) {
     return_value = parse_header_field(http_request, line);
-    if (return_value != 0)
+    if (return_value != 0) {
+      free(raw_request_copy);
       return return_value;
+    }
   }
 
+  free(raw_request_copy);
   return return_value;
 }
 
