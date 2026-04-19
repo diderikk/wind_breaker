@@ -54,7 +54,7 @@ int init_session_cache(SSL_CTX *ctx) {
   assert(pthread_cond_init(&response_generated_cond, NULL) == 0);
 
   max_size = get_session_max_size();
-  session_array = calloc(get_session_max_size(), sizeof(session_t *));
+  session_array = calloc(get_session_max_size(), sizeof(session_t));
   for (int i = 0; i < get_session_max_size(); i++) {
     session_t *session = &session_array[i];
     session->buffer = init_buffer(0);
@@ -396,6 +396,7 @@ static inline int peek_next(WORK_STATUS status) {
 session_t *pop_request(WORK_STATUS status) {
   assert(session_array != NULL);
   pthread_mutex_lock(&session_mutex);
+  session_t* result = NULL;
   int index = -1;
   while ((index = peek_next(status)) == -1 && !stop()) {
     switch (status) {
@@ -419,10 +420,11 @@ session_t *pop_request(WORK_STATUS status) {
   }
   if (index > -1) {
     *status_array[index] |= WORK_STATUS_PROCESSING;
+    result = &session_array[index];
   }
 
   pthread_mutex_unlock(&session_mutex);
-  return &session_array[index];
+  return result;
 }
 
 session_t *pop_request_by_fd(int related_fd) {
