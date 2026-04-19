@@ -31,7 +31,7 @@ int handle_request_async(int fd) {
     log_debug("Reading SSL request for fd %d", fd);
     assert(session->ssl != NULL);
     // Alloc more space for the data
-    int recv_return = recv_ssl(session->ssl, session->buffer);
+    recv_return = recv_ssl(session->ssl, session->buffer);
     if (recv_return > 0) {
       push_request(fd, WORK_STATUS_REQUEST_READ);
       return 0;
