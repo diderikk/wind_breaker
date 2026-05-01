@@ -134,6 +134,13 @@ typedef struct {
   http_response_t response;
 } session_t;
 
+struct session_node {
+  struct node_s *next;
+  session_t session;
+};
+
+typedef struct session_node session_node_t;
+
 char *uri_to_file_name(const uri_token_t uri);
 
 #endif // STATIC_H
