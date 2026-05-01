@@ -7,7 +7,7 @@
 #include <openssl/err.h>
 #include <stdlib.h>
 
-static session_t *session_array = NULL;
+static session_node_t *session_node_array = NULL;
 // Eight states (8 bits)
 static char **status_array = NULL;
 static int max_size = 0;
@@ -42,12 +42,14 @@ static void assert_(const char *file, int line, const char *func,
 
 int init_session_cache(SSL_CTX *ctx) {
   SSL_library_init();
-  assert(session_array == NULL);
+  assert(session_node_array == NULL);
 
   max_size = get_session_max_size();
-  session_array = calloc(get_session_max_size(), sizeof(session_t));
+  session_node_array = calloc(get_session_max_size(), sizeof(session_node_t));
   for (int i = 0; i < get_session_max_size(); i++) {
-    session_t *session = &session_array[i];
+    session_node_t *node = &session_node_array[i];
+    node->next = NULL;
+    session_t *session = &node->session;
     session->buffer = init_buffer(0);
     assert(session->buffer != NULL);
     session->bio = BIO_new(BIO_s_socket());
@@ -72,7 +74,7 @@ int init_session_cache(SSL_CTX *ctx) {
 }
 
 void destroy_session_cache() {
-  assert(session_array != NULL);
+  assert(session_node_array != NULL);
   assert(status_array != NULL);
 
   assert(pthread_mutex_destroy(&session_mutex) == 0);
@@ -85,7 +87,8 @@ void destroy_session_cache() {
 
   // Session array
   for (int i = 0; i < get_session_max_size(); i++) {
-    session_t *session = &session_array[i];
+    session_node_t *node = &session_node_array[i];
+    session_t *session = &node->session;
     if (session->buffer != NULL) {
       deinit_buffer(session->buffer);
       session->buffer = NULL;
@@ -103,8 +106,8 @@ void destroy_session_cache() {
     }
     session->bio = NULL;
   }
-  free(session_array);
-  session_array = NULL;
+  free(session_node_array);
+  session_node_array = NULL;
 
   // Status array
   for (int i = 0; i < max_size; i++) {
@@ -118,7 +121,7 @@ void destroy_session_cache() {
 }
 
 void broadcast_session() {
-  assert(session_array != NULL);
+  assert(session_node_array != NULL);
   assert(status_array != NULL);
 
   pthread_mutex_lock(&session_mutex);
@@ -130,7 +133,7 @@ void broadcast_session() {
 }
 
 static inline void reset_session_at_index(int index) {
-  session_t *session = &session_array[index];
+  session_t *session = &session_node_array[index].session;
   // Meta
   memset(&session->meta, 0, sizeof(meta_t));
 
@@ -174,7 +177,7 @@ static inline void reset_session_at_index(int index) {
 }
 
 static inline void reset_request_at_index(int index) {
-  session_t *session = &session_array[index];
+  session_t *session = &session_node_array[index].session;
   char is_ssl = session->request.is_ssl;
 
   // Buffer
@@ -194,12 +197,12 @@ static inline void reset_request_at_index(int index) {
 // Get the session for a given thread id
 int get_session_id_for_thread() {
   int session_id = -1;
-  if (session_array != NULL) {
+  if (session_node_array != NULL) {
     pthread_mutex_lock(&session_mutex);
     unsigned long thread_id = (unsigned long)pthread_self();
     for (int i = 0; i < session_count; i++) {
-      if (session_array[i].meta.thread_id == thread_id) {
-        session_id = session_array[i].meta.id;
+      if (session_node_array[i].session.meta.thread_id == thread_id) {
+        session_id = session_node_array[i].session.meta.id;
         break;
       }
     }
@@ -209,10 +212,10 @@ int get_session_id_for_thread() {
 }
 
 static inline int init_session_connection(int index) {
-  assert(session_array != NULL);
+  assert(session_node_array != NULL);
 
-  SSL *ssl = session_array[index].ssl;
-  BIO *bio = session_array[index].bio;
+  SSL *ssl = session_node_array[index].session.ssl;
+  BIO *bio = session_node_array[index].session.bio;
 
   SSL_set_bio(ssl, bio, bio);
 
@@ -241,7 +244,7 @@ static inline int add_to_session(int related_fd) {
 
   reset_session_at_index(next);
 
-  session_t *session = &session_array[next];
+  session_t *session = &session_node_array[next].session;
 
   session->meta.id = rand();
   session->meta.related_fd = related_fd;
@@ -260,18 +263,18 @@ static inline int add_to_session(int related_fd) {
 }
 
 static inline void del_from_session(int i) {
-  session_t session = session_array[i];
+  session_node_t node = session_node_array[i];
   char *status = status_array[i];
 
   reset_session_at_index(i);
 
   for (; i < session_count - 1; i++) {
     // Shift all existing sessions to the left
-    session_array[i] = session_array[i + 1];
+    session_node_array[i] = session_node_array[i + 1];
     status_array[i] = status_array[i + 1];
 
     // Replace the left shifted session with the to-be-deleted session
-    session_array[i + 1] = session;
+    session_node_array[i + 1] = node;
     status_array[i + 1] = status;
   }
 
@@ -283,7 +286,7 @@ static inline void del_from_session(int i) {
 }
 
 void push_request(int related_fd, WORK_STATUS status) {
-  assert(session_array != NULL);
+  assert(session_node_array != NULL);
   assert(status_array != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
@@ -291,7 +294,7 @@ void push_request(int related_fd, WORK_STATUS status) {
   pthread_mutex_lock(&session_mutex);
   int found = 0;
   for (int i = 0; i < session_count; i++) {
-    if (session_array[i].meta.related_fd == related_fd) {
+    if (session_node_array[i].session.meta.related_fd == related_fd) {
       found = 1;
       assert(*status_array[i] & WORK_STATUS_PROCESSING);
       *status_array[i] &= ~WORK_STATUS_PROCESSING;
@@ -345,7 +348,7 @@ void push_request(int related_fd, WORK_STATUS status) {
     if (status == WORK_STATUS_INITIAL_SSL) {
       switch (init_session_connection(index)) {
       case 1:
-        session_array[index].request.is_ssl = 1;
+        session_node_array[index].session.request.is_ssl = 1;
         break;
       case -1:
         del_from_session(index);
@@ -385,7 +388,7 @@ static inline int peek_next(WORK_STATUS status) {
 }
 
 session_t *pop_request(WORK_STATUS status) {
-  assert(session_array != NULL);
+  assert(session_node_array != NULL);
   pthread_mutex_lock(&session_mutex);
   session_t* result = NULL;
   int index = -1;
@@ -411,7 +414,7 @@ session_t *pop_request(WORK_STATUS status) {
   }
   if (index > -1) {
     *status_array[index] |= WORK_STATUS_PROCESSING;
-    result = &session_array[index];
+    result = &session_node_array[index].session;
   }
 
   pthread_mutex_unlock(&session_mutex);
@@ -419,7 +422,7 @@ session_t *pop_request(WORK_STATUS status) {
 }
 
 session_t *pop_request_by_fd(int related_fd) {
-  assert(session_array != NULL);
+  assert(session_node_array != NULL);
   assert(status_array != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
@@ -428,7 +431,7 @@ session_t *pop_request_by_fd(int related_fd) {
   session_t *result = NULL;
   int process = 0;
   for (int i = 0; i < session_count; i++) {
-    session_t *session = &session_array[i];
+    session_t *session = &session_node_array[i].session;
     if (session->meta.related_fd == related_fd) {
 
       if (((*status_array[i] & WORK_STATUS_SEND_FAILED) == 0) &&
