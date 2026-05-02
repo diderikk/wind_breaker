@@ -1,4 +1,5 @@
 #include "../data_structures/session.h"
+#include "../data_structures/session_by_thread_map.h"
 #include "../http/request.h"
 #include "../shutdown/stop.h"
 #include "../static.h"
@@ -14,7 +15,7 @@ void *handle_a() {
       continue;
     }
 
-    session->meta.thread_id = (long unsigned int)pthread_self();
+    put_session_id_by_thread(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by request parser",
               session->meta.id, session->meta.related_fd);
@@ -43,7 +44,7 @@ void *handle_a() {
              session->request.accept, session->request.accept_language,
              session->request.accept_encoding, session->request.connection);
 
-    session->meta.thread_id = 0;
+    put_session_id_by_thread(-1);
     push_request(session->meta.related_fd, WORK_STATUS_PARSED);
   }
 

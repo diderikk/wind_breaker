@@ -1,11 +1,10 @@
 #include "session.h"
 #include "../properties.h"
 #include "../shutdown/stop.h"
+#include "../utils/assert2.h"
 #include "buffer.h"
 #include "marked_fds.h"
-#include <execinfo.h>
 #include <openssl/err.h>
-#include <stdlib.h>
 
 static session_node_t *session_node_array = NULL;
 // Eight states (8 bits)
@@ -18,27 +17,6 @@ static pthread_cond_t request_read_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t parsed_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t data_fetched_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t response_generated_cond = PTHREAD_COND_INITIALIZER;
-
-static void assert_(const char *file, int line, const char *func,
-                    const char *msg) {
-  fprintf(stdout, "Assertion failed: %s:%d: %s: %s\n", file, line, func, msg);
-
-  void *backtrace_buffer[BACKTRACE_SIZE];
-  unsigned int backtrace_size = backtrace(backtrace_buffer, BACKTRACE_SIZE);
-  char **backtrace_symbols_buffer =
-      backtrace_symbols(backtrace_buffer, backtrace_size);
-  if (backtrace_symbols_buffer != NULL && backtrace_size > 0) {
-    printf("Backtrace:\n");
-    for (unsigned int i = 0; i < backtrace_size; i++) {
-      printf("  %d: %s\n", i, backtrace_symbols_buffer[i]);
-    }
-    free(backtrace_symbols_buffer);
-  }
-
-  raise(SIGABRT);
-}
-#define assert(expr)                                                           \
-  ((void)((expr) || (assert_(__FILE__, __LINE__, __func__, #expr), 0)))
 
 int init_session_cache(SSL_CTX *ctx) {
   SSL_library_init();
@@ -194,23 +172,6 @@ static inline void reset_request_at_index(int index) {
   session->request.is_ssl = is_ssl;
 }
 
-// Get the session for a given thread id
-int get_session_id_for_thread() {
-  int session_id = -1;
-  if (session_node_array != NULL) {
-    pthread_mutex_lock(&session_mutex);
-    unsigned long thread_id = (unsigned long)pthread_self();
-    for (int i = 0; i < session_count; i++) {
-      if (session_node_array[i].session.meta.thread_id == thread_id) {
-        session_id = session_node_array[i].session.meta.id;
-        break;
-      }
-    }
-    pthread_mutex_unlock(&session_mutex);
-  }
-  return session_id;
-}
-
 static inline int init_session_connection(int index) {
   assert(session_node_array != NULL);
 
@@ -248,7 +209,6 @@ static inline int add_to_session(int related_fd) {
 
   session->meta.id = rand();
   session->meta.related_fd = related_fd;
-  session->meta.thread_id = 0;
   *status_array[next] &= WORK_STATUS_INITIAL;
   BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
   BIO_set_nbio(session->bio, 1);
@@ -390,7 +350,7 @@ static inline int peek_next(WORK_STATUS status) {
 session_t *pop_request(WORK_STATUS status) {
   assert(session_node_array != NULL);
   pthread_mutex_lock(&session_mutex);
-  session_t* result = NULL;
+  session_t *result = NULL;
   int index = -1;
   while ((index = peek_next(status)) == -1 && !stop()) {
     switch (status) {

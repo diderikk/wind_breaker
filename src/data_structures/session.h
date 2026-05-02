@@ -7,7 +7,6 @@
 int init_session_cache(SSL_CTX *ctx);
 void destroy_session_cache();
 
-int get_session_id_for_thread();
 void broadcast_session();
 // Only works for INITIAL and SENT, since they can receive new data
 void push_request(int related_fd, WORK_STATUS status);

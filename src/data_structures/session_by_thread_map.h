@@ -1,12 +1,9 @@
 #ifndef SESSION_BY_THREAD_H
 #define SESSION_BY_THREAD_H
 
-#include "../static.h"
-#include <openssl/ssl.h>
+void destroy_session_by_thread_map();
 
-// INIT???
-
-int put(int session_id);
-int get(int session_id);
+int put_session_id_by_thread(int session_id);
+int get_session_id_by_thread();
 
 #endif // SESSION_BY_THREAD_H

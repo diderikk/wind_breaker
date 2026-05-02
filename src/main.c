@@ -1,6 +1,7 @@
 #include "data_structures/marked_fds.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
+#include "data_structures/session_by_thread_map.h"
 #include "listener.h"
 #include "properties.h"
 #include "shutdown/signal2.h"
@@ -41,6 +42,7 @@ void handle_exit(int signum) {
   }
   if (status >= 2)
     destroy_logger();
+  destroy_session_by_thread_map();
   exit(signum);
 }
 
