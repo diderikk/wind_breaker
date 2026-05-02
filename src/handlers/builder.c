@@ -1,4 +1,5 @@
 #include "../data_structures/session.h"
+#include "../data_structures/session_by_thread_map.h"
 #include "../http/response.h"
 #include "../shutdown/stop.h"
 #include "../utils/assert2.h"
@@ -15,7 +16,7 @@ void *handle_c() {
       continue;
     }
 
-    session->meta.thread_id = (long unsigned int)pthread_self();
+    put_session_id_by_thread(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by response builder",
               session->meta.id, session->meta.related_fd);
@@ -34,7 +35,7 @@ void *handle_c() {
     }
 
     WORK_STATUS next_status = WORK_STATUS_READY_TO_SEND;
-    session->meta.thread_id = 0;
+    put_session_id_by_thread(-1);
     push_request(session->meta.related_fd, next_status);
   }
 

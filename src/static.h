@@ -122,7 +122,6 @@ typedef struct {
 typedef struct {
   int id;
   int related_fd;
-  unsigned long thread_id;
 } meta_t;
 
 typedef struct {

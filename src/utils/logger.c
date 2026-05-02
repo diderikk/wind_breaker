@@ -1,5 +1,5 @@
 #include "logger.h"
-#include "../data_structures/session.h"
+#include "../data_structures/session_by_thread_map.h"
 #include "../static.h"
 #include <assert.h>
 #include <errno.h>
@@ -251,7 +251,7 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
   struct tm *timeinfo;
   char time_str[20];
   pthread_t thread_id = pthread_self();
-  int session_id = get_session_id_for_thread();
+  int session_id = get_session_id_by_thread();
   char *relative_file_path = (strstr(file, "src/") != NULL)
                                  ? strstr(file, "src/") + 4
                                  : strstr(file, "test/") + 5;
@@ -260,7 +260,7 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
   time(&rawtime);
   timeinfo = localtime(&rawtime);
 
-  // Format the time as YYYY-MM-DD HH:MM:SS
+  // Format the time as YYYYMMDD HH:MM:SS
   strftime(time_str, sizeof(time_str), "%Y%m%d %H:%M:%S", timeinfo);
 
   pthread_mutex_lock(&log_mutex);

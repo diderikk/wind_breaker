@@ -1,4 +1,5 @@
 #include "../data_structures/session.h"
+#include "../data_structures/session_by_thread_map.h"
 #include "../http/response.h"
 #include "../properties.h"
 #include "../shutdown/stop.h"
@@ -73,7 +74,7 @@ void *handle_b() {
       continue;
     }
 
-    session->meta.thread_id = (long unsigned int)pthread_self();
+    put_session_id_by_thread(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by response content loader",
               session->meta.id, session->meta.related_fd);
@@ -112,7 +113,7 @@ void *handle_b() {
           gen_error_body(session->response.status_code, session->buffer);
     }
 
-    session->meta.thread_id = 0;
+    put_session_id_by_thread(-1);
     push_request(session->meta.related_fd, WORK_STATUS_DATA_FETCHED);
     memset(tmp_buffer->data, 0, tmp_buffer->count);
     tmp_buffer->count = 0;
