@@ -1,5 +1,5 @@
+#include "../data_structures/current_session.h"
 #include "../data_structures/session.h"
-#include "../data_structures/session_by_thread_map.h"
 #include "../shutdown/stop.h"
 #include "../socket.h"
 #include "../utils/assert2.h"
@@ -8,14 +8,14 @@
 
 void *handle_d() {
   session_t *session;
-  while (!stop()) {
+  while (!is_shutdown_requested()) {
     session = pop_request(WORK_STATUS_READY_TO_SEND);
 
     if (session == NULL) {
       continue;
     }
 
-    put_session_id_by_thread(session->meta.id);
+    put_current_session(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by response sender",
               session->meta.id, session->meta.related_fd);
@@ -66,7 +66,7 @@ void *handle_d() {
       next_status = WORK_STATUS_REJECTED;
     }
 
-    put_session_id_by_thread(-1);
+    clear_current_session();
     push_request(session->meta.related_fd, next_status);
   }
   return NULL;

@@ -1,5 +1,5 @@
+#include "../data_structures/current_session.h"
 #include "../data_structures/session.h"
-#include "../data_structures/session_by_thread_map.h"
 #include "../http/request.h"
 #include "../shutdown/stop.h"
 #include "../static.h"
@@ -8,14 +8,14 @@
 
 void *handle_a() {
   session_t *session;
-  while (!stop()) {
+  while (!is_shutdown_requested()) {
     session = pop_request(WORK_STATUS_REQUEST_READ);
 
     if (session == NULL) {
       continue;
     }
 
-    put_session_id_by_thread(session->meta.id);
+    put_current_session(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by request parser",
               session->meta.id, session->meta.related_fd);
@@ -44,7 +44,7 @@ void *handle_a() {
              session->request.accept, session->request.accept_language,
              session->request.accept_encoding, session->request.connection);
 
-    put_session_id_by_thread(-1);
+    clear_current_session();
     push_request(session->meta.related_fd, WORK_STATUS_PARSED);
   }
 

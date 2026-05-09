@@ -1,7 +1,6 @@
 #include "data_structures/marked_fds.h"
 #include "data_structures/poll_array.h"
 #include "data_structures/session.h"
-#include "data_structures/session_by_thread_map.h"
 #include "listener.h"
 #include "properties.h"
 #include "shutdown/signal2.h"
@@ -20,7 +19,7 @@ static int status = 0;
 
 void handle_exit(int signum) {
   log_info("Socket closed due to signal %s", get_signal_description(signum));
-  stop_server();
+  request_shutdown();
   if (http_socket_fd != -1 && status >= 5) {
     close(http_socket_fd);
   }
@@ -42,7 +41,6 @@ void handle_exit(int signum) {
   }
   if (status >= 2)
     destroy_logger();
-  destroy_session_by_thread_map();
   exit(signum);
 }
 

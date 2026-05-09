@@ -1,5 +1,5 @@
+#include "../data_structures/current_session.h"
 #include "../data_structures/session.h"
-#include "../data_structures/session_by_thread_map.h"
 #include "../http/response.h"
 #include "../shutdown/stop.h"
 #include "../utils/assert2.h"
@@ -8,7 +8,7 @@
 void *handle_c() {
   session_t *session;
   buffer *tmp_buffer = init_buffer(0);
-  while (!stop()) {
+  while (!is_shutdown_requested()) {
     memset(tmp_buffer->data, 0, tmp_buffer->capacity);
     session = pop_request(WORK_STATUS_DATA_FETCHED);
 
@@ -16,7 +16,7 @@ void *handle_c() {
       continue;
     }
 
-    put_session_id_by_thread(session->meta.id);
+    put_current_session(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by response builder",
               session->meta.id, session->meta.related_fd);
@@ -35,7 +35,7 @@ void *handle_c() {
     }
 
     WORK_STATUS next_status = WORK_STATUS_READY_TO_SEND;
-    put_session_id_by_thread(-1);
+    clear_current_session();
     push_request(session->meta.related_fd, next_status);
   }
 
