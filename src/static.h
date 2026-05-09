@@ -134,7 +134,8 @@ typedef struct {
 } session_t;
 
 struct session_node {
-  struct node_s *next;
+  struct session_node *next;
+  struct session_node *tail;
   session_t session;
 };
 

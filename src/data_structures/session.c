@@ -5,10 +5,22 @@
 #include "buffer.h"
 #include "marked_fds.h"
 #include <openssl/err.h>
+#include <stdbool.h>
 
 static session_node_t *session_node_array = NULL;
 // Eight states (8 bits)
-static char **status_array = NULL;
+// static char **status_array = NULL;
+
+// Each state is represented by a linked list
+static session_node_t *initial = NULL;
+static session_node_t *has_been_read = NULL;
+static session_node_t *parsed = NULL;
+static session_node_t *data_fetched = NULL;
+static session_node_t *ready_to_send = NULL;
+static session_node_t *send_failed = NULL;
+static session_node_t *sent = NULL;
+static session_node_t *rejected = NULL;
+
 static int max_size = 0;
 static unsigned int session_count = 0;
 static unsigned int session_last_index = 0;
@@ -17,6 +29,12 @@ static pthread_cond_t request_read_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t parsed_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t data_fetched_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t response_generated_cond = PTHREAD_COND_INITIALIZER;
+
+static inline int init_session(int related_fd);
+static inline void deinit_session(int i);
+static inline int init_ssl_session(int index);
+static void append_linked_list(session_node_t **ll, session_node_t *node);
+static session_node_t *pop_linked_list(session_node_t **ll);
 
 int init_session_cache(SSL_CTX *ctx) {
   SSL_library_init();
@@ -40,20 +58,11 @@ int init_session_cache(SSL_CTX *ctx) {
     // meta_t, http_request_t, http_response_t should be zeroed
   }
 
-  // Status array
-  status_array = calloc(max_size, sizeof(char *));
-  assert(status_array != NULL);
-  for (int i = 0; i < max_size; i++) {
-    status_array[i] = calloc(1, sizeof(char));
-    assert(status_array[i] != NULL);
-  }
-
   return 0;
 }
 
 void destroy_session_cache() {
   assert(session_node_array != NULL);
-  assert(status_array != NULL);
 
   assert(pthread_mutex_destroy(&session_mutex) == 0);
   assert(pthread_cond_destroy(&request_read_cond) == 0);
@@ -88,19 +97,18 @@ void destroy_session_cache() {
   session_node_array = NULL;
 
   // Status array
-  for (int i = 0; i < max_size; i++) {
-    if (status_array[i] != NULL) {
-      free(status_array[i]);
-      status_array[i] = NULL;
-    }
-  }
-  free(status_array);
-  status_array = NULL;
+  initial = NULL;
+  has_been_read = NULL;
+  parsed = NULL;
+  data_fetched = NULL;
+  ready_to_send = NULL;
+  send_failed = NULL;
+  sent = NULL;
+  rejected = NULL;
 }
 
 void broadcast_session() {
   assert(session_node_array != NULL);
-  assert(status_array != NULL);
 
   pthread_mutex_lock(&session_mutex);
   pthread_cond_broadcast(&request_read_cond);
@@ -114,9 +122,6 @@ static inline void reset_session_at_index(int index) {
   session_t *session = &session_node_array[index].session;
   // Meta
   memset(&session->meta, 0, sizeof(meta_t));
-
-  // Status array
-  *status_array[index] = 0;
 
   // Buffer
   buffer *buffer = session->buffer;
@@ -172,101 +177,27 @@ static inline void reset_request_at_index(int index) {
   session->request.is_ssl = is_ssl;
 }
 
-static inline int init_session_connection(int index) {
-  assert(session_node_array != NULL);
-
-  SSL *ssl = session_node_array[index].session.ssl;
-  BIO *bio = session_node_array[index].session.bio;
-
-  SSL_set_bio(ssl, bio, bio);
-
-  int ret = SSL_accept(ssl);
-  if (ret <= 0 || ret == 2) {
-    int err = SSL_get_error(ssl, ret);
-    // According to the SSL_accept, non-blocking socket must be handled
-    if (err == SSL_ERROR_WANT_READ) {
-      printf("SSL_ERROR_WANT_READ");
-      return 1;
-    } else if (ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST) {
-      printf("SSL_R_HTTP_REQUEST\n");
-      return -1;
-    } else {
-      printf("SSL_accept failed, %s\n",
-             ERR_error_string(ERR_get_error(), NULL));
-      return -1;
-    }
-  }
-  return ret;
-}
-
-static inline int add_to_session(int related_fd) {
-  int next = session_count < max_size ? session_count : session_last_index;
-  assert(next < max_size);
-
-  reset_session_at_index(next);
-
-  session_t *session = &session_node_array[next].session;
-
-  session->meta.id = rand();
-  session->meta.related_fd = related_fd;
-  *status_array[next] &= WORK_STATUS_INITIAL;
-  BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
-  BIO_set_nbio(session->bio, 1);
-
-  if (session_count < max_size) {
-    session_count++;
-  } else {
-    session_last_index = (session_last_index + 1) % max_size;
-  }
-
-  return next;
-}
-
-static inline void del_from_session(int i) {
-  session_node_t node = session_node_array[i];
-  char *status = status_array[i];
-
-  reset_session_at_index(i);
-
-  for (; i < session_count - 1; i++) {
-    // Shift all existing sessions to the left
-    session_node_array[i] = session_node_array[i + 1];
-    status_array[i] = status_array[i + 1];
-
-    // Replace the left shifted session with the to-be-deleted session
-    session_node_array[i + 1] = node;
-    status_array[i + 1] = status;
-  }
-
-  if (session_count > 0)
-    session_count--;
-
-  if (i < session_last_index)
-    session_last_index--;
-}
-
 void push_request(int related_fd, WORK_STATUS status) {
+  pthread_mutex_lock(&session_mutex);
+
   assert(session_node_array != NULL);
-  assert(status_array != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
 
-  pthread_mutex_lock(&session_mutex);
   int found = 0;
+  bool is_new_session =
+      status == WORK_STATUS_INITIAL_SSL || status == WORK_STATUS_INITIAL;
   for (int i = 0; i < session_count; i++) {
+    if (is_new_session)
+      break;
+
     if (session_node_array[i].session.meta.related_fd == related_fd) {
       found = 1;
-      assert(*status_array[i] & WORK_STATUS_PROCESSING);
-      *status_array[i] &= ~WORK_STATUS_PROCESSING;
-      *status_array[i] |= status;
 
       switch (status) {
-      case WORK_STATUS_INITIAL_SSL:
-        *status_array[i] |= WORK_STATUS_INITIAL;
-        break;
-      case WORK_STATUS_INITIAL:
-        break;
       case WORK_STATUS_REQUEST_READ:
+        // TODO: Broadcast?
+
         pthread_cond_broadcast(&request_read_cond);
         break;
       case WORK_STATUS_PARSED:
@@ -279,20 +210,12 @@ void push_request(int related_fd, WORK_STATUS status) {
         pthread_cond_broadcast(&response_generated_cond);
         break;
       case WORK_STATUS_SEND_FAILED:
-        *status_array[i] &= ~WORK_STATUS_READY_TO_SEND;
         break;
       case WORK_STATUS_SENT:
-        *status_array[i] &=
-            ~(WORK_STATUS_REQUEST_READ | WORK_STATUS_PARSED |
-              WORK_STATUS_DATA_FETCHED | WORK_STATUS_READY_TO_SEND);
         reset_request_at_index(i);
         break;
-      case WORK_STATUS_PROCESSING:
-        // Deadlocked - used for instance for failed send
-        break;
       case WORK_STATUS_REJECTED:
-        del_from_session(i);
-        mark(related_fd);
+        deinit_session(i);
         break;
 
       default:
@@ -302,17 +225,15 @@ void push_request(int related_fd, WORK_STATUS status) {
     }
   }
 
-  if (found != 1 &&
-      (status == WORK_STATUS_INITIAL || status == WORK_STATUS_INITIAL_SSL)) {
-    int index = add_to_session(related_fd);
+  if (found != 1 && is_new_session) {
+    int index = init_session(related_fd);
     if (status == WORK_STATUS_INITIAL_SSL) {
-      switch (init_session_connection(index)) {
+      switch (init_ssl_session(index)) {
       case 1:
         session_node_array[index].session.request.is_ssl = 1;
         break;
       case -1:
-        del_from_session(index);
-        mark(related_fd);
+        deinit_session(index);
         break;
       default:
         assert(0);
@@ -320,6 +241,7 @@ void push_request(int related_fd, WORK_STATUS status) {
       }
     }
   }
+
   pthread_mutex_unlock(&session_mutex);
 }
 
@@ -348,8 +270,9 @@ static inline int peek_next(WORK_STATUS status) {
 }
 
 session_t *pop_request(WORK_STATUS status) {
-  assert(session_node_array != NULL);
   pthread_mutex_lock(&session_mutex);
+
+  assert(session_node_array != NULL);
   session_t *result = NULL;
   int index = -1;
   while ((index = peek_next(status)) == -1 && !is_shutdown_requested()) {
@@ -411,4 +334,103 @@ session_t *pop_request_by_fd(int related_fd) {
 
   pthread_mutex_unlock(&session_mutex);
   return result;
+}
+
+static inline int init_session(int related_fd) {
+  int next = session_count < max_size ? session_count : session_last_index;
+  assert(next < max_size);
+
+  reset_session_at_index(next);
+
+  session_t *session = &session_node_array[next].session;
+
+  session->meta.id = rand();
+  session->meta.related_fd = related_fd;
+  BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
+  BIO_set_nbio(session->bio, 1);
+
+  if (session_count < max_size) {
+    session_count++;
+  } else {
+    session_last_index = (session_last_index + 1) % max_size;
+  }
+
+  return next;
+}
+
+static inline void deinit_session(int i) {
+  session_node_t node = session_node_array[i];
+  mark(node.session.meta.related_fd);
+
+  reset_session_at_index(i);
+
+  for (; i < session_count - 1; i++) {
+    // Shift all existing sessions to the left
+    session_node_array[i] = session_node_array[i + 1];
+
+    // Replace the left shifted session with the to-be-deleted session
+    session_node_array[i + 1] = node;
+  }
+
+  if (session_count > 0)
+    session_count--;
+
+  if (i < session_last_index)
+    session_last_index--;
+}
+
+static inline int init_ssl_session(int index) {
+  assert(session_node_array != NULL);
+
+  SSL *ssl = session_node_array[index].session.ssl;
+  BIO *bio = session_node_array[index].session.bio;
+
+  SSL_set_bio(ssl, bio, bio);
+
+  int ret = SSL_accept(ssl);
+  if (ret <= 0 || ret == 2) {
+    int err = SSL_get_error(ssl, ret);
+    // According to the SSL_accept, non-blocking socket must be handled
+    if (err == SSL_ERROR_WANT_READ) {
+      printf("SSL_ERROR_WANT_READ");
+      return 1;
+    } else if (ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST) {
+      printf("SSL_R_HTTP_REQUEST\n");
+      return -1;
+    } else {
+      printf("SSL_accept failed, %s\n",
+             ERR_error_string(ERR_get_error(), NULL));
+      return -1;
+    }
+  }
+  return ret;
+}
+
+static void append_linked_list(session_node_t **ll, session_node_t *node) {
+  if (*ll == NULL) {
+    *ll = node;
+    node->tail = node;
+  } else {
+    session_node_t *head = *ll;
+    head->tail->next = node;
+    head->tail = node;
+  }
+}
+
+static session_node_t *pop_linked_list(session_node_t **ll) {
+  if (*ll == NULL)
+    return NULL;
+
+  session_node_t *head = *ll;
+  session_node_t *new_head = head->next;
+
+  if (head->next != NULL) {
+    new_head->tail = head->tail;
+  }
+  *ll = new_head;
+
+  head->next = NULL;
+  head->tail = NULL;
+
+  return head;
 }
