@@ -139,7 +139,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
   sigemptyset(&sigmask);
 
   // Continously listen for new connections
-  while (!stop()) {
+  while (!is_shutdown_requested()) {
     assert(count > 0);
     log_info("Number of active sockets (including listener): %d", count);
 

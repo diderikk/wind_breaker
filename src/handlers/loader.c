@@ -1,5 +1,5 @@
+#include "../data_structures/current_session.h"
 #include "../data_structures/session.h"
-#include "../data_structures/session_by_thread_map.h"
 #include "../http/response.h"
 #include "../properties.h"
 #include "../shutdown/stop.h"
@@ -67,14 +67,14 @@ void *handle_b() {
                  SQLITE_OK,
              "Failed to open database: %s", sqlite3_errmsg(db));
 
-  while (!stop()) {
+  while (!is_shutdown_requested()) {
     session = pop_request(WORK_STATUS_PARSED);
 
     if (session == NULL) {
       continue;
     }
 
-    put_session_id_by_thread(session->meta.id);
+    put_current_session(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by response content loader",
               session->meta.id, session->meta.related_fd);
@@ -113,7 +113,7 @@ void *handle_b() {
           gen_error_body(session->response.status_code, session->buffer);
     }
 
-    put_session_id_by_thread(-1);
+    clear_current_session();
     push_request(session->meta.related_fd, WORK_STATUS_DATA_FETCHED);
     memset(tmp_buffer->data, 0, tmp_buffer->count);
     tmp_buffer->count = 0;

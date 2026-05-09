@@ -52,7 +52,9 @@ int put_session_id_by_thread(int session_id) {
   unsigned long thread_id = pthread_self();
   entry_t *entry = find_entry(table.entries, thread_id);
   bool is_new_entry = entry->session_id == -1;
-  if (is_new_entry)
+  if (session_id == -1)
+    table.count -= 1;
+  else if (is_new_entry)
     table.count += 1;
 
   entry->session_id = session_id;

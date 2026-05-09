@@ -352,7 +352,7 @@ session_t *pop_request(WORK_STATUS status) {
   pthread_mutex_lock(&session_mutex);
   session_t *result = NULL;
   int index = -1;
-  while ((index = peek_next(status)) == -1 && !stop()) {
+  while ((index = peek_next(status)) == -1 && !is_shutdown_requested()) {
     switch (status) {
     case WORK_STATUS_REQUEST_READ:
       pthread_cond_wait(&request_read_cond, &session_mutex);
