@@ -131,6 +131,7 @@ typedef struct {
   buffer *buffer;
   http_request_t request;
   http_response_t response;
+  unsigned char failed_send_attempts;
 } session_t;
 
 struct session_node {

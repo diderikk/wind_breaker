@@ -12,14 +12,11 @@ static session_node_t *session_node_array = NULL;
 // static char **status_array = NULL;
 
 // Each state is represented by a linked list
-static session_node_t *initial = NULL;
-static session_node_t *has_been_read = NULL;
-static session_node_t *parsed = NULL;
-static session_node_t *data_fetched = NULL;
-static session_node_t *ready_to_send = NULL;
-static session_node_t *send_failed = NULL;
-static session_node_t *sent = NULL;
-static session_node_t *rejected = NULL;
+static session_node_t *ll_initial = NULL;
+static session_node_t *ll_has_been_read = NULL;
+static session_node_t *ll_parsed = NULL;
+static session_node_t *ll_data_fetched = NULL;
+static session_node_t *ll_ready_to_send = NULL;
 
 static int max_size = 0;
 static unsigned int session_count = 0;
@@ -33,6 +30,8 @@ static pthread_cond_t response_generated_cond = PTHREAD_COND_INITIALIZER;
 static inline int init_session(int related_fd);
 static inline void deinit_session(int i);
 static inline int init_ssl_session(int index);
+static inline void reset_session_at_index(int index);
+static inline void reset_request_at_index(int index);
 static void append_linked_list(session_node_t **ll, session_node_t *node);
 static session_node_t *pop_linked_list(session_node_t **ll);
 
@@ -118,65 +117,6 @@ void broadcast_session() {
   pthread_mutex_unlock(&session_mutex);
 }
 
-static inline void reset_session_at_index(int index) {
-  session_t *session = &session_node_array[index].session;
-  // Meta
-  memset(&session->meta, 0, sizeof(meta_t));
-
-  // Buffer
-  buffer *buffer = session->buffer;
-  if (buffer->data != NULL) {
-    memset(buffer->data, 0, buffer->capacity);
-  }
-  buffer->count = 0;
-
-  // Request
-  memset(&session->request, 0, sizeof(http_request_t));
-
-  // Response
-  memset(&session->response, 0, sizeof(http_response_t));
-
-  // BIO
-  int ret = BIO_reset(session->bio);
-  if (ret == -1) {
-    printf("BIO_reset failed: %s\n", ERR_error_string(ERR_get_error(), NULL));
-    assert(ret != -1);
-  }
-  BIO_set_fd(session->bio, -1, BIO_NOCLOSE);
-  BIO_set_nbio(session->bio, 1);
-
-  if (session->ssl != NULL) {
-    SSL *ssl = session->ssl;
-    if (ssl != NULL) {
-      SSL_set_bio(ssl, session->bio, session->bio);
-      ret = SSL_clear(ssl);
-      if (ret != 1) {
-        printf("SSL_clear failed: %s\n",
-               ERR_error_string(ERR_get_error(), NULL));
-        assert(ret == 1);
-      }
-    }
-  }
-}
-
-static inline void reset_request_at_index(int index) {
-  session_t *session = &session_node_array[index].session;
-  char is_ssl = session->request.is_ssl;
-
-  // Buffer
-  buffer *buffer = session->buffer;
-  if (buffer->data != NULL) {
-    free(buffer->data);
-    buffer->data = NULL;
-  }
-  buffer->capacity = 0;
-  buffer->count = 0;
-
-  // Request
-  memset(&session->request, 0, sizeof(http_request_t));
-  session->request.is_ssl = is_ssl;
-}
-
 void push_request(int related_fd, WORK_STATUS status) {
   pthread_mutex_lock(&session_mutex);
 
@@ -193,25 +133,32 @@ void push_request(int related_fd, WORK_STATUS status) {
 
     if (session_node_array[i].session.meta.related_fd == related_fd) {
       found = 1;
+      session_node_t* node = &session_node_array[i];
 
       switch (status) {
       case WORK_STATUS_REQUEST_READ:
         // TODO: Broadcast?
-
+        append_linked_list(&ll_has_been_read, node);
         pthread_cond_broadcast(&request_read_cond);
         break;
       case WORK_STATUS_PARSED:
+        append_linked_list(&ll_parsed, node);
         pthread_cond_broadcast(&parsed_cond);
         break;
       case WORK_STATUS_DATA_FETCHED:
+        append_linked_list(&ll_data_fetched, node);
         pthread_cond_broadcast(&data_fetched_cond);
         break;
       case WORK_STATUS_READY_TO_SEND:
+        append_linked_list(&ll_ready_to_send, node);
         pthread_cond_broadcast(&response_generated_cond);
         break;
       case WORK_STATUS_SEND_FAILED:
+        node->session.failed_send_attempts += 1;
+        append_linked_list(&ll_ready_to_send, node);
         break;
       case WORK_STATUS_SENT:
+        append_linked_list(&ll_initial, node);
         reset_request_at_index(i);
         break;
       case WORK_STATUS_REJECTED:
@@ -406,6 +353,57 @@ static inline int init_ssl_session(int index) {
   return ret;
 }
 
+static inline void reset_session_at_index(int index) {
+  session_t *session = &session_node_array[index].session;
+  // Meta
+  memset(&session->meta, 0, sizeof(meta_t));
+
+  reset_request_at_index(index);
+
+  // Response
+  memset(&session->response, 0, sizeof(http_response_t));
+
+  // BIO
+  int ret = BIO_reset(session->bio);
+  if (ret == -1) {
+    printf("BIO_reset failed: %s\n", ERR_error_string(ERR_get_error(), NULL));
+    assert(ret != -1);
+  }
+  BIO_set_fd(session->bio, -1, BIO_NOCLOSE);
+  BIO_set_nbio(session->bio, 1);
+
+  if (session->ssl != NULL) {
+    SSL *ssl = session->ssl;
+    if (ssl != NULL) {
+      SSL_set_bio(ssl, session->bio, session->bio);
+      ret = SSL_clear(ssl);
+      if (ret != 1) {
+        printf("SSL_clear failed: %s\n",
+               ERR_error_string(ERR_get_error(), NULL));
+        assert(ret == 1);
+      }
+    }
+  }
+}
+
+static inline void reset_request_at_index(int index) {
+  session_t *session = &session_node_array[index].session;
+  char is_ssl = session->request.is_ssl;
+
+  // Buffer
+  buffer *buffer = session->buffer;
+  if (buffer->data != NULL) {
+    free(buffer->data);
+    buffer->data = NULL;
+  }
+  buffer->capacity = 0;
+  buffer->count = 0;
+
+  // Request
+  memset(&session->request, 0, sizeof(http_request_t));
+  session->request.is_ssl = is_ssl;
+}
+
 static void append_linked_list(session_node_t **ll, session_node_t *node) {
   if (*ll == NULL) {
     *ll = node;
@@ -434,3 +432,4 @@ static session_node_t *pop_linked_list(session_node_t **ll) {
 
   return head;
 }
+
