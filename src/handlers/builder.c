@@ -10,7 +10,7 @@ void *handle_c() {
   buffer *tmp_buffer = init_buffer(0);
   while (!is_shutdown_requested()) {
     memset(tmp_buffer->data, 0, tmp_buffer->capacity);
-    session = pop_request(WORK_STATUS_DATA_FETCHED);
+    session = pop_session(WORK_STATUS_DATA_FETCHED);
 
     if (session == NULL) {
       continue;
@@ -36,7 +36,7 @@ void *handle_c() {
 
     WORK_STATUS next_status = WORK_STATUS_READY_TO_SEND;
     clear_current_session();
-    push_request(session->meta.related_fd, next_status);
+    push_session(session->meta.related_fd, next_status);
   }
 
   deinit_buffer(tmp_buffer);
