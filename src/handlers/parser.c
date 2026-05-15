@@ -9,7 +9,7 @@
 void *handle_a() {
   session_t *session;
   while (!is_shutdown_requested()) {
-    session = pop_request(WORK_STATUS_REQUEST_READ);
+    session = pop_session(WORK_STATUS_REQUEST_READ);
 
     if (session == NULL) {
       continue;
@@ -45,7 +45,7 @@ void *handle_a() {
              session->request.accept_encoding, session->request.connection);
 
     clear_current_session();
-    push_request(session->meta.related_fd, WORK_STATUS_PARSED);
+    push_session(session->meta.related_fd, WORK_STATUS_PARSED);
   }
 
   return NULL;

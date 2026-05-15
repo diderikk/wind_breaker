@@ -68,7 +68,7 @@ void *handle_b() {
              "Failed to open database: %s", sqlite3_errmsg(db));
 
   while (!is_shutdown_requested()) {
-    session = pop_request(WORK_STATUS_PARSED);
+    session = pop_session(WORK_STATUS_PARSED);
 
     if (session == NULL) {
       continue;
@@ -114,7 +114,7 @@ void *handle_b() {
     }
 
     clear_current_session();
-    push_request(session->meta.related_fd, WORK_STATUS_DATA_FETCHED);
+    push_session(session->meta.related_fd, WORK_STATUS_DATA_FETCHED);
     memset(tmp_buffer->data, 0, tmp_buffer->count);
     tmp_buffer->count = 0;
   }

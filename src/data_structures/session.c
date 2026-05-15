@@ -45,6 +45,7 @@ int init_session_cache(SSL_CTX *ctx) {
     session_node_t *node = &session_node_array[i];
     node->next = NULL;
     session_t *session = &node->session;
+    session->failed_send_attempts = 0;
     session->buffer = init_buffer(0);
     assert(session->buffer != NULL);
     session->bio = BIO_new(BIO_s_socket());
@@ -96,14 +97,11 @@ void destroy_session_cache() {
   session_node_array = NULL;
 
   // Status array
-  initial = NULL;
-  has_been_read = NULL;
-  parsed = NULL;
-  data_fetched = NULL;
-  ready_to_send = NULL;
-  send_failed = NULL;
-  sent = NULL;
-  rejected = NULL;
+  ll_initial = NULL;
+  ll_has_been_read = NULL;
+  ll_parsed = NULL;
+  ll_data_fetched = NULL;
+  ll_ready_to_send = NULL;
 }
 
 void broadcast_session() {
@@ -117,7 +115,7 @@ void broadcast_session() {
   pthread_mutex_unlock(&session_mutex);
 }
 
-void push_request(int related_fd, WORK_STATUS status) {
+void push_session(int related_fd, WORK_STATUS status) {
   pthread_mutex_lock(&session_mutex);
 
   assert(session_node_array != NULL);
@@ -138,6 +136,7 @@ void push_request(int related_fd, WORK_STATUS status) {
       switch (status) {
       case WORK_STATUS_REQUEST_READ:
         // TODO: Broadcast?
+        // TODO: Remove old sessions
         append_linked_list(&ll_has_been_read, node);
         pthread_cond_broadcast(&request_read_cond);
         break;
@@ -155,9 +154,15 @@ void push_request(int related_fd, WORK_STATUS status) {
         break;
       case WORK_STATUS_SEND_FAILED:
         node->session.failed_send_attempts += 1;
-        append_linked_list(&ll_ready_to_send, node);
+        if(node->session.failed_send_attempts >= 3) {
+          deinit_session(i);
+        } else {
+          append_linked_list(&ll_ready_to_send, node);
+          pthread_cond_broadcast(&response_generated_cond);
+        }
         break;
       case WORK_STATUS_SENT:
+        node->session.failed_send_attempts = 0;
         append_linked_list(&ll_initial, node);
         reset_request_at_index(i);
         break;
@@ -192,37 +197,30 @@ void push_request(int related_fd, WORK_STATUS status) {
   pthread_mutex_unlock(&session_mutex);
 }
 
-static inline int peek_next(WORK_STATUS status) {
-  int index = -1;
-  for (int i = 0; i < session_count; i++) {
-    if (*status_array[i] < status)
-      continue;
-    if (*status_array[i] & WORK_STATUS_PROCESSING)
-      continue;
-    if (*status_array[i] & WORK_STATUS_SEND_FAILED)
-      continue;
-    for (int bit = 4; bit >= 0; bit--) {
-      // All significant bits should NOT be set
-      if ((1 << bit) > status && (1 << bit) & *status_array[i]) {
-        break;
-      }
-      // This is the bit we are looking for
-      else if ((1 << bit) == status && status & *status_array[i]) {
-        index = i;
-        break;
-      } // TODO: Check if remaining bits are set
-    }
+static session_node_t* pop_next(WORK_STATUS status) {
+  switch (status) {
+    case WORK_STATUS_REQUEST_READ:
+      return pop_linked_list(&ll_ready_to_send); 
+    case WORK_STATUS_PARSED:
+      return pop_linked_list(&ll_parsed); 
+    case WORK_STATUS_DATA_FETCHED:
+      return pop_linked_list(&ll_data_fetched); 
+    case WORK_STATUS_READY_TO_SEND:
+      return pop_linked_list(&ll_ready_to_send); 
+    default:
+      assert(0);
+      return NULL;
+      break;
   }
-  return index;
 }
 
-session_t *pop_request(WORK_STATUS status) {
+session_t *pop_session(WORK_STATUS status) {
   pthread_mutex_lock(&session_mutex);
 
   assert(session_node_array != NULL);
-  session_t *result = NULL;
+  session_node_t *result = NULL;
   int index = -1;
-  while ((index = peek_next(status)) == -1 && !is_shutdown_requested()) {
+  while ((result = pop_next(status)) == NULL && !is_shutdown_requested()) {
     switch (status) {
     case WORK_STATUS_REQUEST_READ:
       pthread_cond_wait(&request_read_cond, &session_mutex);
@@ -242,42 +240,27 @@ session_t *pop_request(WORK_STATUS status) {
       break;
     }
   }
-  if (index > -1) {
-    *status_array[index] |= WORK_STATUS_PROCESSING;
-    result = &session_node_array[index].session;
-  }
 
   pthread_mutex_unlock(&session_mutex);
-  return result;
+  return &result->session;
 }
 
-session_t *pop_request_by_fd(int related_fd) {
+session_t *pop_session_for_read(int related_fd) {
+  pthread_mutex_lock(&session_mutex);
+
   assert(session_node_array != NULL);
-  assert(status_array != NULL);
+  assert(ll_initial != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
 
-  pthread_mutex_lock(&session_mutex);
   session_t *result = NULL;
   int process = 0;
-  for (int i = 0; i < session_count; i++) {
-    session_t *session = &session_node_array[i].session;
-    if (session->meta.related_fd == related_fd) {
-
-      if (((*status_array[i] & WORK_STATUS_SEND_FAILED) == 0) &&
-          (*status_array[i] & WORK_STATUS_REQUEST_READ ||
-           *status_array[i] & WORK_STATUS_PARSED ||
-           *status_array[i] & WORK_STATUS_DATA_FETCHED ||
-           *status_array[i] & WORK_STATUS_PROCESSING ||
-           *status_array[i] & WORK_STATUS_READY_TO_SEND)) {
-        process = 1;
-      } else {
-        *status_array[i] |= WORK_STATUS_PROCESSING;
-        result = session;
-      }
-      break;
+  while(ll_initial != NULL) {
+    if(ll_initial->session.meta.related_fd == related_fd) {
+      result = 
     }
   }
+  
 
   pthread_mutex_unlock(&session_mutex);
   return result;
@@ -355,6 +338,9 @@ static inline int init_ssl_session(int index) {
 
 static inline void reset_session_at_index(int index) {
   session_t *session = &session_node_array[index].session;
+
+  session->failed_send_attempts = 0;
+
   // Meta
   memset(&session->meta, 0, sizeof(meta_t));
 

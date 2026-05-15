@@ -9,7 +9,7 @@
 void *handle_d() {
   session_t *session;
   while (!is_shutdown_requested()) {
-    session = pop_request(WORK_STATUS_READY_TO_SEND);
+    session = pop_session(WORK_STATUS_READY_TO_SEND);
 
     if (session == NULL) {
       continue;
@@ -67,7 +67,7 @@ void *handle_d() {
     }
 
     clear_current_session();
-    push_request(session->meta.related_fd, next_status);
+    push_session(session->meta.related_fd, next_status);
   }
   return NULL;
 }
