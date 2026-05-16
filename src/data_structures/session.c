@@ -12,7 +12,7 @@ static session_node_t *session_node_array = NULL;
 // static char **status_array = NULL;
 
 // Each state is represented by a linked list
-static session_node_t *ll_initial = NULL;
+static session_node_t *ll_ready_to_read = NULL;
 static session_node_t *ll_has_been_read = NULL;
 static session_node_t *ll_parsed = NULL;
 static session_node_t *ll_data_fetched = NULL;
@@ -34,6 +34,7 @@ static inline void reset_session_at_index(int index);
 static inline void reset_request_at_index(int index);
 static void append_linked_list(session_node_t **ll, session_node_t *node);
 static session_node_t *pop_linked_list(session_node_t **ll);
+static session_node_t *splice_by_fd_linked_list(session_node_t **ll, int fd);
 
 int init_session_cache(SSL_CTX *ctx) {
   SSL_library_init();
@@ -97,7 +98,7 @@ void destroy_session_cache() {
   session_node_array = NULL;
 
   // Status array
-  ll_initial = NULL;
+  ll_ready_to_read = NULL;
   ll_has_been_read = NULL;
   ll_parsed = NULL;
   ll_data_fetched = NULL;
@@ -131,7 +132,7 @@ void push_session(int related_fd, WORK_STATUS status) {
 
     if (session_node_array[i].session.meta.related_fd == related_fd) {
       found = 1;
-      session_node_t* node = &session_node_array[i];
+      session_node_t *node = &session_node_array[i];
 
       switch (status) {
       case WORK_STATUS_REQUEST_READ:
@@ -154,7 +155,7 @@ void push_session(int related_fd, WORK_STATUS status) {
         break;
       case WORK_STATUS_SEND_FAILED:
         node->session.failed_send_attempts += 1;
-        if(node->session.failed_send_attempts >= 3) {
+        if (node->session.failed_send_attempts >= 3) {
           deinit_session(i);
         } else {
           append_linked_list(&ll_ready_to_send, node);
@@ -163,8 +164,8 @@ void push_session(int related_fd, WORK_STATUS status) {
         break;
       case WORK_STATUS_SENT:
         node->session.failed_send_attempts = 0;
-        append_linked_list(&ll_initial, node);
         reset_request_at_index(i);
+        append_linked_list(&ll_ready_to_read, node);
         break;
       case WORK_STATUS_REJECTED:
         deinit_session(i);
@@ -179,10 +180,11 @@ void push_session(int related_fd, WORK_STATUS status) {
 
   if (found != 1 && is_new_session) {
     int index = init_session(related_fd);
+    session_node_t *node = &session_node_array[index];
     if (status == WORK_STATUS_INITIAL_SSL) {
       switch (init_ssl_session(index)) {
       case 1:
-        session_node_array[index].session.request.is_ssl = 1;
+        node->session.request.is_ssl = 1;
         break;
       case -1:
         deinit_session(index);
@@ -192,25 +194,26 @@ void push_session(int related_fd, WORK_STATUS status) {
         break;
       }
     }
+    append_linked_list(&ll_ready_to_read, node);
   }
 
   pthread_mutex_unlock(&session_mutex);
 }
 
-static session_node_t* pop_next(WORK_STATUS status) {
+static session_node_t *pop_next(WORK_STATUS status) {
   switch (status) {
-    case WORK_STATUS_REQUEST_READ:
-      return pop_linked_list(&ll_ready_to_send); 
-    case WORK_STATUS_PARSED:
-      return pop_linked_list(&ll_parsed); 
-    case WORK_STATUS_DATA_FETCHED:
-      return pop_linked_list(&ll_data_fetched); 
-    case WORK_STATUS_READY_TO_SEND:
-      return pop_linked_list(&ll_ready_to_send); 
-    default:
-      assert(0);
-      return NULL;
-      break;
+  case WORK_STATUS_REQUEST_READ:
+    return pop_linked_list(&ll_has_been_read);
+  case WORK_STATUS_PARSED:
+    return pop_linked_list(&ll_parsed);
+  case WORK_STATUS_DATA_FETCHED:
+    return pop_linked_list(&ll_data_fetched);
+  case WORK_STATUS_READY_TO_SEND:
+    return pop_linked_list(&ll_ready_to_send);
+  default:
+    assert(0);
+    return NULL;
+    break;
   }
 }
 
@@ -219,7 +222,6 @@ session_t *pop_session(WORK_STATUS status) {
 
   assert(session_node_array != NULL);
   session_node_t *result = NULL;
-  int index = -1;
   while ((result = pop_next(status)) == NULL && !is_shutdown_requested()) {
     switch (status) {
     case WORK_STATUS_REQUEST_READ:
@@ -241,26 +243,29 @@ session_t *pop_session(WORK_STATUS status) {
     }
   }
 
+  if (is_shutdown_requested()) {
+    printf("I am closing now!");
+  }
+
   pthread_mutex_unlock(&session_mutex);
-  return &result->session;
+  return (result == NULL) ? NULL : &result->session;
 }
 
 session_t *pop_session_for_read(int related_fd) {
   pthread_mutex_lock(&session_mutex);
 
   assert(session_node_array != NULL);
-  assert(ll_initial != NULL);
+  assert(ll_ready_to_read != NULL);
   assert(related_fd > 0);
   assert(related_fd < 16384);
 
   session_t *result = NULL;
-  int process = 0;
-  while(ll_initial != NULL) {
-    if(ll_initial->session.meta.related_fd == related_fd) {
-      result = 
-    }
+  session_node_t *node =
+      splice_by_fd_linked_list(&ll_ready_to_read, related_fd);
+
+  if (node != NULL) {
+    result = &node->session;
   }
-  
 
   pthread_mutex_unlock(&session_mutex);
   return result;
@@ -419,3 +424,25 @@ static session_node_t *pop_linked_list(session_node_t **ll) {
   return head;
 }
 
+static session_node_t *splice_by_fd_linked_list(session_node_t **ll, int fd) {
+  session_node_t *curr = *ll;
+  session_node_t *prev = NULL;
+
+  while (curr != NULL) {
+    if (curr->session.meta.related_fd == fd) {
+      if (prev == NULL) {
+        return pop_linked_list(ll);
+      } else {
+        prev->next = curr->next;
+        curr->next = NULL;
+      }
+
+      break;
+    }
+
+    prev = curr;
+    curr = curr->next;
+  }
+
+  return curr;
+}
