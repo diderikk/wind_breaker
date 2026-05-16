@@ -1,3 +1,4 @@
+#include "../data_structures/current_session.h"
 #include "../data_structures/session.h"
 #include "../http/response.h"
 #include "../properties.h"
@@ -29,7 +30,7 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **index_projects_stmt,
                              buffer *tmp_buffer, buffer *buffer);
 static inline void str_replace(buffer *target, const char *needle,
                                const char *replacement);
-static inline unsigned int gen_error_body(http_status_code http_status_code,
+static inline unsigned int gen_error_body(HTTP_STATUS_CODE http_status_code,
                                           buffer *buffer) {
   const char *status_code_str = http_status_code_to_str(http_status_code);
   assert(ENSURE_CAPACITY(buffer, 512) > 0);
@@ -61,61 +62,59 @@ void *handle_b() {
   sqlite3 *db = NULL;
   sqlite3_stmt *index_projects_stmt = NULL, *index_posts_stmt = NULL,
                *project_stmt = NULL, *post_stmt = NULL;
-  struct session_full_return session;
+  session_t *session;
   assert_log(sqlite3_open_v2(get_db_url(), &db, WB_SQLITE_OPEN_FLAGS, NULL) ==
                  SQLITE_OK,
              "Failed to open database: %s", sqlite3_errmsg(db));
 
-  while (!stop()) {
-    session = pop_request(WORK_STATUS_PARSED);
+  while (!is_shutdown_requested()) {
+    session = pop_session(WORK_STATUS_PARSED);
 
-    if (session.session == NULL) {
+    if (session == NULL) {
       continue;
     }
 
-    session.session->thread_id = (long unsigned int)pthread_self();
+    put_current_session(session->meta.id);
 
     log_trace("Request %d (%d) is being handled by response content loader",
-              session.session->id, session.session->related_fd);
+              session->meta.id, session->meta.related_fd);
 
-    assert(session.request != NULL);
-    assert(session.response != NULL);
-    assert(session.buffer != NULL);
+    assert(session->buffer != NULL);
 
     // Request already parsed
-    memset(session.buffer->data, 0, session.buffer->count);
+    memset(session->buffer->data, 0, session->buffer->count);
 
-    if (session.response->status_code == HTTP_OK) {
-      const char *file_name = uri_to_file_name(session.request->uri);
-      read_static_file(file_name, session.buffer);
+    if (session->response.status_code == HTTP_OK) {
+      const char *file_name = uri_to_file_name(session->request.uri);
+      read_static_file(file_name, session->buffer);
 
       // Fetch and inject arguments
       switch (load(db, &index_projects_stmt, &index_posts_stmt, &project_stmt,
-                   &post_stmt, file_name, tmp_buffer, session.buffer,
-                   session.request->uri[1])) {
+                   &post_stmt, file_name, tmp_buffer, session->buffer,
+                   session->request.uri[1])) {
       case 0:
         break;
       case -1:
         log_error("Failed to fetch and inject arguments");
-        session.response->status_code = HTTP_INTERNAL_SERVER_ERROR;
-        session.buffer->count =
-            gen_error_body(session.response->status_code, session.buffer);
+        session->response.status_code = HTTP_INTERNAL_SERVER_ERROR;
+        session->buffer->count =
+            gen_error_body(session->response.status_code, session->buffer);
         break;
       case -2:
-        log_error("Id not found in database: %s", session.request->uri[1]);
-        session.response->status_code = HTTP_NOT_FOUND;
-        session.buffer->count =
-            gen_error_body(session.response->status_code, session.buffer);
+        log_error("Id not found in database: %s", session->request.uri[1]);
+        session->response.status_code = HTTP_NOT_FOUND;
+        session->buffer->count =
+            gen_error_body(session->response.status_code, session->buffer);
         break;
       }
 
     } else {
-      session.buffer->count =
-          gen_error_body(session.response->status_code, session.buffer);
+      session->buffer->count =
+          gen_error_body(session->response.status_code, session->buffer);
     }
 
-    session.session->thread_id = 0;
-    push_request(session.session->related_fd, WORK_STATUS_DATA_FETCHED);
+    clear_current_session();
+    push_session(session->meta.related_fd, WORK_STATUS_DATA_FETCHED);
     memset(tmp_buffer->data, 0, tmp_buffer->count);
     tmp_buffer->count = 0;
   }
@@ -316,7 +315,7 @@ static inline void str_replace(buffer *target, const char *needle,
     assert(hit >= target->data + offset);
     // Capacity is greater than the difference between needle and replacement
     // word
-    if(diff >= 0)
+    if (diff >= 0)
       assert(ENSURE_CAPACITY(target, target->count + diff + 1) > 0);
 
     // If the target->data has been reallocated

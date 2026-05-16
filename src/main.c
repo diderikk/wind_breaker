@@ -19,7 +19,7 @@ static int status = 0;
 
 void handle_exit(int signum) {
   log_info("Socket closed due to signal %s", get_signal_description(signum));
-  stop_server();
+  request_shutdown();
   if (http_socket_fd != -1 && status >= 5) {
     close(http_socket_fd);
   }

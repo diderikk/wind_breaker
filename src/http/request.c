@@ -11,7 +11,7 @@ int parse_header_field(http_request_t *http_request, const char *char_data);
 // int parse_trailer_fields(http_request_t* http_request, char * char_data);
 // int extract_body(http_request_t* http_request, char * char_data, long
 // content_size);
-http_method method_str_to_enum(const char *raw_method);
+HTTP_METHOD method_str_to_enum(const char *raw_method);
 
 int parse_http_request(http_request_t *http_request,
                        const buffer *raw_request) {
@@ -126,7 +126,7 @@ int validate_request_headers(const http_request_t *http_request) {
 
 int parse_control_data(http_request_t *http_request,
                        const char *raw_control_data) {
-  http_method method;
+  HTTP_METHOD method;
   const char *pattern = "^([A-Z]{2,12}) ([^ ]+) (HTTP/[0-9.]{3})$";
   regmatch_t matches[4]; // Method, URI, Version
 
@@ -251,7 +251,7 @@ int parse_header_field(http_request_t *http_request,
   return 0;
 }
 
-http_method method_str_to_enum(const char *raw_method) {
+HTTP_METHOD method_str_to_enum(const char *raw_method) {
   if (strncasecmp(raw_method, "POST", 4) == 0)
     return HTTP_POST;
   else if (strncasecmp(raw_method, "GET", 3) == 0)

@@ -34,9 +34,9 @@ typedef enum {
   HTTP_OPTIONS,
   HTTP_TRACE,
   HTTP_BAD_METHOD
-} http_method;
+} HTTP_METHOD;
 
-typedef enum { KEEP_ALIVE, CLOSE } http_connection;
+typedef enum { KEEP_ALIVE, CLOSE } HTTP_CONNECTION;
 
 typedef enum {
   HTTP_OK = 200,
@@ -49,7 +49,7 @@ typedef enum {
   HTTP_INTERNAL_SERVER_ERROR = 500,
   HTTP_NOT_IMPLEMENTED = 501,
   HTTP_SERVICE_UNAVAILABLE = 503
-} http_status_code;
+} HTTP_STATUS_CODE;
 
 typedef enum {
   WORK_STATUS_INITIAL = 1,
@@ -68,11 +68,11 @@ typedef struct {
   int fd;
   int size;
   char *data;
-} worker_data;
+} worker_data_t;
 
 typedef struct {
   void *arg;
-} worker_arg;
+} worker_arg_t;
 
 // TODO:
 // Upgrade-Insecure-Requests: 1
@@ -83,7 +83,7 @@ typedef struct {
 // Priority: u=0, i
 
 typedef struct {
-  http_status_code status_code;
+  HTTP_STATUS_CODE status_code;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
   char content_language[HTTP_HEADER_SMALL_SIZE];
@@ -98,7 +98,7 @@ typedef char uri_token_t[HTTP_URI_TOKEN_COUNT][HTTP_URI_TOKEN_SIZE];
 
 typedef struct {
   uri_token_t uri;
-  http_method method;
+  HTTP_METHOD method;
   char is_ssl;
   char version[HTTP_VERSION_SIZE];
   char host[HTTP_HEADER_SIZE];
@@ -107,32 +107,40 @@ typedef struct {
   char accept_language[HTTP_HEADER_SIZE];
   char accept_encoding[HTTP_HEADER_SIZE];
   char if_none_match[HTTP_HEADER_ETAG_SIZE];
-  http_connection connection;
+  HTTP_CONNECTION connection;
   char content_type[HTTP_HEADER_SIZE];
   long content_length;
 } http_request_t;
 
 typedef struct {
-  worker_data **data;
+  worker_data_t **data;
   int count, front, rear;
   pthread_mutex_t mutex;
   pthread_cond_t cond;
 } queue_t;
 
-struct session {
+typedef struct {
   int id;
   int related_fd;
-  unsigned long thread_id;
-};
+} meta_t;
 
-struct session_full_return {
-  struct session *session;
+typedef struct {
+  meta_t meta;
   BIO *bio;
   SSL *ssl;
   buffer *buffer;
-  http_request_t *request;
-  http_response_t *response;
+  http_request_t request;
+  http_response_t response;
+  unsigned char failed_send_attempts;
+} session_t;
+
+struct session_node {
+  struct session_node *next;
+  struct session_node *tail;
+  session_t session;
 };
+
+typedef struct session_node session_node_t;
 
 char *uri_to_file_name(const uri_token_t uri);
 
