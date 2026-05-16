@@ -202,7 +202,7 @@ log_to_buffer(int log_destination, const char *time_str,
               va_list args_f, va_list args_c, int level) {
   unsigned int offset = 0;
   offset += sprintf(log_buffer + (log_buffer_offset + offset),
-                    YEL "%-17s %-30s (%-5s) " RESET, time_str,
+                    YEL "%-21s %-30s (%-5s) " RESET, time_str,
                     relative_file_path, log_level_to_string(level));
   if (session_id != -1) {
     offset +=
@@ -248,20 +248,21 @@ log_to_buffer(int log_destination, const char *time_str,
 inline void log_message(LOG_LEVEL level, const char *file, const char *message,
                         va_list args_f, va_list args_c) {
   time_t rawtime;
-  struct tm *timeinfo;
-  char time_str[20];
+  struct tm timeinfo;
+  char temp[20], time_str[24];
   pthread_t thread_id = pthread_self();
   int session_id = get_current_session();
   char *relative_file_path = (strstr(file, "src/") != NULL)
                                  ? strstr(file, "src/") + 4
                                  : strstr(file, "test/") + 5;
 
-  // Get the current time
-  time(&rawtime);
-  timeinfo = localtime(&rawtime);
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
 
-  // Format the time as YYYYMMDD HH:MM:SS
-  strftime(time_str, sizeof(time_str), "%Y%m%d %H:%M:%S", timeinfo);
+  localtime_r(&ts.tv_sec, &timeinfo);
+
+  strftime(temp, sizeof(temp), "%Y%m%d %H:%M:%S", &timeinfo);
+  snprintf(time_str, sizeof(time_str), "%s.%03ld", temp, ts.tv_nsec / 1000000);
 
   pthread_mutex_lock(&log_mutex);
 
