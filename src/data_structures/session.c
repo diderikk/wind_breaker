@@ -49,6 +49,15 @@ int init_session_cache(SSL_CTX *ctx) {
   SSL_library_init();
   assert(session_array == NULL);
 
+  // destroy_session_cache() destroys these. glibc lets a destroyed static
+  // mutex/cond be reused, but on macOS it becomes invalid, so re-initialize
+  // them every time the cache is (re)created.
+  assert(pthread_mutex_init(&session_mutex, NULL) == 0);
+  assert(pthread_cond_init(&request_read_cond, NULL) == 0);
+  assert(pthread_cond_init(&parsed_cond, NULL) == 0);
+  assert(pthread_cond_init(&data_fetched_cond, NULL) == 0);
+  assert(pthread_cond_init(&response_generated_cond, NULL) == 0);
+
   max_size = get_session_max_size();
   // Static array of sessions, should not be resized... Tiger style
 

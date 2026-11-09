@@ -187,7 +187,7 @@ int parse_control_data(http_request_t *http_request,
 // Only one header field is extracted at a time.
 int parse_header_field(http_request_t *http_request,
                        const char *raw_header_field) {
-  const char *pattern = "^([A-Za-z0-9-]+):\\s(.*)$";
+  const char *pattern = "^([A-Za-z0-9-]+):[[:space:]](.*)$";
   regmatch_t matches[3]; // Header Name, Header Value
   char header_name[100];
 

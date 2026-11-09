@@ -8,6 +8,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
+// Removed from static.h in the buffer refactor; tests still use fixed buffers.
+#ifndef REQUEST_RESPONSE_MAX_SIZE
+#define REQUEST_RESPONSE_MAX_SIZE (1024 * 1024)
+#endif
+
 #define INDEX_PROJECTS_SQL "SELECT id, title FROM Project;"
 #define INDEX_POSTS_SQL "SELECT id, title FROM Post;"
 
