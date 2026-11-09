@@ -1,3 +1,5 @@
 build/
 app.log
 src/version.h
+compile_commands.json
+.cache/

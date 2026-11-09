@@ -5,6 +5,13 @@ project(WindBreaker VERSION 1.2.1 LANGUAGES C)
 
 configure_file(src/version.h.in ../src/version.h)
 
+# Generate compile_commands.json for clangd, and link it into the source root
+# (clangd is started with --compile-commands-dir=.).
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+    ${CMAKE_BINARY_DIR}/compile_commands.json
+    ${CMAKE_SOURCE_DIR}/compile_commands.json)
+
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
