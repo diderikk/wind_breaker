@@ -10,6 +10,12 @@
 #include <errno.h>
 #include <openssl/err.h>
 
+// POLLRDHUP is Linux-only. On other platforms (macOS) a peer shutdown is
+// reported through POLLHUP / a zero-byte read.
+#ifndef POLLRDHUP
+#define POLLRDHUP 0
+#endif
+
 extern int count;
 extern struct pollfd *fds;
 POLL_ERROR_CLASS classify_poll_error(int code);
@@ -122,6 +128,17 @@ int get_listener_socket(const char *port, int backlog) {
   return socket_fd;
 }
 
+static int wait_for_events(struct pollfd *pfds, nfds_t nfds, sigset_t *mask) {
+#ifdef __linux__
+  return ppoll(pfds, nfds, NULL, mask);
+#else
+  // ppoll is Linux-only. No signals are blocked in this process, so plain
+  // poll with an infinite timeout behaves the same.
+  (void)mask;
+  return poll(pfds, nfds, -1);
+#endif
+}
+
 void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
   assert(listener > 0);
   assert(request_handler != NULL);
@@ -146,7 +163,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
     // https://man7.org/linux/man-pages/man2/poll.2.html
     // NULL causes the poll system call to poll until a revents
     // is updated by the kernel
-    event_count = ppoll(fds, count, NULL, &sigmask);
+    event_count = wait_for_events(fds, count, &sigmask);
 
     if (event_count < 0) {
       error_class = classify_poll_error(errno);

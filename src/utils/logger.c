@@ -65,8 +65,8 @@ FILE *init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
     }
 
     // Map file to memory
-    log_buffer = mmap(NULL, LOG_BUFFER_SIZE, PROT_READ | PROT_WRITE,
-                      MAP_SHARED_VALIDATE, fd, offset);
+    log_buffer = mmap(NULL, LOG_BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
+                      fd, offset);
     if (log_buffer == MAP_FAILED) {
       fprintf(stderr, "Failed to map log file: %s : %s\n", file_path,
               strerror(errno));
@@ -183,8 +183,8 @@ static inline int remap_log_buffer() {
       fprintf(stderr, "Failed to truncate log file: %s\n", strerror(errno));
       return -1;
     }
-    log_buffer = mmap(NULL, LOG_BUFFER_SIZE, PROT_READ | PROT_WRITE,
-                      MAP_SHARED_VALIDATE, fd, size);
+    log_buffer = mmap(NULL, LOG_BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
+                      fd, size);
     if (log_buffer == MAP_FAILED) {
       fprintf(stderr, "Failed to map log file: %s\n", strerror(errno));
       return -1;

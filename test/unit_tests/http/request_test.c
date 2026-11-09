@@ -3,6 +3,17 @@
 #include <string.h>
 
 static int request_test_count = 0;
+
+// parse_http_request takes a heap-backed `buffer`; copy the literal into one.
+// Count includes the terminating NUL since the parser tokenizes with strtok_r.
+static buffer *make_raw(const char *text) {
+  unsigned long len = strlen(text) + 1;
+  buffer *raw = init_buffer(len);
+  assert(raw != NULL);
+  memcpy(raw->data, text, len);
+  raw->count = len;
+  return raw;
+}
 static int request_start_case(void *(*func)(void *), const char *name);
 
 // Example GET requests as C strings
@@ -86,10 +97,10 @@ static const char *request8 = "GET /abc/def/ghe HTTP/1.1\r\n"
 void *parse_http_request_basic_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request1);
+  buffer *raw = make_raw(request1);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -108,10 +119,10 @@ void *parse_http_request_basic_test() {
 void *parse_http_request_with_additional_headers_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request2);
+  buffer *raw = make_raw(request2);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -135,10 +146,10 @@ void *parse_http_request_with_additional_headers_test() {
 void *parse_http_request_if_none_match_header_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request3);
+  buffer *raw = make_raw(request3);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -159,10 +170,10 @@ void *parse_http_request_if_none_match_header_test() {
 void *parse_http_request_content_type_and_length_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request4);
+  buffer *raw = make_raw(request4);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -184,10 +195,10 @@ void *parse_http_request_content_type_and_length_test() {
 void *parse_http_request_minimal_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request5);
+  buffer *raw = make_raw(request5);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -202,10 +213,10 @@ void *parse_http_request_minimal_test() {
 void *parse_http_request_with_complex_accept_header_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request6);
+  buffer *raw = make_raw(request6);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -227,10 +238,10 @@ void *parse_http_request_with_complex_accept_header_test() {
 void *parse_http_request_with_connection_close_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request7);
+  buffer *raw = make_raw(request7);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);
@@ -249,10 +260,10 @@ void *parse_http_request_with_connection_close_test() {
 void *parse_http_request_with_multiple_path_parameters_test() {
   http_request_t http_request;
   memset(&http_request, 0, sizeof(http_request_t));
-  char buffer[REQUEST_RESPONSE_MAX_SIZE];
-  strcpy(buffer, request8);
+  buffer *raw = make_raw(request8);
 
-  int result = parse_http_request(&http_request, buffer);
+  int result = parse_http_request(&http_request, raw);
+  deinit_buffer(raw);
 
   assert(result == 0);
   assert(http_request.method == HTTP_GET);

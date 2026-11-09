@@ -6,8 +6,8 @@ void assert_log_(const char *file, int line, const char *func, const char *msg,
                  const char *format, ...);
 
 #define assert_log(expr, format, ...)                                          \
-  ((void)((expr) || (assert_log_(__FILE__, __LINE__, __func__, #expr, format,  \
-                                 ##__VA_ARGS__),                               \
+  ((void)((expr) || (assert_log_(__FILE__, __LINE__, __func__, #expr,          \
+                                 format, ##__VA_ARGS__),                       \
                      0)))
 
 #define assert(expr)                                                           \

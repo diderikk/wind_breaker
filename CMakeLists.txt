@@ -16,8 +16,10 @@ find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(CURL REQUIRED)
 
+include_directories(${OPENSSL_INCLUDE_DIR})
+
 function(enable_compile_options target)
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3 -rdynamic)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -g -O3)
 endfunction()
 
 function(enable_address_sanitizer target)

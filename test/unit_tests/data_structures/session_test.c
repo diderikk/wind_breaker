@@ -41,7 +41,8 @@ void *pop_request_by_fd_initial_test() {
   assert(sess.session->thread_id == 0);
   assert(sess.session->id != 0);
   assert(sess.request->uri[0][0] == 0);
-  assert(sess.buffer[0] == 0);
+  assert(sess.buffer != NULL);
+  assert(sess.buffer->count == 0);
   assert(sess.bio != NULL);
   assert(sess.ssl == NULL);
   destroy_session_cache();
@@ -151,8 +152,8 @@ void *push_request_overflow_test() {
     assert(sess.session->thread_id == 0);
     assert(sess.session->id != 0);
     assert(sess.request->uri[0][0] == 0);
-    assert(sess.buffer[0] == 0);
-    assert(sess.buffer[0] == 0);
+    assert(sess.buffer != NULL);
+    assert(sess.buffer->count == 0);
     assert(sess.bio != NULL);
     assert(sess.ssl == NULL);
     count++;
