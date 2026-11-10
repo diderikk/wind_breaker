@@ -18,6 +18,14 @@ static session_node_t *ll_parsed = NULL;
 static session_node_t *ll_data_fetched = NULL;
 static session_node_t *ll_ready_to_send = NULL;
 
+// free stack
+typedef struct {
+  unsigned int tail;
+  unsigned int capacity;
+  unsigned int *array;
+} stack;
+static stack *free_stack = NULL;
+
 static int max_size = 0;
 static unsigned int session_count = 0;
 static unsigned int session_last_index = 0;
@@ -50,8 +58,9 @@ int init_session_cache(SSL_CTX *ctx) {
   assert(pthread_cond_init(&response_generated_cond, NULL) == 0);
 
   max_size = get_session_max_size();
-  session_node_array = calloc(get_session_max_size(), sizeof(session_node_t));
-  for (int i = 0; i < get_session_max_size(); i++) {
+  session_node_array = calloc(max_size, sizeof(session_node_t));
+  assert(session_node_array != NULL);
+  for (int i = 0; i < max_size; i++) {
     session_node_t *node = &session_node_array[i];
     node->next = NULL;
     session_t *session = &node->session;
@@ -67,6 +76,7 @@ int init_session_cache(SSL_CTX *ctx) {
     }
     // meta_t, http_request_t, http_response_t should be zeroed
   }
+  free_stack = calloc(1, sizeof(stack));
 
   return 0;
 }
@@ -372,6 +382,7 @@ static inline void reset_session_at_index(int index) {
   BIO_set_fd(session->bio, -1, BIO_NOCLOSE);
   BIO_set_nbio(session->bio, 1);
 
+  // SSL
   if (session->ssl != NULL) {
     SSL *ssl = session->ssl;
     if (ssl != NULL) {

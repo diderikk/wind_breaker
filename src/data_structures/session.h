@@ -8,8 +8,8 @@ int init_session_cache(SSL_CTX *ctx);
 void destroy_session_cache();
 
 void broadcast_session();
-// Only works for INITIAL and SENT, since they can receive new data
 void push_session(int related_fd, WORK_STATUS status);
+// Only works for INITIAL and SENT, since they can receive new data
 session_t *pop_session_for_read(int related_fd);
 session_t *pop_session(WORK_STATUS status);
 

@@ -130,6 +130,9 @@ int get_listener_socket(const char *port, int backlog) {
 
 static int wait_for_events(struct pollfd *pfds, nfds_t nfds, sigset_t *mask) {
 #ifdef __linux__
+  // https://man7.org/linux/man-pages/man2/poll.2.html
+  // NULL causes the poll system call to poll until a revents
+  // is updated by the kernel
   return ppoll(pfds, nfds, NULL, mask);
 #else
   // ppoll is Linux-only. No signals are blocked in this process, so plain
@@ -160,9 +163,6 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
     assert(count > 0);
     log_info("Number of active sockets (including listener): %d", count);
 
-    // https://man7.org/linux/man-pages/man2/poll.2.html
-    // NULL causes the poll system call to poll until a revents
-    // is updated by the kernel
     event_count = wait_for_events(fds, count, &sigmask);
 
     if (event_count < 0) {

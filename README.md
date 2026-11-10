@@ -125,6 +125,7 @@ enable_https = 0 (binary value for enabling HTTPS)
 * ENSURE_CAPACITY use assert for checking for memory issues...
 * Request/response logger
 * HTTP/JSON parser
+* Arena allocator in buffer.h
 
 ## Try to remember
 * Clean up includes
