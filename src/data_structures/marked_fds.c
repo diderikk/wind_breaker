@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/*
+ * Marked file descriptors are closed sessions
+ * They are marked so they can be removed from
+ * poll_array structure
+ */
 static int *marks = NULL;
 static int max_count = 0;
 

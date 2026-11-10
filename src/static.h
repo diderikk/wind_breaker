@@ -61,7 +61,8 @@ typedef enum {
   WORK_STATUS_SENT = 1 << 6,
   WORK_STATUS_PROCESSING = 1 << 7,
   WORK_STATUS_REJECTED = 1 << 8,
-  WORK_STATUS_INITIAL_SSL = 1 << 9
+  WORK_STATUS_INITIAL_SSL = 1 << 9,
+  WORK_STATUS_RETRY = 1 << 10
 } WORK_STATUS;
 
 typedef struct {
@@ -122,6 +123,7 @@ typedef struct {
 typedef struct {
   int id;
   int related_fd;
+  char closing;
 } meta_t;
 
 typedef struct {

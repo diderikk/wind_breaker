@@ -29,7 +29,7 @@ int handle_request_async(int fd) {
   session_t *session = pop_session_for_read(fd);
   if (session == NULL) {
     log_debug("Session is NULL for fd %d", fd);
-    return -1;
+    return -2;
   }
   assert(session->bio != NULL);
 
@@ -39,29 +39,26 @@ int handle_request_async(int fd) {
     // Alloc more space for the data
     recv_return = recv_ssl(session->ssl, session->buffer);
     if (recv_return > 0) {
-      push_session(fd, WORK_STATUS_REQUEST_READ);
-      return 0;
+      return push_session(fd, WORK_STATUS_REQUEST_READ);
     } else if (recv_return <= 0 && SSL_get_error(session->ssl, recv_return) ==
                                        SSL_ERROR_WANT_READ) {
-      push_session(fd, WORK_STATUS_INITIAL);
-      return 0;
+      return push_session(fd, WORK_STATUS_RETRY);
     } else {
       // Got error or connection closed by client
       if (recv_return == 0) {
         // Connection closed
         log_trace("Socket %d hung up", fd);
       }
+      push_session(fd, WORK_STATUS_REJECTED);
       return -1;
     }
   } else {
     log_debug("Reading plain request for fd %d", fd);
     recv_return = recv_bio(session->bio, session->buffer);
     if (recv_return > 0) {
-      push_session(fd, WORK_STATUS_REQUEST_READ);
-      return 0;
+      return push_session(fd, WORK_STATUS_REQUEST_READ);
     } else if (recv_return <= 0 && BIO_should_retry(session->bio)) {
-      push_session(fd, WORK_STATUS_INITIAL);
-      return 0;
+      return push_session(fd, WORK_STATUS_RETRY);
     } else {
       log_error("BIO read error");
       // Got error or connection closed by client
@@ -69,6 +66,7 @@ int handle_request_async(int fd) {
         // Connection closed
         log_trace("Socket %d hung up", fd);
       }
+      push_session(fd, WORK_STATUS_REJECTED);
       return -1;
     }
   }
@@ -185,8 +183,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
 
       if (check_for_socket_error(poll->fd) == -1) {
         log_debug("Socket %d is invalid, removing...", poll->fd);
-        push_session(poll->fd, WORK_STATUS_REJECTED);
-        remove_poll_fd_by_index_sync(&i);
+        request_close_session(poll->fd);
         continue;
       }
 
@@ -196,8 +193,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
           log_debug("Socket %d error event, removing...", poll->fd);
-          push_session(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(&i);
+          request_close_session(poll->fd);
           continue;
         }
       }
@@ -209,8 +205,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
         else if (poll->revents & POLLNVAL)
           log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
-          push_session(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(&i);
+          request_close_session(poll->fd);
           continue;
         }
       }
@@ -249,7 +244,6 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 
           if (request_handler(poll->fd) == -1) {
-            push_session(poll->fd, WORK_STATUS_REJECTED);
             remove_poll_fd_by_index_sync(&i);
           }
         }
