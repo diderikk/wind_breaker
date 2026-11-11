@@ -157,7 +157,7 @@ int push_session(int related_fd, WORK_STATUS status) {
 
   assert(session_node_array != NULL);
   assert(related_fd > 0);
-  assert(related_fd < 16384);
+  assert(related_fd < MAX_FD);
 
   int result = 0;
   int found = 0;
@@ -175,7 +175,7 @@ int push_session(int related_fd, WORK_STATUS status) {
 
       switch (status) {
       case WORK_STATUS_RETRY:
-        append_linked_list(&ll_has_been_read, node);
+        append_linked_list(&ll_ready_to_read, node);
         break;
       case WORK_STATUS_REQUEST_READ:
         // TODO: Broadcast?
@@ -308,7 +308,7 @@ session_t *pop_session_for_read(int related_fd) {
 
   assert(session_node_array != NULL);
   assert(related_fd > 0);
-  assert(related_fd < 16384);
+  assert(related_fd < MAX_FD);
 
   session_t *result = NULL;
   session_node_t *node =
@@ -333,7 +333,6 @@ static inline session_node_t *init_session(int related_fd) {
     session->meta.id = rand();
     session->meta.related_fd = related_fd;
     BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
-    BIO_set_nbio(session->bio, 1);
   }
 
   return node;
@@ -397,7 +396,6 @@ static inline void reset_session(session_node_t *node) {
     assert(ret != -1);
   }
   BIO_set_fd(session->bio, -1, BIO_NOCLOSE);
-  BIO_set_nbio(session->bio, 1);
 
   // SSL
   if (session->ssl != NULL) {

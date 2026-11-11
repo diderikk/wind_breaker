@@ -176,7 +176,6 @@ int recv_bio(BIO *bio, buffer *buffer) {
     log_error("BIO read error");
   } else {
     buffer->data[buffer->count] = '\0';
-    buffer->count++;
   }
 
   return buffer->count;

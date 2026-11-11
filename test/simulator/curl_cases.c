@@ -5,6 +5,7 @@
 #include <curl/curl.h>
 #include <dirent.h>
 #include <sqlite3.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -40,7 +41,10 @@ void *start_curl_get_request(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
   CURL *curl;
   CURLcode res;
-  char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+  // Each case runs on its own thread: a 1 MiB array would overflow the
+  // default thread stack on some platforms (512 KiB on macOS)
+  char *response = calloc(REQUEST_RESPONSE_MAX_SIZE, sizeof(char));
+  assert(response != NULL);
   char address[HTTP_HEADER_SIZE];
   snprintf(address, HTTP_HEADER_SIZE, "http://%s:%s", data->ip, data->port);
 
@@ -70,6 +74,7 @@ void *start_curl_get_request(void *arg) {
     curl_easy_cleanup(curl);
   }
 
+  free(response);
   return 0;
 }
 
@@ -79,7 +84,10 @@ void *start_curl_get_all_posts(void *arg) {
   sqlite3_stmt *stmt;
   CURL *curl;
   CURLcode res;
-  char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+  // Each case runs on its own thread: a 1 MiB array would overflow the
+  // default thread stack on some platforms (512 KiB on macOS)
+  char *response = calloc(REQUEST_RESPONSE_MAX_SIZE, sizeof(char));
+  assert(response != NULL);
   char address[HTTP_HEADER_SIZE];
   int rc;
   curl = curl_easy_init();
@@ -125,6 +133,7 @@ void *start_curl_get_all_posts(void *arg) {
   sqlite3_finalize(stmt);
   sqlite3_close(db);
 
+  free(response);
   return NULL;
 }
 
@@ -134,7 +143,10 @@ void *start_curl_get_all_projects(void *arg) {
   sqlite3_stmt *stmt;
   CURL *curl;
   CURLcode res;
-  char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+  // Each case runs on its own thread: a 1 MiB array would overflow the
+  // default thread stack on some platforms (512 KiB on macOS)
+  char *response = calloc(REQUEST_RESPONSE_MAX_SIZE, sizeof(char));
+  assert(response != NULL);
   char address[HTTP_HEADER_SIZE];
   int rc;
   curl = curl_easy_init();
@@ -180,6 +192,7 @@ void *start_curl_get_all_projects(void *arg) {
   sqlite3_finalize(stmt);
   sqlite3_close(db);
 
+  free(response);
   return NULL;
 }
 
@@ -187,7 +200,10 @@ void *start_curl_get_all_images(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
   CURL *curl;
   CURLcode res;
-  char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+  // Each case runs on its own thread: a 1 MiB array would overflow the
+  // default thread stack on some platforms (512 KiB on macOS)
+  char *response = calloc(REQUEST_RESPONSE_MAX_SIZE, sizeof(char));
+  assert(response != NULL);
   char address[HTTP_HEADER_SIZE + 100], file_path[HTTP_HEADER_SIZE + 100];
   curl = curl_easy_init();
 
@@ -226,6 +242,7 @@ void *start_curl_get_all_images(void *arg) {
   curl_easy_cleanup(curl);
   closedir(dir);
 
+  free(response);
   return NULL;
 }
 
@@ -233,7 +250,10 @@ void *start_curl_get_ssl_request(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
   CURL *curl;
   CURLcode res;
-  char response[REQUEST_RESPONSE_MAX_SIZE] = {0};
+  // Each case runs on its own thread: a 1 MiB array would overflow the
+  // default thread stack on some platforms (512 KiB on macOS)
+  char *response = calloc(REQUEST_RESPONSE_MAX_SIZE, sizeof(char));
+  assert(response != NULL);
   char address[HTTP_HEADER_SIZE];
   snprintf(address, HTTP_HEADER_SIZE, "https://%s:%s", data->ip,
            get_https_port());
@@ -266,5 +286,6 @@ void *start_curl_get_ssl_request(void *arg) {
     curl_easy_cleanup(curl);
   }
 
+  free(response);
   return 0;
 }
