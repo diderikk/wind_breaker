@@ -16,12 +16,13 @@ HTTP_METHOD method_str_to_enum(const char *raw_method);
 int parse_http_request(http_request_t *http_request,
                        const buffer *raw_request) {
   int return_value;
-  char *raw_request_copy = malloc(sizeof(char) * raw_request->count);
+  char *raw_request_copy = malloc(sizeof(char) * raw_request->count + 1);
   if (raw_request_copy == NULL)
     return ALLOCATE_MEMORY_ERROR;
   char *saveptr, *line;
 
   memcpy(raw_request_copy, raw_request->data, raw_request->count);
+  raw_request_copy[raw_request->count] = '\0';
   line = strtok_r(raw_request_copy, "\r\n", &saveptr);
   return_value = parse_control_data(http_request, line);
 
