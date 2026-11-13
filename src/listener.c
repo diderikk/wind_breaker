@@ -9,6 +9,7 @@
 #include "utils/logger.h"
 #include <errno.h>
 #include <openssl/err.h>
+#include <unistd.h>
 
 // POLLRDHUP is Linux-only. On other platforms (macOS) a peer shutdown is
 // reported through POLLHUP / a zero-byte read.
@@ -229,17 +230,25 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
 
           get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
                           sizeof(ip_str));
+          int session_push_result = 0;
           if (poll->fd == listener) {
             log_debug("New client connected on HTTP socket %s:%d", ip_str,
                       get_in_addr_port((struct sockaddr *)&client_addr));
-            push_session(client_socket_fd, WORK_STATUS_INITIAL);
+            session_push_result =
+                push_session(client_socket_fd, WORK_STATUS_INITIAL);
           } else {
             log_debug("New client connected on HTTPS socket %s:%d", ip_str,
                       get_in_addr_port((struct sockaddr *)&client_addr));
-            push_session(client_socket_fd, WORK_STATUS_INITIAL_SSL);
+            session_push_result =
+                push_session(client_socket_fd, WORK_STATUS_INITIAL_SSL);
           }
-          int poll_array_index = add_poll_fd_sync(client_socket_fd);
-          continue;
+          if (session_push_result >= 0)
+            add_poll_fd_sync(client_socket_fd);
+          else {
+            unmark(client_socket_fd);
+            close(client_socket_fd);
+          }
+
         } else {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 

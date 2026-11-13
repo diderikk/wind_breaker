@@ -290,7 +290,7 @@ static inline int load_index(sqlite3 *db, sqlite3_stmt **projects_stmt,
     log_error("Failed to fetch data: %s", sqlite3_errmsg(db));
   }
   rc_projects = sqlite3_reset(*projects_stmt);
-  rc_posts = sqlite3_reset(*projects_stmt);
+  rc_posts = sqlite3_reset(*posts_stmt);
 
   return (rc_projects != SQLITE_OK || rc_posts != SQLITE_OK) ? -1 : 0;
 }
