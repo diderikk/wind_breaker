@@ -13,12 +13,12 @@ static int max_count = 0;
 // This should be called once, when the server fronts
 void init_poll_array(int listen_fd) {
   assert(listen_fd > 0);
-  assert(listen_fd < 16384);
+  assert(listen_fd < MAX_FD);
   assert(fds == NULL);
   max_count = get_session_max_size();
 
   assert(max_count > 0);
-  assert(max_count < 16384);
+  assert(max_count < MAX_FD);
 
   fds = calloc(max_count, sizeof(struct pollfd));
   assert(fds != NULL);
@@ -32,16 +32,16 @@ void init_poll_array(int listen_fd) {
 
 void init_poll_array_ssl(int listen_fd, int listen_fd_ssl) {
   assert(listen_fd > 0);
-  assert(listen_fd < 16384);
+  assert(listen_fd < MAX_FD);
   assert(fds == NULL);
   assert(listen_fd_ssl > 0);
-  assert(listen_fd_ssl < 16384);
+  assert(listen_fd_ssl < MAX_FD);
   assert(listen_fd != listen_fd_ssl);
   assert(get_enabled_ssl() == 1);
   max_count = get_session_max_size();
 
   assert(max_count > 0);
-  assert(max_count < 16384);
+  assert(max_count < MAX_FD);
 
   fds = calloc(max_count, sizeof(struct pollfd));
   assert(fds != NULL);
@@ -81,7 +81,7 @@ static inline int peek_next() {
 
 int add_poll_fd_sync(int fd) {
   assert(fd > 0);
-  assert(fd < 16384);
+  assert(fd < MAX_FD);
   assert(fds != NULL);
   log_trace("Poller: Adding fd %d", fd);
 

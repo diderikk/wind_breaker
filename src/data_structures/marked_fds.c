@@ -1,15 +1,17 @@
 #include "marked_fds.h"
-#include "../properties.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+/*
+ * Marked file descriptors are closed sessions
+ * They are marked so they can be removed from
+ * poll_array structure
+ */
 static int *marks = NULL;
-static int max_count = 0;
 
 void init_marked_fds() {
-  max_count = get_session_max_size() * 2;
-  marks = calloc(max_count, sizeof(int));
+  marks = calloc(MAX_FD, sizeof(int));
   if (marks == NULL) {
     perror("Failed to allocate memory for marks");
     exit(EXIT_FAILURE);

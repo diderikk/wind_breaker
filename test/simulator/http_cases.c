@@ -8,14 +8,18 @@
 #include <unistd.h>
 
 #define TEST_REQUEST_RESPONSE_MAX_SIZE 16 * 1024
+// Safety net so a server that never answers fails the case instead of hanging
+#define TEST_RECV_TIMEOUT_MS 5000
 
 int http_request_to_string(const http_request_t *request, char *buffer);
-char *http_method_to_string(http_method method);
+char *http_method_to_string(HTTP_METHOD method);
 
 void *start_http_get_request(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE];
+  char request_text[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
+  buffer *response = init_buffer(0);
+  assert(response != NULL);
 
   socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
@@ -32,34 +36,34 @@ void *start_http_get_request(void *arg) {
       .accept_encoding = "",
   };
 
-  request_length = http_request_to_string(&request, buffer);
-  assert(send_socket(socket_fd, buffer, request_length) > 0);
+  request_length = http_request_to_string(&request, request_text);
+  assert(send_socket(socket_fd, request_text, request_length) > 0);
 
-  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
-
-  response_length =
-      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
   close(socket_fd);
 
   assert(response_length > 0);
-  assert(strstr(buffer, "HTTP/1.1 200 OK") != NULL);
-  assert(strstr(buffer, "Content-Type: text/html") != NULL);
-  assert(strstr(buffer, "Content-Length: ") != NULL);
-  assert(strstr(buffer, "Content-Language: en-US") != NULL);
-  assert(strstr(buffer, "Date: ") != NULL);
-  assert(strstr(buffer, "Last-Modified: ") != NULL);
-  assert(strstr(buffer, "ETag: ") != NULL);
-  assert(strstr(buffer, "Content-Encoding: ") == NULL);
+  assert(strstr(response->data, "HTTP/1.1 200 OK") != NULL);
+  assert(strstr(response->data, "Content-Type: text/html") != NULL);
+  assert(strstr(response->data, "Content-Length: ") != NULL);
+  assert(strstr(response->data, "Content-Language: en-US") != NULL);
+  assert(strstr(response->data, "Date: ") != NULL);
+  assert(strstr(response->data, "Last-Modified: ") != NULL);
+  assert(strstr(response->data, "ETag: ") != NULL);
+  assert(strstr(response->data, "Content-Encoding: ") == NULL);
 
+  deinit_buffer(response);
   return 0;
 }
 
 void *start_http_get_request_gzip(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE],
+  char request_text[TEST_REQUEST_RESPONSE_MAX_SIZE],
       decompressed[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
+  buffer *response = init_buffer(0);
+  assert(response != NULL);
 
   socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
@@ -76,43 +80,44 @@ void *start_http_get_request_gzip(void *arg) {
       .accept_encoding = "gzip",
   };
 
-  request_length = http_request_to_string(&request, buffer);
-  assert(send_socket(socket_fd, buffer, request_length) > 0);
+  request_length = http_request_to_string(&request, request_text);
+  assert(send_socket(socket_fd, request_text, request_length) > 0);
 
-  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
-
-  response_length =
-      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
   close(socket_fd);
 
   assert(response_length > 0);
-  assert(strstr(buffer, "HTTP/1.1 200 OK") != NULL);
-  assert(strstr(buffer, "Content-Type: text/html") != NULL);
-  assert(strstr(buffer, "Content-Length: ") != NULL);
-  assert(strstr(buffer, "Content-Language: en-US") != NULL);
-  assert(strstr(buffer, "Content-Encoding: gzip") != NULL);
-  assert(strstr(buffer, "Date: ") != NULL);
-  assert(strstr(buffer, "Last-Modified: ") != NULL);
-  assert(strstr(buffer, "ETag: ") != NULL);
-  assert(strstr(buffer, "<body>") == NULL);
+  assert(strstr(response->data, "HTTP/1.1 200 OK") != NULL);
+  assert(strstr(response->data, "Content-Type: text/html") != NULL);
+  assert(strstr(response->data, "Content-Length: ") != NULL);
+  assert(strstr(response->data, "Content-Language: en-US") != NULL);
+  assert(strstr(response->data, "Content-Encoding: gzip") != NULL);
+  assert(strstr(response->data, "Date: ") != NULL);
+  assert(strstr(response->data, "Last-Modified: ") != NULL);
+  assert(strstr(response->data, "ETag: ") != NULL);
+  assert(strstr(response->data, "<body>") == NULL);
 
-  const char *body = strstr(buffer, "\r\n\r\n");
+  const char *body = strstr(response->data, "\r\n\r\n");
   body += 4;
+  unsigned int body_length = response->data + response->count - body;
 
-  int decompressed_length =
-      decompress_gzip(body, 1024, decompressed, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  int decompressed_length = decompress_gzip(body, body_length, decompressed,
+                                            TEST_REQUEST_RESPONSE_MAX_SIZE);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<body>") != NULL);
 
+  deinit_buffer(response);
   return 0;
 }
 
 void *start_http_get_request_deflate(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE],
+  char request_text[TEST_REQUEST_RESPONSE_MAX_SIZE],
       decompressed[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
+  buffer *response = init_buffer(0);
+  assert(response != NULL);
 
   socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
@@ -129,44 +134,45 @@ void *start_http_get_request_deflate(void *arg) {
       .accept_encoding = "deflate",
   };
 
-  request_length = http_request_to_string(&request, buffer);
-  assert(send_socket(socket_fd, buffer, request_length) > 0);
+  request_length = http_request_to_string(&request, request_text);
+  assert(send_socket(socket_fd, request_text, request_length) > 0);
 
-  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
-
-  response_length =
-      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
   close(socket_fd);
 
   assert(response_length > 0);
-  assert(strstr(buffer, "HTTP/1.1 200 OK") != NULL);
-  assert(strstr(buffer, "Content-Type: text/html") != NULL);
-  assert(strstr(buffer, "Content-Length: ") != NULL);
-  assert(strstr(buffer, "Content-Language: en-US") != NULL);
-  assert(strstr(buffer, "Content-Encoding: deflate") != NULL);
-  assert(strstr(buffer, "Date: ") != NULL);
-  assert(strstr(buffer, "Last-Modified: ") != NULL);
-  assert(strstr(buffer, "ETag: ") != NULL);
-  assert(strstr(buffer, "<body>") == NULL);
+  assert(strstr(response->data, "HTTP/1.1 200 OK") != NULL);
+  assert(strstr(response->data, "Content-Type: text/html") != NULL);
+  assert(strstr(response->data, "Content-Length: ") != NULL);
+  assert(strstr(response->data, "Content-Language: en-US") != NULL);
+  assert(strstr(response->data, "Content-Encoding: deflate") != NULL);
+  assert(strstr(response->data, "Date: ") != NULL);
+  assert(strstr(response->data, "Last-Modified: ") != NULL);
+  assert(strstr(response->data, "ETag: ") != NULL);
+  assert(strstr(response->data, "<body>") == NULL);
 
-  const char *body = strstr(buffer, "\r\n\r\n");
+  const char *body = strstr(response->data, "\r\n\r\n");
   body += 4;
+  unsigned int body_length = response->data + response->count - body;
 
-  int decompressed_length = decompress_deflate(body, 1024, decompressed,
+  int decompressed_length = decompress_deflate(body, body_length, decompressed,
                                                TEST_REQUEST_RESPONSE_MAX_SIZE);
   // printf("Decompressed: %s\n", decompressed);
   assert(decompressed_length > 0);
   assert(strstr(decompressed, "<head>") != NULL);
 
+  deinit_buffer(response);
   return 0;
 }
 
 void *start_http_get_request_not_found(void *arg) {
   struct connection_data *data = (struct connection_data *)arg;
-  char buffer[TEST_REQUEST_RESPONSE_MAX_SIZE],
+  char request_text[TEST_REQUEST_RESPONSE_MAX_SIZE],
       decompressed[TEST_REQUEST_RESPONSE_MAX_SIZE];
   int socket_fd, request_length, response_length;
+  buffer *response = init_buffer(0);
+  assert(response != NULL);
 
   socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
@@ -183,27 +189,25 @@ void *start_http_get_request_not_found(void *arg) {
       .accept_encoding = "",
   };
 
-  request_length = http_request_to_string(&request, buffer);
-  assert(send_socket(socket_fd, buffer, request_length) > 0);
+  request_length = http_request_to_string(&request, request_text);
+  assert(send_socket(socket_fd, request_text, request_length) > 0);
 
-  memset(buffer, 0, TEST_REQUEST_RESPONSE_MAX_SIZE);
-
-  response_length =
-      recv_socket(socket_fd, buffer, TEST_REQUEST_RESPONSE_MAX_SIZE);
+  response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
   close(socket_fd);
 
   assert(response_length > 0);
-  assert(strstr(buffer, "HTTP/1.1 404 Not Found") != NULL);
-  assert(strstr(buffer, "Content-Type: text/html") != NULL);
-  assert(strstr(buffer, "Content-Length: ") != NULL);
-  assert(strstr(buffer, "Content-Language: en-US") != NULL);
-  assert(strstr(buffer, "Content-Encoding: ") == NULL);
-  assert(strstr(buffer, "Date: ") != NULL);
-  assert(strstr(buffer, "Last-Modified: ") == NULL);
-  assert(strstr(buffer, "ETag: ") == NULL);
-  assert(strstr(buffer, "<h1>404 Not Found</h1>") != NULL);
+  assert(strstr(response->data, "HTTP/1.1 404 Not Found") != NULL);
+  assert(strstr(response->data, "Content-Type: text/html") != NULL);
+  assert(strstr(response->data, "Content-Length: ") != NULL);
+  assert(strstr(response->data, "Content-Language: en-US") != NULL);
+  assert(strstr(response->data, "Content-Encoding: ") == NULL);
+  assert(strstr(response->data, "Date: ") != NULL);
+  assert(strstr(response->data, "Last-Modified: ") == NULL);
+  assert(strstr(response->data, "ETag: ") == NULL);
+  assert(strstr(response->data, "<h1>404 Not Found</h1>") != NULL);
 
+  deinit_buffer(response);
   return 0;
 }
 
@@ -223,7 +227,7 @@ int http_request_to_string(const http_request_t *request, char *buffer) {
                  request->connection == KEEP_ALIVE ? "keep-alive" : "close");
 }
 
-char *http_method_to_string(http_method method) {
+char *http_method_to_string(HTTP_METHOD method) {
   switch (method) {
   case HTTP_POST:
     return "POST";

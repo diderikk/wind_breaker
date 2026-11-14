@@ -1,6 +1,8 @@
 #ifndef MARKED_FDS_H
 #define MARKED_FDS_H
 
+#define MAX_FD 16384
+
 void init_marked_fds();
 void destroy_marked_fds();
 

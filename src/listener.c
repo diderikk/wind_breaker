@@ -9,6 +9,7 @@
 #include "utils/logger.h"
 #include <errno.h>
 #include <openssl/err.h>
+#include <unistd.h>
 
 // POLLRDHUP is Linux-only. On other platforms (macOS) a peer shutdown is
 // reported through POLLHUP / a zero-byte read.
@@ -26,42 +27,39 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int));
 
 int handle_request_async(int fd) {
   int recv_return;
-  struct session_full_return session = pop_request_by_fd(fd);
-  if (session.session == NULL) {
+  session_t *session = pop_session_for_read(fd);
+  if (session == NULL) {
     log_debug("Session is NULL for fd %d", fd);
-    return -1;
+    return -2;
   }
-  assert(session.bio != NULL);
+  assert(session->bio != NULL);
 
-  if (session.request->is_ssl) {
+  if (session->request.is_ssl) {
     log_debug("Reading SSL request for fd %d", fd);
-    assert(session.ssl != NULL);
+    assert(session->ssl != NULL);
     // Alloc more space for the data
-    int recv_return = recv_ssl(session.ssl, session.buffer);
+    recv_return = recv_ssl(session->ssl, session->buffer);
     if (recv_return > 0) {
-      push_request(fd, WORK_STATUS_REQUEST_READ);
-      return 0;
-    } else if (recv_return <= 0 &&
-               SSL_get_error(session.ssl, recv_return) == SSL_ERROR_WANT_READ) {
-      push_request(fd, WORK_STATUS_INITIAL);
-      return 0;
+      return push_session(fd, WORK_STATUS_REQUEST_READ);
+    } else if (recv_return <= 0 && SSL_get_error(session->ssl, recv_return) ==
+                                       SSL_ERROR_WANT_READ) {
+      return push_session(fd, WORK_STATUS_RETRY);
     } else {
       // Got error or connection closed by client
       if (recv_return == 0) {
         // Connection closed
         log_trace("Socket %d hung up", fd);
       }
+      push_session(fd, WORK_STATUS_REJECTED);
       return -1;
     }
   } else {
     log_debug("Reading plain request for fd %d", fd);
-    recv_return = recv_bio(session.bio, session.buffer);
+    recv_return = recv_bio(session->bio, session->buffer);
     if (recv_return > 0) {
-      push_request(fd, WORK_STATUS_REQUEST_READ);
-      return 0;
-    } else if (recv_return <= 0 && BIO_should_retry(session.bio)) {
-      push_request(fd, WORK_STATUS_INITIAL);
-      return 0;
+      return push_session(fd, WORK_STATUS_REQUEST_READ);
+    } else if (recv_return <= 0 && BIO_should_retry(session->bio)) {
+      return push_session(fd, WORK_STATUS_RETRY);
     } else {
       log_error("BIO read error");
       // Got error or connection closed by client
@@ -69,6 +67,7 @@ int handle_request_async(int fd) {
         // Connection closed
         log_trace("Socket %d hung up", fd);
       }
+      push_session(fd, WORK_STATUS_REJECTED);
       return -1;
     }
   }
@@ -130,6 +129,9 @@ int get_listener_socket(const char *port, int backlog) {
 
 static int wait_for_events(struct pollfd *pfds, nfds_t nfds, sigset_t *mask) {
 #ifdef __linux__
+  // https://man7.org/linux/man-pages/man2/poll.2.html
+  // NULL causes the poll system call to poll until a revents
+  // is updated by the kernel
   return ppoll(pfds, nfds, NULL, mask);
 #else
   // ppoll is Linux-only. No signals are blocked in this process, so plain
@@ -156,13 +158,10 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
   sigemptyset(&sigmask);
 
   // Continously listen for new connections
-  while (!stop()) {
+  while (!is_shutdown_requested()) {
     assert(count > 0);
     log_info("Number of active sockets (including listener): %d", count);
 
-    // https://man7.org/linux/man-pages/man2/poll.2.html
-    // NULL causes the poll system call to poll until a revents
-    // is updated by the kernel
     event_count = wait_for_events(fds, count, &sigmask);
 
     if (event_count < 0) {
@@ -185,8 +184,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
 
       if (check_for_socket_error(poll->fd) == -1) {
         log_debug("Socket %d is invalid, removing...", poll->fd);
-        push_request(poll->fd, WORK_STATUS_REJECTED);
-        remove_poll_fd_by_index_sync(&i);
+        request_close_session(poll->fd);
         continue;
       }
 
@@ -196,8 +194,7 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
         assert(error_class != RESET);
         if (error_class == REMOVE_FD) {
           log_debug("Socket %d error event, removing...", poll->fd);
-          push_request(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(&i);
+          request_close_session(poll->fd);
           continue;
         }
       }
@@ -209,14 +206,13 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
         else if (poll->revents & POLLNVAL)
           log_debug("%s", get_poll_event_description(POLLNVAL));
         if (check_for_socket_error(poll->fd) == -1) {
-          push_request(poll->fd, WORK_STATUS_REJECTED);
-          remove_poll_fd_by_index_sync(&i);
+          request_close_session(poll->fd);
           continue;
         }
       }
       if (poll->revents & POLLOUT) {
         log_debug("Socket %d is ready for writing", poll->fd);
-        push_request(poll->fd, WORK_STATUS_READY_TO_SEND);
+        push_session(poll->fd, WORK_STATUS_READY_TO_SEND);
 
         continue;
       }
@@ -234,22 +230,29 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
 
           get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
                           sizeof(ip_str));
+          int session_push_result = 0;
           if (poll->fd == listener) {
             log_debug("New client connected on HTTP socket %s:%d", ip_str,
                       get_in_addr_port((struct sockaddr *)&client_addr));
-            push_request(client_socket_fd, WORK_STATUS_INITIAL);
+            session_push_result =
+                push_session(client_socket_fd, WORK_STATUS_INITIAL);
           } else {
             log_debug("New client connected on HTTPS socket %s:%d", ip_str,
                       get_in_addr_port((struct sockaddr *)&client_addr));
-            push_request(client_socket_fd, WORK_STATUS_INITIAL_SSL);
+            session_push_result =
+                push_session(client_socket_fd, WORK_STATUS_INITIAL_SSL);
           }
-          int poll_array_index = add_poll_fd_sync(client_socket_fd);
-          continue;
+          if (session_push_result >= 0)
+            add_poll_fd_sync(client_socket_fd);
+          else {
+            unmark(client_socket_fd);
+            close(client_socket_fd);
+          }
+
         } else {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 
           if (request_handler(poll->fd) == -1) {
-            push_request(poll->fd, WORK_STATUS_REJECTED);
             remove_poll_fd_by_index_sync(&i);
           }
         }

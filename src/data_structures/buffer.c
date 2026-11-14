@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+// TODO: Make an arena allocator
 buffer *init_buffer(unsigned long initial_capacity) {
   buffer *b = malloc(sizeof(buffer));
   if (b == NULL)
