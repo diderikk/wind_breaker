@@ -3,9 +3,9 @@
 
 #include <signal.h>
 
-sig_atomic_t stop();
-void _stop_server(const char *file);
+sig_atomic_t is_shutdown_requested();
+void _request_shutdown(const char *file);
 
-#define stop_server() _stop_server(__FILE__)
+#define request_shutdown() _request_shutdown(__FILE__)
 
 #endif // STOP_H

@@ -1,4 +1,5 @@
 #include "../../../src/data_structures/marked_fds.h"
+#include "../../../src/static.h"
 #include "../../../src/utils/assert2.h"
 #include <stdio.h>
 
@@ -81,6 +82,42 @@ void *unmark_fds_test() {
   return NULL;
 }
 
+void *mark_highest_fd_test() {
+  // The table covers every fd the server accepts, not only small ones
+  init_marked_fds();
+
+  mark(MAX_FD - 1);
+
+  assert(is_marked(MAX_FD - 1) == 1);
+  assert(is_marked(MAX_FD - 2) == 0);
+
+  unmark(MAX_FD - 1);
+
+  assert(is_marked(MAX_FD - 1) == 0);
+
+  destroy_marked_fds();
+
+  return NULL;
+}
+
+void *mark_counts_test() {
+  // mark() counts, unmark() clears all of it at once
+  init_marked_fds();
+
+  mark(7);
+  mark(7);
+
+  assert(is_marked(7) == 1);
+
+  unmark(7);
+
+  assert(is_marked(7) == 0);
+
+  destroy_marked_fds();
+
+  return NULL;
+}
+
 int marked_fds_test() {
 
   marked_fds_start_case(init_marked_fds_test, "init_marked_fds_test");
@@ -88,6 +125,8 @@ int marked_fds_test() {
   marked_fds_start_case(mark_fds_test, "mark_fds_test");
   marked_fds_start_case(unmark_fd_test, "unmark_fd_test");
   marked_fds_start_case(unmark_fds_test, "unmark_fds_test");
+  marked_fds_start_case(mark_highest_fd_test, "mark_highest_fd_test");
+  marked_fds_start_case(mark_counts_test, "mark_counts_test");
 
   return marked_fds_test_count;
 }

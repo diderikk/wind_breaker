@@ -3,16 +3,16 @@
 #include <stddef.h>
 #include <string.h>
 
-static volatile sig_atomic_t server_stop = 0;
+static volatile sig_atomic_t shutdown_requested = 0;
 
-sig_atomic_t stop() { return server_stop; }
+sig_atomic_t is_shutdown_requested() { return shutdown_requested; }
 
-void _stop_server(const char *file) {
+void _request_shutdown(const char *file) {
   assert(file != NULL);
 
   if (strstr(file, "main.c") == NULL) {
     return;
   }
 
-  server_stop = 1;
+  shutdown_requested = 1;
 }

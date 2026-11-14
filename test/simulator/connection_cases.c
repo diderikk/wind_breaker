@@ -8,8 +8,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define BUFFER_SIZE 8192
-
 void *start_write_recv_close_connection(void *arg);
 void sleep_ms(int ms);
 int set_recv_timeout(int socket, int milliseconds);
@@ -66,24 +64,27 @@ void *start_connections_simultaneously(void *arg) {
 }
 
 void *start_connection_send_recv_ten_times(void *arg) {
-  char buffer[BUFFER_SIZE];
+  buffer *response = init_buffer(0);
   int socket_fd, send, size;
+  assert(response != NULL);
   struct connection_data *data = (struct connection_data *)arg;
 
   socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
 
-  set_recv_timeout(socket_fd, 1000);
   for (int i = 0; i < 10; i++) {
     char *message = "Hello, server!";
     send = send_socket(socket_fd, message, strlen(message));
     assert(send > 0);
 
-    size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
+    // recv_bio appends to the buffer
+    response->count = 0;
+    size = recv_response(socket_fd, response, 1000);
     assert(size > 0);
   }
 
   close(socket_fd);
+  deinit_buffer(response);
   return 0;
 }
 
@@ -98,24 +99,24 @@ void *start_connection_close(void *arg) {
 }
 
 void *start_write_recv_close_connection(void *arg) {
-  char buffer[BUFFER_SIZE];
+  buffer *response = init_buffer(0);
   int socket_fd, send, size;
+  assert(response != NULL);
   struct connection_data *data = (struct connection_data *)arg;
 
   socket_fd = connect_to_server(data->ip, data->port);
   assert(socket_fd > 0);
-
-  set_recv_timeout(socket_fd, 1000);
 
   char *message = "Hello, server!";
   send = send_socket(socket_fd, message, strlen(message));
   assert(send > 0);
   sleep(1);
 
-  size = recv_socket(socket_fd, buffer, BUFFER_SIZE);
+  size = recv_response(socket_fd, response, 1000);
   assert(size > 0);
 
   close(socket_fd);
+  deinit_buffer(response);
   return 0;
 }
 
@@ -156,6 +157,17 @@ int connect_to_server(const char *ip, const char *port) {
 
   freeaddrinfo(servinfo);
   return socket_fd;
+}
+
+int recv_response(int socket_fd, buffer *response, int timeout_ms) {
+  BIO *bio = BIO_new_socket(socket_fd, BIO_NOCLOSE);
+  assert(bio != NULL);
+  assert(set_recv_timeout(socket_fd, timeout_ms) == 0);
+
+  int size = recv_bio(bio, response);
+
+  BIO_free(bio);
+  return size;
 }
 
 int set_recv_timeout(int socket, int milliseconds) {
