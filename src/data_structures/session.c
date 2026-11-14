@@ -523,8 +523,9 @@ static void session_map_set(int fd, session_node_t *node) {
       session_map_adjust_capacity(session_map->capacity);
     } else {
       // Double the capacity
-      unsigned int new_capacity =
-          session_map->capacity == 0 ? 16 : session_map->capacity * 2;
+      unsigned int new_capacity = session_map->capacity == 0
+                                      ? SESSION_DEFAULT_SIZE
+                                      : session_map->capacity * 2;
       session_map_adjust_capacity(new_capacity);
     }
   }

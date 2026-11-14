@@ -16,6 +16,7 @@
 #define HTTP_HEADER_ETAG_SIZE 65
 #define HTTP_VERSION "1.1"
 #define BACKTRACE_SIZE 128
+#define SESSION_DEFAULT_SIZE 16
 #define WB_SQLITE_OPEN_FLAGS                                                   \
   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI |               \
       SQLITE_OPEN_NOMUTEX

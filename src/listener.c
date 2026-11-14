@@ -17,8 +17,6 @@
 #define POLLRDHUP 0
 #endif
 
-extern int count;
-extern struct pollfd *fds;
 POLL_ERROR_CLASS classify_poll_error(int code);
 const char *get_poll_event_description(short event);
 int check_for_socket_error(int fd);
@@ -159,10 +157,12 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
 
   // Continously listen for new connections
   while (!is_shutdown_requested()) {
-    assert(count > 0);
-    log_info("Number of active sockets (including listener): %d", count);
+    assert(get_poll_fd_array_count() > 0);
+    log_info("Number of active sockets (including listener): %d",
+             get_poll_fd_array_count());
 
-    event_count = wait_for_events(fds, count, &sigmask);
+    event_count = wait_for_events(get_poll_fd_array(),
+                                  get_poll_fd_array_count(), &sigmask);
 
     if (event_count < 0) {
       error_class = classify_poll_error(errno);
@@ -172,13 +172,15 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
     }
 
     // Iterate through all the file descriptors and check for events
-    for (int i = 0; i < count; i++) {
-      poll = &fds[i];
+    // Looping backwards because remove_poll_fd_by_index_sync moves last
+    // entry to deleted entry
+    for (int i = get_poll_fd_array_count() - 1; i >= 0; i--) {
+      poll = &get_poll_fd_array()[i];
       assert(poll != NULL);
 
       if (is_marked(poll->fd)) {
         log_debug("Socket %d is marked, removing from poll array...", poll->fd);
-        remove_poll_fd_by_index_sync(&i);
+        remove_poll_fd_by_index_sync(i);
         continue;
       }
 
@@ -230,7 +232,12 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
 
           get_in_addr_str((struct sockaddr *)&client_addr, ip_str,
                           sizeof(ip_str));
+
+          // Adding new file description to poll array and session
           int session_push_result = 0;
+          int add_poll_fd_result = 0;
+
+          // First session data structure
           if (poll->fd == listener) {
             log_debug("New client connected on HTTP socket %s:%d", ip_str,
                       get_in_addr_port((struct sockaddr *)&client_addr));
@@ -242,18 +249,25 @@ void _listen(int listener, int listener_ssl, int (*request_handler)(int)) {
             session_push_result =
                 push_session(client_socket_fd, WORK_STATUS_INITIAL_SSL);
           }
+
+          // Then poll array
           if (session_push_result >= 0)
-            add_poll_fd_sync(client_socket_fd);
-          else {
+            add_poll_fd_result = add_poll_fd_sync(client_socket_fd);
+
+          // Remove from session data structure if poll array fails
+          if (add_poll_fd_result < 0)
+            request_close_session(client_socket_fd);
+
+          // Remove
+          if (session_push_result < 0 || add_poll_fd_result < 0) {
             unmark(client_socket_fd);
             close(client_socket_fd);
           }
-
         } else {
           log_debug("Polling for existing fd %d to send data...", poll->fd);
 
           if (request_handler(poll->fd) == -1) {
-            remove_poll_fd_by_index_sync(&i);
+            remove_poll_fd_by_index_sync(i);
           }
         }
       }
