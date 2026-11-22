@@ -13,7 +13,6 @@
 #include <unistd.h>
 
 static int http_socket_fd = -1, https_socket_fd = -1;
-static FILE *log_file;
 static SSL_CTX *ctx;
 static int status = 0;
 
@@ -39,7 +38,7 @@ void handle_exit(int signum) {
     destroy_ssl_ctx();
     ctx = NULL;
   }
-  if (status >= 2)
+  if (status >= 1)
     destroy_logger();
   exit(signum);
 }
@@ -48,42 +47,40 @@ int main(int argc, char *argv[]) {
   handle_signals(handle_exit);
   init_properties(argc, argv);
   status = 1;
-  log_file = init_logger(get_log_level(), get_log_type(), get_log_file());
+
+  assert(init_logger(get_log_level(), get_log_type(), get_log_file()) == 0);
   status = 2;
-  // Log file is opened if LOG_TYPE is FILE_ONLY or CONSOLE_FILE
-  assert(get_log_type() == CONSOLE_ONLY || log_file != NULL);
-  status = 3;
 
   log_debug("PID: %d", getpid());
 
   assert(migrate_db() == 0);
-  status = 4;
+  status = 3;
 
   http_socket_fd =
       get_listener_socket(get_http_port(), get_listen_backlog_max_size());
   assert(http_socket_fd >= 0);
-  status = 5;
+  status = 4;
 
   if (get_enabled_ssl() == 1) {
     https_socket_fd =
         get_listener_socket(get_https_port(), get_listen_backlog_max_size());
-    status = 6;
+    status = 5;
     if (https_socket_fd >= 0)
       ctx = init_ssl_ctx();
   }
 
   init_marked_fds();
-  status = 7;
+  status = 6;
   init_session_cache(ctx);
-  status = 8;
+  status = 7;
   if (get_enabled_ssl() == 1) {
     init_poll_array_ssl(http_socket_fd, https_socket_fd);
   } else {
     init_poll_array(http_socket_fd);
   }
-  status = 9;
+  status = 8;
   assert(init_workers(get_worker_thread_max_size(), NULL) == 0);
-  status = 10;
+  status = 9;
 
   listen_async(http_socket_fd, https_socket_fd);
 

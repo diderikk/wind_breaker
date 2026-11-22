@@ -320,7 +320,7 @@ int check_for_socket_error(int fd) {
   int err = 0;
   socklen_t len = sizeof(err);
   if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == -1) {
-    log_error("Error on socket %d => %s", fd, strerror(errno));
+    log_errno("Error on socket %d", fd);
     return -1;
   }
   return err;

@@ -14,7 +14,10 @@
 
 int main() {
   set_env("test");
-  init_logger(TRACE, CONSOLE_ONLY, NULL);
+  if (init_logger(TRACE, CONSOLE_ONLY, NULL) != 0) {
+    fprintf(stderr, "Failed to initialise the logger\n");
+    return 1;
+  }
   int prev_number_of_tests = 0;
   int number_of_tests = 0;
   int group_count = 0;

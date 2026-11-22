@@ -74,7 +74,7 @@ void *start_connection_send_recv_ten_times(void *arg) {
 
   for (int i = 0; i < 10; i++) {
     char *message = "Hello, server!";
-    send = send_socket(socket_fd, message, strlen(message));
+    send = send_request(socket_fd, message, strlen(message));
     assert(send > 0);
 
     // recv_bio appends to the buffer
@@ -108,7 +108,7 @@ void *start_write_recv_close_connection(void *arg) {
   assert(socket_fd > 0);
 
   char *message = "Hello, server!";
-  send = send_socket(socket_fd, message, strlen(message));
+  send = send_request(socket_fd, message, strlen(message));
   assert(send > 0);
   sleep(1);
 
@@ -157,6 +157,18 @@ int connect_to_server(const char *ip, const char *port) {
 
   freeaddrinfo(servinfo);
   return socket_fd;
+}
+
+int send_request(int socket_fd, const char *data, size_t length) {
+  BIO *bio = BIO_new_socket(socket_fd, BIO_NOCLOSE);
+  assert(bio != NULL);
+  // send_bio only reads from the buffer, so wrapping const data is safe.
+  buffer request = {.capacity = length, .count = length, .data = (char *)data};
+
+  int size = send_bio(bio, &request);
+
+  BIO_free(bio);
+  return size;
 }
 
 int recv_response(int socket_fd, buffer *response, int timeout_ms) {

@@ -3,9 +3,8 @@
 #include "../static.h"
 #include <errno.h>
 #include <execinfo.h>
-#include <openssl/err.h>
-#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -14,6 +13,9 @@
 #define LOG_BUFFER_SIZE (1 * 1024 * 1024) // 1 MiB
 #define TEMP_BUFFER_SIZE (4 * 1024)       // 4 KiB
 #define BACKTRACE_SIZE 128
+#define NO_ERRNO 0
+#define WITH_BACKTRACE 1
+#define WITHOUT_BACKTRACE 0
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"
 #define YEL "\x1B[33m"
@@ -24,8 +26,8 @@
 #define RESET "\x1B[0m"
 
 char *log_level_to_string(LOG_LEVEL level);
-void log_message(LOG_LEVEL level, const char *file, const char *message,
-                 va_list args_c);
+static void log_message(LOG_LEVEL level, const char *file, const char *message,
+                        va_list args_c, int error_no, int with_backtrace);
 
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 static LOG_LEVEL log_level = TRACE;
@@ -47,25 +49,39 @@ static unsigned int backtrace_offset;
 static int system_page_size = 0;
 static int file_offset_page_size_delta = 0;
 
+static void reset_logger_state() {
+  log_buffer = NULL;
+  if (log_file != NULL) {
+    fclose(log_file);
+  }
+  log_file = NULL;
+  log_buffer_offset = 0;
+  file_offset = 0;
+  system_page_size = 0;
+  file_offset_page_size_delta = 0;
+  log_destination = CONSOLE_ONLY;
+}
+
 // mmap idea from UNDO C & C++ Logging for Debugging Concurrency video
-FILE *init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
-                  const char *file_path) {
-  log_level = level;
-  log_destination = destination;
+int init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
+                const char *file_path) {
+  // Prevent re-init on file
+  if (log_file != NULL)
+    return -1;
   system_page_size = (int)sysconf(_SC_PAGE_SIZE);
   if (system_page_size < 1) {
     fprintf(stderr, "Failed to get system page size: %d\n", system_page_size);
-    return NULL;
+    return -1;
   }
   struct stat st;
 
   // Open file
-  if (log_destination == FILE_ONLY || log_destination == CONSOLE_FILE) {
+  if (destination == FILE_ONLY || destination == CONSOLE_FILE) {
     log_file = fopen(file_path, "a+");
     if (log_file == NULL) {
       fprintf(stderr, "Failed to open log file: %s : %s\n", file_path,
               strerror(errno));
-      return NULL;
+      return -1;
     }
 
     // Get file size
@@ -73,7 +89,8 @@ FILE *init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
     if (fstat(fd, &st) == -1) {
       fprintf(stderr, "Failed to get file stats: %s : %s\n", file_path,
               strerror(errno));
-      return NULL;
+      reset_logger_state();
+      return -1;
     }
     file_offset = st.st_size;
     // mmap requires the file_offset to be a multiple of the system's page size
@@ -87,46 +104,41 @@ FILE *init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
     if (ftruncate(fd, file_offset + LOG_BUFFER_SIZE) == -1) {
       fprintf(stderr, "Failed to truncate log file: %s : %s\n", file_path,
               strerror(errno));
-      return NULL;
+      reset_logger_state();
+      return -1;
     }
 
     // Map file to memory
     log_buffer = mmap(NULL, LOG_BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
                       fd, file_offset);
     if (log_buffer == MAP_FAILED) {
-      ftruncate(fd, file_offset + file_offset_page_size_delta);
+      log_buffer = NULL;
       fprintf(stderr, "Failed to map log file: %s : %s\n", file_path,
               strerror(errno));
-      return NULL;
+      ftruncate(fd, file_offset + log_buffer_offset);
+      reset_logger_state();
+      return -1;
     }
   }
 
-  if (log_destination != FILE_ONLY)
+  log_level = level;
+  log_destination = destination;
+
+  if (destination != FILE_ONLY)
     log_logo();
   log_info_(__FILE__, "Logger initialized with level %s and destination %s",
             log_level_to_string(level),
-            log_destination == CONSOLE_ONLY ? "CONSOLE_ONLY"
-            : log_destination == FILE_ONLY  ? "FILE_ONLY"
-                                            : "CONSOLE_FILE");
-  return log_file;
-}
+            destination == CONSOLE_ONLY ? "CONSOLE_ONLY"
+            : destination == FILE_ONLY  ? "FILE_ONLY"
+                                        : "CONSOLE_FILE");
 
-static void reset_logger_state() {
-  if (log_file != NULL) {
-    fclose(log_file);
-  }
-  log_file = NULL;
-  log_buffer_offset = 0;
-  file_offset = 0;
-  system_page_size = 0;
-  file_offset_page_size_delta = 0;
-  log_destination = CONSOLE_ONLY;
+  return 0;
 }
 
 void destroy_logger() {
   pthread_mutex_lock(&log_mutex);
-  msync(log_buffer, log_buffer_offset, MS_SYNC);
   if (log_buffer != NULL) {
+    msync(log_buffer, log_buffer_offset, MS_SYNC);
     if (log_destination == FILE_ONLY || log_destination == CONSOLE_FILE) {
       munmap(log_buffer, LOG_BUFFER_SIZE);
       int fd = fileno(log_file);
@@ -145,7 +157,7 @@ void log_trace_(const char *file, const char *message, ...) {
   }
   va_list args_c;
   va_start(args_c, message);
-  log_message(TRACE, file, message, args_c);
+  log_message(TRACE, file, message, args_c, NO_ERRNO, WITHOUT_BACKTRACE);
   va_end(args_c);
 }
 
@@ -155,7 +167,7 @@ void log_debug_(const char *file, const char *message, ...) {
   }
   va_list args_c;
   va_start(args_c, message);
-  log_message(DEBUG, file, message, args_c);
+  log_message(DEBUG, file, message, args_c, NO_ERRNO, WITHOUT_BACKTRACE);
   va_end(args_c);
 }
 
@@ -165,7 +177,7 @@ void log_info_(const char *file, const char *message, ...) {
   }
   va_list args_c;
   va_start(args_c, message);
-  log_message(INFO, file, message, args_c);
+  log_message(INFO, file, message, args_c, NO_ERRNO, WITHOUT_BACKTRACE);
   va_end(args_c);
 }
 
@@ -175,14 +187,33 @@ void log_warn_(const char *file, const char *message, ...) {
   }
   va_list args_c;
   va_start(args_c, message);
-  log_message(WARN, file, message, args_c);
+  log_message(WARN, file, message, args_c, NO_ERRNO, WITHOUT_BACKTRACE);
   va_end(args_c);
 }
 
 void log_error_(const char *file, const char *message, ...) {
   va_list args_c;
   va_start(args_c, message);
-  log_message(ERROR, file, message, args_c);
+  log_message(ERROR, file, message, args_c, NO_ERRNO, WITHOUT_BACKTRACE);
+  va_end(args_c);
+}
+
+void log_error_v_(const char *file, const char *message, va_list args_c) {
+  log_message(ERROR, file, message, args_c, NO_ERRNO, WITHOUT_BACKTRACE);
+}
+
+void log_error_backtrace_(const char *file, const char *message, ...) {
+  va_list args_c;
+  va_start(args_c, message);
+  log_message(ERROR, file, message, args_c, NO_ERRNO, WITH_BACKTRACE);
+  va_end(args_c);
+}
+
+void log_errno_(const char *file, const char *message, ...) {
+  int error_no = errno;
+  va_list args_c;
+  va_start(args_c, message);
+  log_message(ERROR, file, message, args_c, error_no, WITH_BACKTRACE);
   va_end(args_c);
 }
 
@@ -200,17 +231,17 @@ static inline int remap_log_buffer() {
 
     int fd = fileno(log_file);
     if (ftruncate(fd, file_offset + LOG_BUFFER_SIZE) == -1) {
+      fprintf(stderr, "Failed to truncate log file: %s\n", strerror(errno));
       // Try to truncate it to remove null bytes
       ftruncate(fd, file_offset + file_offset_page_size_delta);
-      fprintf(stderr, "Failed to truncate log file: %s\n", strerror(errno));
       return -1;
     }
     log_buffer = mmap(NULL, LOG_BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
                       fd, file_offset);
     if (log_buffer == MAP_FAILED) {
+      fprintf(stderr, "Failed to map log file: %s\n", strerror(errno));
       // Try to truncate it to remove null bytes
       ftruncate(fd, file_offset + file_offset_page_size_delta);
-      fprintf(stderr, "Failed to map log file: %s\n", strerror(errno));
       return -1;
     }
   }
@@ -286,25 +317,16 @@ log_to_backtrace_buffer(const char *time_str, const char *relative_file_path,
 static inline unsigned int log_to_error_buffer(const char *time_str,
                                                const char *relative_file_path,
                                                unsigned long thread_id,
-                                               int session_id, int level) {
+                                               int session_id, int level,
+                                               int error_no) {
   unsigned int temp_offset = 0;
   error_offset += log_header(error_buffer, time_str, relative_file_path,
                              thread_id, session_id, level);
 
-  if (errno != 0) {
+  if (error_no != 0) {
     temp_offset =
         snprintf(error_buffer + error_offset, TEMP_BUFFER_SIZE - error_offset,
-                 RED ": %d %s\n" RESET, errno, strerror(errno));
-
-    if (temp_offset + error_offset >= TEMP_BUFFER_SIZE) {
-      error_offset = shorten(error_buffer);
-    } else
-      error_offset += temp_offset;
-  }
-  if (ERR_peek_error() != 0 && error_offset < TEMP_BUFFER_SIZE) {
-    temp_offset =
-        snprintf(error_buffer + error_offset, TEMP_BUFFER_SIZE - error_offset,
-                 RED ": %s\n" RESET, ERR_error_string(ERR_get_error(), NULL));
+                 RED ": %d %s" RESET, error_no, strerror(error_no));
 
     if (temp_offset + error_offset >= TEMP_BUFFER_SIZE) {
       error_offset = shorten(error_buffer);
@@ -321,11 +343,10 @@ static inline unsigned int log_to_error_buffer(const char *time_str,
 }
 
 // Maybe remove coloring for "optimization"...
-static inline unsigned int log_to_buffer(const char *time_str,
-                                         const char *relative_file_path,
-                                         unsigned long thread_id,
-                                         int session_id, const char *message,
-                                         va_list args_c, int level) {
+static inline unsigned int
+log_to_buffer(const char *time_str, const char *relative_file_path,
+              unsigned long thread_id, int session_id, const char *message,
+              va_list args_c, int level, int error_no, int with_backtrace) {
   unsigned int offset = 0;
   unsigned int temp_offset = 0;
   offset += log_header(temp_buffer, time_str, relative_file_path, thread_id,
@@ -346,25 +367,28 @@ static inline unsigned int log_to_buffer(const char *time_str,
   // Error handling, always reset error offset
   error_offset = 0;
   backtrace_offset = 0;
-  if (level == ERROR && (errno != 0 || ERR_peek_error() != 0)) {
-    log_to_error_buffer(time_str, relative_file_path, thread_id, session_id,
-                        level);
+  if (with_backtrace == WITH_BACKTRACE) {
     log_to_backtrace_buffer(time_str, relative_file_path, thread_id, session_id,
                             level);
+  }
+  if (error_no > 0) {
+    log_to_error_buffer(time_str, relative_file_path, thread_id, session_id,
+                        level, error_no);
   }
 
   return offset;
 }
 
-inline void log_message(LOG_LEVEL level, const char *file, const char *message,
-                        va_list args_c) {
+static void log_message(LOG_LEVEL level, const char *file, const char *message,
+                        va_list args_c, int error_no, int with_backtrace) {
   struct tm timeinfo;
   char temp[20], time_str[24];
   pthread_t thread_id = pthread_self();
   int session_id = get_current_session();
-  char *relative_file_path = (strstr(file, "src/") != NULL)
-                                 ? strstr(file, "src/") + 4
-                                 : strstr(file, "test/") + 5;
+  const char *relative_file_path =
+      (strstr(file, "src/") != NULL) ? strstr(file, "src/") + 4
+      : (strstr(file, "test/"))      ? strstr(file, "test/") + 5
+                                     : file;
 
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
@@ -378,19 +402,18 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
 
   unsigned int offset = 0;
   offset = log_to_buffer(time_str, relative_file_path, (unsigned long)thread_id,
-                         session_id, message, args_c, level);
+                         session_id, message, args_c, level, error_no,
+                         with_backtrace);
   unsigned int total_offset = offset + error_offset + backtrace_offset;
-  if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
-    printf("%.*s%.*s%.*s", (int)offset, temp_buffer, (int)error_offset,
-           error_buffer, (int)backtrace_offset, backtrace_buffer);
-  }
 
+  // Log to file
   if (log_buffer != NULL) {
     int remap_offset = 0;
     if (log_buffer_offset + total_offset > LOG_BUFFER_SIZE) {
       remap_offset = remap_log_buffer();
       if (remap_offset < 0) {
-        printf("Failed to remap log buffer, going to CONSOLE_ONLY...");
+        fprintf(stderr,
+                "Failed to remap log buffer, going to CONSOLE_ONLY...\n");
         // Resetting to CONSOLE_ONLY
         reset_logger_state();
       } else {
@@ -410,6 +433,12 @@ inline void log_message(LOG_LEVEL level, const char *file, const char *message,
         log_buffer_offset += backtrace_offset;
       }
     }
+  }
+
+  // Log to console
+  if (log_destination == CONSOLE_ONLY || log_destination == CONSOLE_FILE) {
+    printf("%.*s%.*s%.*s", (int)offset, temp_buffer, (int)error_offset,
+           error_buffer, (int)backtrace_offset, backtrace_buffer);
   }
 
   pthread_mutex_unlock(&log_mutex);

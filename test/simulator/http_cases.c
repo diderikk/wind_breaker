@@ -37,7 +37,7 @@ void *start_http_get_request(void *arg) {
   };
 
   request_length = http_request_to_string(&request, request_text);
-  assert(send_socket(socket_fd, request_text, request_length) > 0);
+  assert(send_request(socket_fd, request_text, request_length) > 0);
 
   response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
@@ -81,7 +81,7 @@ void *start_http_get_request_gzip(void *arg) {
   };
 
   request_length = http_request_to_string(&request, request_text);
-  assert(send_socket(socket_fd, request_text, request_length) > 0);
+  assert(send_request(socket_fd, request_text, request_length) > 0);
 
   response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
@@ -135,7 +135,7 @@ void *start_http_get_request_deflate(void *arg) {
   };
 
   request_length = http_request_to_string(&request, request_text);
-  assert(send_socket(socket_fd, request_text, request_length) > 0);
+  assert(send_request(socket_fd, request_text, request_length) > 0);
 
   response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 
@@ -190,7 +190,7 @@ void *start_http_get_request_not_found(void *arg) {
   };
 
   request_length = http_request_to_string(&request, request_text);
-  assert(send_socket(socket_fd, request_text, request_length) > 0);
+  assert(send_request(socket_fd, request_text, request_length) > 0);
 
   response_length = recv_response(socket_fd, response, TEST_RECV_TIMEOUT_MS);
 

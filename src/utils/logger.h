@@ -1,13 +1,14 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+#include <stdarg.h>
 #include <stdio.h>
 
 typedef enum { TRACE, DEBUG, INFO, WARN, ERROR } LOG_LEVEL;
 typedef enum { CONSOLE_ONLY, FILE_ONLY, CONSOLE_FILE } LOG_DESTINATION;
 
-FILE *init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
-                  const char *file_path);
+int init_logger(LOG_LEVEL level, LOG_DESTINATION destination,
+                const char *file_path);
 void destroy_logger();
 void log_logo();
 void log_trace_(const char *file, const char *format, ...);
@@ -15,6 +16,9 @@ void log_debug_(const char *file, const char *format, ...);
 void log_info_(const char *file, const char *format, ...);
 void log_warn_(const char *file, const char *format, ...);
 void log_error_(const char *file, const char *format, ...);
+void log_errno_(const char *file, const char *format, ...);
+void log_error_backtrace_(const char *file, const char *format, ...);
+void log_error_v_(const char *file, const char *format, va_list args);
 
 // Macro definitions
 #define log_trace(format, ...) log_trace_(__FILE__, format, ##__VA_ARGS__)
@@ -22,5 +26,9 @@ void log_error_(const char *file, const char *format, ...);
 #define log_info(format, ...) log_info_(__FILE__, format, ##__VA_ARGS__)
 #define log_warn(format, ...) log_warn_(__FILE__, format, ##__VA_ARGS__)
 #define log_error(format, ...) log_error_(__FILE__, format, ##__VA_ARGS__)
+#define log_errno(format, ...) log_errno_(__FILE__, format, ##__VA_ARGS__)
+#define log_error_backtrace(format, ...)                                       \
+  log_error_backtrace_(__FILE__, format, ##__VA_ARGS__)
+#define log_error_v(format, args) log_error_v_(__FILE__, format, args)
 
 #endif // LOGGER_H
