@@ -33,7 +33,7 @@ int handle_request_async(int fd) {
   assert(session->bio != NULL);
 
   if (session->request.is_ssl) {
-    log_debug("Reading SSL request for fd %d", fd);
+    log_trace("Reading SSL request for fd %d", fd);
     assert(session->ssl != NULL);
     // Alloc more space for the data
     recv_return = recv_ssl(session->ssl, session->buffer);
@@ -52,18 +52,19 @@ int handle_request_async(int fd) {
       return -1;
     }
   } else {
-    log_debug("Reading plain request for fd %d", fd);
+    log_trace("Reading plain request for fd %d", fd);
     recv_return = recv_bio(session->bio, session->buffer);
     if (recv_return > 0) {
       return push_session(fd, WORK_STATUS_REQUEST_READ);
     } else if (recv_return <= 0 && BIO_should_retry(session->bio)) {
       return push_session(fd, WORK_STATUS_RETRY);
     } else {
-      log_error("BIO read error");
       // Got error or connection closed by client
       if (recv_return == 0) {
         // Connection closed
         log_trace("Socket %d hung up", fd);
+      } else { 
+        log_error("BIO read error");
       }
       push_session(fd, WORK_STATUS_REJECTED);
       return -1;
