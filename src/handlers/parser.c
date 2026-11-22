@@ -22,7 +22,7 @@ void *handle_a() {
 
     assert(session->buffer != NULL);
 
-    log_trace("Parsing request:\n%s", session->buffer->data);
+    log_info("Parsing request:\n%s", session->buffer->data);
 
     int result = parse_http_request(&session->request, session->buffer);
     if (result == ALLOCATE_MEMORY_ERROR) {
@@ -34,7 +34,7 @@ void *handle_a() {
           validate_request_headers(&session->request);
     }
 
-    log_info("Parsed:\nmethod: %d, uri_tokens: %s %s %s %s, version: %s, "
+    log_trace("Parsed:\nmethod: %d, uri_tokens: %s %s %s %s, version: %s, "
              "host: %s, user_agent: %s, accept: %s, "
              "accept_language: %s, accept_encoding: %s, connection: %d",
              session->request.method, session->request.uri[0],
