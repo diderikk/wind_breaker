@@ -113,22 +113,6 @@ int send_bio(BIO *bio, const buffer *buffer) {
   return send_return;
 }
 
-// TODO: Deprecated
-int send_socket(int socket_fd, const char *buffer, size_t buffer_size) {
-  int send_return;
-  assert(socket_fd > 0);
-  assert(buffer != NULL);
-  assert(buffer_size > 0);
-
-  send_return = send(socket_fd, buffer, buffer_size, 0);
-
-  if (send_return == -1) {
-    log_error("send error");
-    return -1;
-  }
-  return send_return;
-}
-
 // To be removed and functionality merged with BIO
 int recv_ssl(SSL *ssl, buffer *buffer) {
   int recv_return;
@@ -181,25 +165,6 @@ int recv_bio(BIO *bio, buffer *buffer) {
   return buffer->count;
 }
 
-// TODO: Deprecated
-int recv_socket(int socket_fd, char *buffer, size_t buffer_size) {
-  int recv_return;
-  assert(socket_fd > 0);
-  assert(buffer != NULL);
-  assert(buffer_size > 0);
-
-  memset(buffer, 0, buffer_size);
-  recv_return = recv(socket_fd, buffer, buffer_size - 1, 0);
-
-  if (recv_return == -1) {
-    log_error("recv error");
-    return -1;
-  }
-
-  buffer[buffer_size] = '\0';
-  return recv_return;
-}
-
 // TODO: Move to separate file
 // https://beej.us/guide/bgnet/html/split/client-server-background.html
 // get sockaddr, IPv4 or IPv6:
@@ -239,5 +204,4 @@ static inline void disable_socket_blocking(int socket_fd) {
 
   flags |= O_NONBLOCK;
   assert(fcntl(socket_fd, F_SETFL, flags) != -1);
-  log_trace("Set socket %d to non-blocking", socket_fd);
 }

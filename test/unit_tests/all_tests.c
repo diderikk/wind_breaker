@@ -7,13 +7,17 @@
 #include "http/response_test.c"
 #include "utils/compression_test.c"
 #include "utils/hash_test.c"
+#include "utils/logger_test.c"
 
 #define GRN "\x1B[32m"
 #define RESET "\x1B[0m"
 
 int main() {
   set_env("test");
-  init_logger(TRACE, CONSOLE_ONLY, NULL);
+  if (init_logger(TRACE, CONSOLE_ONLY, NULL) != 0) {
+    fprintf(stderr, "Failed to initialise the logger\n");
+    return 1;
+  }
   int prev_number_of_tests = 0;
   int number_of_tests = 0;
   int group_count = 0;
@@ -45,6 +49,12 @@ int main() {
   number_of_tests += hash_test();
   group_count = number_of_tests - prev_number_of_tests;
   printf(GRN "\nCompleted %d/%d hash tests\n" RESET, group_count, group_count);
+  prev_number_of_tests = number_of_tests;
+
+  number_of_tests += logger_test();
+  group_count = number_of_tests - prev_number_of_tests;
+  printf(GRN "\nCompleted %d/%d logger tests\n" RESET, group_count,
+         group_count);
   prev_number_of_tests = number_of_tests;
 
   number_of_tests += request_test();

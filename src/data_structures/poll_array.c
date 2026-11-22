@@ -76,7 +76,7 @@ int add_poll_fd_sync(int fd) {
     struct pollfd *temp_fds =
         realloc(fds, sizeof(struct pollfd) * new_capacity);
     if (temp_fds == NULL) {
-      log_error("poll_array failed to increase to capacity: %d", new_capacity);
+      log_errno("poll_array failed to increase to capacity: %d", new_capacity);
       return -1;
     }
 

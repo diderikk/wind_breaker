@@ -105,7 +105,7 @@ static inline int find_migration_files(int current_version) {
   // Open migration directory
   DIR *dir = opendir(DB_MIGRATE_DIR);
   if (dir == NULL) {
-    log_error("Failed to open directory: %s", DB_MIGRATE_DIR);
+    log_errno("Failed to open directory: %s", DB_MIGRATE_DIR);
     return -1;
   }
 
@@ -191,7 +191,7 @@ int migrate_db() {
 
     FILE *file = fopen(full_path, "r");
     if (file == NULL) {
-      log_error("Failed to open migration file: %s", migration_files[i]);
+      log_errno("Failed to open migration file: %s", migration_files[i]);
       rollback();
       sqlite3_close(db);
       return -1;
