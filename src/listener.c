@@ -32,43 +32,21 @@ int handle_request_async(int fd) {
   }
   assert(session->bio != NULL);
 
-  if (session->request.is_ssl) {
-    log_trace("Reading SSL request for fd %d", fd);
-    assert(session->ssl != NULL);
-    // Alloc more space for the data
-    recv_return = recv_ssl(session->ssl, session->buffer);
-    if (recv_return > 0) {
-      return push_session(fd, WORK_STATUS_REQUEST_READ);
-    } else if (recv_return <= 0 && SSL_get_error(session->ssl, recv_return) ==
-                                       SSL_ERROR_WANT_READ) {
-      return push_session(fd, WORK_STATUS_RETRY);
-    } else {
-      // Got error or connection closed by client
-      if (recv_return == 0) {
-        // Connection closed
-        log_trace("Socket %d hung up", fd);
-      }
-      push_session(fd, WORK_STATUS_REJECTED);
-      return -1;
-    }
+  recv_return = recv_bio(session->bio, session->buffer);
+  if (recv_return > 0) {
+    return push_session(fd, WORK_STATUS_REQUEST_READ);
+  } else if (recv_return <= 0 && BIO_should_retry(session->bio)) {
+    return push_session(fd, WORK_STATUS_RETRY);
   } else {
-    log_trace("Reading plain request for fd %d", fd);
-    recv_return = recv_bio(session->bio, session->buffer);
-    if (recv_return > 0) {
-      return push_session(fd, WORK_STATUS_REQUEST_READ);
-    } else if (recv_return <= 0 && BIO_should_retry(session->bio)) {
-      return push_session(fd, WORK_STATUS_RETRY);
+    // Got error or connection closed by client
+    if (recv_return == 0) {
+      // Connection closed
+      log_trace("Socket %d hung up", fd);
     } else {
-      // Got error or connection closed by client
-      if (recv_return == 0) {
-        // Connection closed
-        log_trace("Socket %d hung up", fd);
-      } else { 
-        log_error("BIO read error");
-      }
-      push_session(fd, WORK_STATUS_REJECTED);
-      return -1;
+      log_error("BIO read error");
     }
+    push_session(fd, WORK_STATUS_REJECTED);
+    return -1;
   }
 }
 

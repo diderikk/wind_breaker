@@ -3,7 +3,6 @@
 
 #include "data_structures/buffer.h"
 #include <openssl/bio.h>
-#include <openssl/ssl.h>
 #include <poll.h>
 #include <pthread.h>
 
@@ -129,7 +128,6 @@ typedef struct {
 typedef struct {
   meta_t meta;
   BIO *bio;
-  SSL *ssl;
   buffer *buffer;
   http_request_t request;
   http_response_t response;

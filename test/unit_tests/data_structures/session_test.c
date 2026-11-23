@@ -4,7 +4,9 @@
 #include "../../../src/static.h"
 #include "../../../src/utils/assert2.h"
 #include <fcntl.h>
+#include <openssl/err.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -124,7 +126,7 @@ void *initial_session_test() {
   assert(session->buffer != NULL);
   assert(session->buffer->count == 0);
   assert(session->bio != NULL);
-  assert(session->ssl == NULL);
+  assert(BIO_find_type(session->bio, BIO_TYPE_SSL) == NULL);
   assert(session->failed_send_attempts == 0);
 
   st_teardown();
@@ -134,11 +136,11 @@ void *initial_session_test() {
 
 void *initial_session_with_ssl_ctx_test() {
   // A plain connection on a cache that has an SSL context does not get an SSL
-  // object, only TLS connections (INITIAL_SSL) do
+  // BIO, only TLS connections (INITIAL_SSL) do
   st_setup_ssl(SESSION_TEST_SIZE);
 
   session_t *session = st_open(1);
-  assert(session->ssl == NULL);
+  assert(BIO_find_type(session->bio, BIO_TYPE_SSL) == NULL);
   assert(session->bio != NULL);
   assert(session->request.is_ssl == 0);
 
@@ -676,12 +678,22 @@ void *ssl_handshake_in_progress_test() {
   int sv[2];
   st_socketpair(sv);
 
-  // Client has not said anything yet: the handshake needs more data
+  // The handshake is driven by the first read, creating the session must not
+  // need any data from the client
   assert(push_session(sv[0], WORK_STATUS_INITIAL_SSL) == 0);
   session_t *session = pop_session_for_read(sv[0]);
   assert(session != NULL);
   assert(session->request.is_ssl == 1);
-  assert(session->ssl != NULL);
+  // send_bio/recv_bio use session->bio directly, so the SSL BIO must be the
+  // head of the chain, wrapping the socket BIO
+  assert(BIO_method_type(session->bio) == BIO_TYPE_SSL);
+  assert(BIO_find_type(session->bio, BIO_TYPE_SOCKET) != NULL);
+  assert(is_marked(sv[0]) == 0);
+
+  // Client has not said anything yet: reading must ask to be retried
+  char data[64];
+  assert(BIO_read(session->bio, data, sizeof(data)) <= 0);
+  assert(BIO_should_retry(session->bio) != 0);
   assert(is_marked(sv[0]) == 0);
 
   st_teardown();
@@ -700,8 +712,22 @@ void *ssl_port_receives_plain_http_test() {
   const char *request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
   assert(write(sv[1], request, strlen(request)) == (ssize_t)strlen(request));
 
-  // The handshake fails: the session is released and must not be queued
-  assert(push_session(sv[0], WORK_STATUS_INITIAL_SSL) == -1);
+  // The session is created, the handshake only starts on the first read
+  assert(push_session(sv[0], WORK_STATUS_INITIAL_SSL) == 0);
+  session_t *session = pop_session_for_read(sv[0]);
+  assert(session != NULL);
+
+  // The read fails for good: it must not be retried, and the reason is that
+  // the client spoke plain HTTP
+  char data[64];
+  ERR_clear_error();
+  assert(BIO_read(session->bio, data, sizeof(data)) <= 0);
+  assert(BIO_should_retry(session->bio) == 0);
+  assert(ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST);
+  ERR_clear_error();
+
+  // The listener rejects it: the session is released
+  assert(push_session(sv[0], WORK_STATUS_REJECTED) == 0);
   assert(is_marked(sv[0]) == 1);
   assert(pop_session_for_read(sv[0]) == NULL);
 
@@ -742,6 +768,217 @@ void *is_ssl_cleared_when_slot_reused_test() {
   st_teardown();
   close(sv[0]);
   close(sv[1]);
+
+  return NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Real TLS handshakes
+//
+// The server side is the session's own BIO chain, the client side is a plain
+// OpenSSL client. Both ends are non-blocking and driven from this thread, one
+// step at a time, so no threads or timeouts are needed.
+// Uses the certificate and key at the default property paths
+// (/etc/wind_breaker/), the same ones the server uses.
+// ---------------------------------------------------------------------------
+
+#define ST_TLS_MAX_STEPS 200
+
+// Like st_setup_ssl, but the context has the server certificate and key
+static void st_setup_tls(int size) {
+  set_session_max_size(size);
+  init_marked_fds();
+  session_test_ctx = SSL_CTX_new(TLS_server_method());
+  assert(session_test_ctx != NULL);
+  assert(SSL_CTX_use_certificate_chain_file(session_test_ctx, get_cert_file()) >
+         0);
+  assert(SSL_CTX_use_PrivateKey_file(session_test_ctx, get_key_file(),
+                                     SSL_FILETYPE_PEM) > 0);
+  assert(SSL_CTX_check_private_key(session_test_ctx) == 1);
+  init_session_cache(session_test_ctx);
+}
+
+typedef struct {
+  SSL_CTX *ctx;
+  SSL *ssl;
+} st_tls_client_t;
+
+// Non-blocking TLS client on fd, not yet connected
+static st_tls_client_t st_tls_client_open(int fd) {
+  // Both ends are driven from this thread, a blocking client would wait for a
+  // server reply that can only be produced after it returns
+  int flags = fcntl(fd, F_GETFL, 0);
+  assert(flags != -1);
+  assert(fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1);
+
+  st_tls_client_t client;
+  client.ctx = SSL_CTX_new(TLS_client_method());
+  assert(client.ctx != NULL);
+  // Test certificate is self-signed
+  SSL_CTX_set_verify(client.ctx, SSL_VERIFY_NONE, NULL);
+  client.ssl = SSL_new(client.ctx);
+  assert(client.ssl != NULL);
+  assert(SSL_set_fd(client.ssl, fd) == 1);
+  SSL_set_connect_state(client.ssl);
+  return client;
+}
+
+static void st_tls_client_close(st_tls_client_t *client) {
+  SSL_free(client->ssl);
+  SSL_CTX_free(client->ctx);
+}
+
+// A TLS call on a non-blocking socket may only fail because it needs more I/O
+static void st_assert_tls_progress(SSL *ssl, int ret) {
+  if (ret > 0)
+    return;
+  int err = SSL_get_error(ssl, ret);
+  assert(err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE);
+}
+
+// Server side SSL of a session (the SSL BIO has to be reachable from the head)
+static SSL *st_session_ssl(session_t *session) {
+  SSL *ssl = NULL;
+  BIO_get_ssl(session->bio, &ssl);
+  assert(ssl != NULL);
+  return ssl;
+}
+
+// Alternates one client step and one server read until both sides report the
+// handshake as finished. The server read is what drives the server handshake,
+// like the listener does for a new connection.
+static void st_tls_handshake(session_t *session, st_tls_client_t *client) {
+  SSL *server_ssl = st_session_ssl(session);
+  char data[64];
+
+  for (int step = 0; step < ST_TLS_MAX_STEPS; step++) {
+    if (SSL_is_init_finished(client->ssl) && SSL_is_init_finished(server_ssl))
+      return;
+
+    if (!SSL_is_init_finished(client->ssl))
+      st_assert_tls_progress(client->ssl, SSL_connect(client->ssl));
+
+    // No application data has been sent: the read can only make progress on
+    // the handshake and must ask to be retried until it is done
+    assert(BIO_read(session->bio, data, sizeof(data)) <= 0);
+    assert(BIO_should_retry(session->bio) != 0);
+  }
+  assert(0 && "TLS handshake did not finish");
+}
+
+void *tls_handshake_completes_test() {
+  st_setup_tls(SESSION_TEST_SIZE);
+
+  int sv[2];
+  st_socketpair(sv);
+  st_tls_client_t client = st_tls_client_open(sv[1]);
+
+  assert(push_session(sv[0], WORK_STATUS_INITIAL_SSL) == 0);
+  session_t *session = pop_session_for_read(sv[0]);
+  assert(session != NULL);
+
+  st_tls_handshake(session, &client);
+
+  SSL *server_ssl = st_session_ssl(session);
+  assert(SSL_is_server(server_ssl) == 1);
+  assert(SSL_version(server_ssl) >= TLS1_2_VERSION);
+  assert(SSL_version(client.ssl) == SSL_version(server_ssl));
+  assert(is_marked(sv[0]) == 0);
+
+  // A finished TLS session is released like any other
+  assert(push_session(sv[0], WORK_STATUS_REJECTED) == 0);
+  assert(is_marked(sv[0]) == 1);
+  assert(pop_session_for_read(sv[0]) == NULL);
+
+  st_tls_client_close(&client);
+  st_teardown();
+  close(sv[0]);
+  close(sv[1]);
+
+  return NULL;
+}
+
+void *tls_data_roundtrip_test() {
+  st_setup_tls(SESSION_TEST_SIZE);
+
+  int sv[2];
+  st_socketpair(sv);
+  st_tls_client_t client = st_tls_client_open(sv[1]);
+
+  assert(push_session(sv[0], WORK_STATUS_INITIAL_SSL) == 0);
+  session_t *session = pop_session_for_read(sv[0]);
+  assert(session != NULL);
+  st_tls_handshake(session, &client);
+
+  // Request: client -> server, read through the session's BIO like recv_bio
+  const char *request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  int request_len = (int)strlen(request);
+  assert(SSL_write(client.ssl, request, request_len) == request_len);
+
+  char received[128];
+  assert(BIO_read(session->bio, received, sizeof(received)) == request_len);
+  assert(memcmp(received, request, request_len) == 0);
+
+  // Nothing more to read until the client sends something
+  assert(BIO_read(session->bio, received, sizeof(received)) <= 0);
+  assert(BIO_should_retry(session->bio) != 0);
+
+  // Response: server -> client, written through the session's BIO like
+  // send_bio
+  const char *response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+  int response_len = (int)strlen(response);
+  assert(BIO_write(session->bio, response, response_len) == response_len);
+
+  char answer[128];
+  assert(SSL_read(client.ssl, answer, sizeof(answer)) == response_len);
+  assert(memcmp(answer, response, response_len) == 0);
+
+  st_tls_client_close(&client);
+  st_teardown();
+  close(sv[0]);
+  close(sv[1]);
+
+  return NULL;
+}
+
+void *tls_client_hangs_up_during_handshake_test() {
+  // The server ignores SIGPIPE (shutdown/signal2.c): writing a TLS alert to a
+  // closed peer must be an error return, not a dead process
+  signal(SIGPIPE, SIG_IGN);
+  st_setup_tls(SESSION_TEST_SIZE);
+
+  int sv[2];
+  st_socketpair(sv);
+  st_tls_client_t client = st_tls_client_open(sv[1]);
+
+  assert(push_session(sv[0], WORK_STATUS_INITIAL_SSL) == 0);
+  session_t *session = pop_session_for_read(sv[0]);
+  assert(session != NULL);
+
+  // The client sends its hello and then disappears
+  st_assert_tls_progress(client.ssl, SSL_connect(client.ssl));
+  st_tls_client_close(&client);
+  close(sv[1]);
+
+  // The server may need a few reads to consume the hello, but it must end in
+  // a failure that is not retried, not in an endless "try again"
+  char data[64];
+  int ret = 1;
+  for (int step = 0; step < ST_TLS_MAX_STEPS; step++) {
+    ret = BIO_read(session->bio, data, sizeof(data));
+    if (ret <= 0 && !BIO_should_retry(session->bio))
+      break;
+  }
+  assert(ret <= 0);
+  assert(BIO_should_retry(session->bio) == 0);
+  ERR_clear_error();
+
+  assert(push_session(sv[0], WORK_STATUS_REJECTED) == 0);
+  assert(is_marked(sv[0]) == 1);
+  assert(pop_session_for_read(sv[0]) == NULL);
+
+  st_teardown();
+  close(sv[0]);
 
   return NULL;
 }
@@ -1134,6 +1371,11 @@ int session_test() {
                      "ssl_port_receives_plain_http_test");
   session_start_case(is_ssl_cleared_when_slot_reused_test,
                      "is_ssl_cleared_when_slot_reused_test");
+  session_start_case(tls_handshake_completes_test,
+                     "tls_handshake_completes_test");
+  session_start_case(tls_data_roundtrip_test, "tls_data_roundtrip_test");
+  session_start_case(tls_client_hangs_up_during_handshake_test,
+                     "tls_client_hangs_up_during_handshake_test");
 
   session_start_case(pop_session_blocks_until_pushed_test,
                      "pop_session_blocks_until_pushed_test");

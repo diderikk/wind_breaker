@@ -79,24 +79,6 @@ int connect_socket(int socket_fd, const struct sockaddr *in_addr,
   return connect_return;
 }
 
-// To be removed and functionality merged with BIO
-int send_ssl(SSL *ssl, const buffer *buffer) {
-  int send_return;
-  assert(ssl != NULL);
-  assert(buffer != NULL);
-  assert(buffer->data != NULL);
-  assert(buffer->count > 0);
-
-  send_return = SSL_write(ssl, buffer->data, buffer->count);
-
-  assert(send_return != -2);
-  if (send_return == -1) {
-    log_error("SSL write error: %d %s", SSL_get_error(ssl, send_return),
-              ERR_reason_error_string(SSL_get_error(ssl, send_return)));
-  }
-  return send_return;
-}
-
 int send_bio(BIO *bio, const buffer *buffer) {
   int send_return;
   assert(bio != NULL);
@@ -111,32 +93,6 @@ int send_bio(BIO *bio, const buffer *buffer) {
     log_error("BIO write error");
   }
   return send_return;
-}
-
-// To be removed and functionality merged with BIO
-int recv_ssl(SSL *ssl, buffer *buffer) {
-  int recv_return;
-  assert(ssl != NULL);
-  assert(buffer != NULL);
-  assert(buffer->data == NULL || buffer->capacity > 0);
-
-  // Alloc more space for the data or any space at all :)
-  size_t pending = SSL_pending(ssl);
-  size_t old_count = buffer->count;
-  assert(ENSURE_CAPACITY(buffer, old_count + pending + 1) > 0);
-
-  recv_return = SSL_read(ssl, buffer->data + old_count, pending - 1);
-  buffer->count = buffer->count + recv_return;
-
-  assert(recv_return <= pending);
-  if (recv_return < 0) {
-    log_error("SSL read error");
-    return -1;
-  }
-
-  buffer->data[buffer->count] = '\0';
-  buffer->count++;
-  return recv_return;
 }
 
 int recv_bio(BIO *bio, buffer *buffer) {
