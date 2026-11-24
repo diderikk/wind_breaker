@@ -49,9 +49,8 @@ static pthread_cond_t data_fetched_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t response_generated_cond = PTHREAD_COND_INITIALIZER;
 
 static void destroy_session_node(session_node_t *node);
-static inline session_node_t *init_session(int related_fd);
+static inline session_node_t *init_session(int related_fd, bool is_ssl);
 static inline void deinit_session(session_node_t *node);
-static inline int init_ssl_session(session_node_t *node);
 static inline void reset_request(session_t *session);
 static void append_linked_list(session_node_t **ll, session_node_t *node);
 static session_node_t *pop_linked_list(session_node_t **ll);
@@ -88,12 +87,7 @@ static void destroy_session_node(session_node_t *node) {
     deinit_buffer(session->buffer);
     session->buffer = NULL;
   }
-  if (session->ssl != NULL) {
-    SSL_free(session->ssl);
-    session->ssl = NULL;
-  } else {
-    BIO_free(session->bio);
-  }
+  BIO_free_all(session->bio);
   session->bio = NULL;
   free(node);
 }
@@ -222,26 +216,12 @@ int push_session(int related_fd, WORK_STATUS status) {
   }
 
   if (is_new_session) {
+    bool is_ssl = status == WORK_STATUS_INITIAL_SSL;
     bool is_ready = true;
-    session_node_t *node = init_session(related_fd);
+    session_node_t *node = init_session(related_fd, is_ssl);
     if (node == NULL) {
       is_ready = false;
       mark(related_fd);
-    } else {
-      if (status == WORK_STATUS_INITIAL_SSL) {
-        switch (init_ssl_session(node)) {
-        case 1:
-          node->session.request.is_ssl = 1;
-          break;
-        case -1:
-          deinit_session(node);
-          is_ready = false;
-          break;
-        default:
-          assert(0);
-          break;
-        }
-      }
     }
     if (is_ready)
       append_linked_list(&ll_ready_to_read, node);
@@ -323,7 +303,22 @@ session_t *pop_session_for_read(int related_fd) {
   return result;
 }
 
-static inline session_node_t *init_session(int related_fd) {
+static bool init_session_ssl(session_t *session) {
+  assert(ssl_ctx != NULL);
+  if (session->bio == NULL)
+    return false;
+
+  // 0 = server mode
+  BIO *ssl_bio = BIO_new_ssl(ssl_ctx, 0);
+  if (ssl_bio == NULL) {
+    return false;
+  }
+  session->bio = BIO_push(ssl_bio, session->bio);
+
+  return true;
+}
+
+static inline session_node_t *init_session(int related_fd, bool is_ssl) {
   if (session_map->live > get_session_max_size())
     return NULL;
   session_node_t *node = calloc(1, sizeof(session_node_t));
@@ -334,19 +329,26 @@ static inline session_node_t *init_session(int related_fd) {
   session->meta.id = rand();
   session->meta.related_fd = related_fd;
   session->failed_send_attempts = 0;
-  session->buffer = init_buffer(0);
+  session->request.is_ssl = is_ssl;
 
+  session->buffer = init_buffer(0);
   if (session->buffer == NULL) {
     free(node);
     return NULL;
   }
+
   session->bio = BIO_new(BIO_s_socket());
-  if (session->bio == NULL) {
+  if (session->bio != NULL)
+    BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
+
+  if (session->bio == NULL || (is_ssl && !init_session_ssl(session))) {
+    if (session->bio != NULL) {
+      BIO_free_all(session->bio);
+    }
     deinit_buffer(session->buffer);
     free(node);
     return NULL;
   }
-  BIO_set_fd(session->bio, related_fd, BIO_NOCLOSE);
 
   session_map_set(related_fd, node);
 
@@ -358,46 +360,6 @@ static inline void deinit_session(session_node_t *node) {
   session_map_delete(node->session.meta.related_fd);
 
   destroy_session_node(node);
-}
-
-static inline int init_ssl_session(session_node_t *node) {
-  session_t *session = &node->session;
-
-  // SSL
-  if (ssl_ctx != NULL) {
-    session->ssl = SSL_new(ssl_ctx);
-    if (session->ssl == NULL) {
-      log_error("Failed to SSL_new\n");
-      BIO_free(session->bio);
-      deinit_buffer(session->buffer);
-      free(node);
-      return -1;
-    }
-    assert(SSL_is_server(session->ssl));
-  }
-
-  SSL *ssl = node->session.ssl;
-  BIO *bio = node->session.bio;
-
-  SSL_set_bio(ssl, bio, bio);
-
-  int ret = SSL_accept(ssl);
-  if (ret <= 0 || ret == 2) {
-    int err = SSL_get_error(ssl, ret);
-    // According to the SSL_accept, non-blocking socket must be handled
-    if (err == SSL_ERROR_WANT_READ) {
-      log_error("SSL_ERROR_WANT_READ");
-      return 1;
-    } else if (ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST) {
-      log_error("SSL_R_HTTP_REQUEST\n");
-      return -1;
-    } else {
-      log_error("SSL_accept failed, %s\n",
-                ERR_error_string(ERR_get_error(), NULL));
-      return -1;
-    }
-  }
-  return ret;
 }
 
 static inline void reset_request(session_t *session) {

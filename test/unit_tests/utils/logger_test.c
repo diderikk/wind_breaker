@@ -588,11 +588,13 @@ void *logger_line_length_boundaries_test() {
   long size = 0;
   char *buffer = logger_read_file(TEST_LOG_PATH, &size);
   // One line per message, plus the "Logger initialized" line
-  long expected_lines = LOGGER_TEST_SWEEP_LAST - LOGGER_TEST_SWEEP_FIRST + 1 + 1;
+  long expected_lines =
+      LOGGER_TEST_SWEEP_LAST - LOGGER_TEST_SWEEP_FIRST + 1 + 1;
   logger_check(logger_count_nul_bytes(buffer, size) == 0,
                "no line length may produce zero bytes");
   logger_check(logger_count_occurrences(buffer, size, "\n") == expected_lines,
-               "expected exactly %ld newlines, one per message", expected_lines);
+               "expected exactly %ld newlines, one per message",
+               expected_lines);
   logger_check(buffer[size - 1] == '\n', "file should end with a newline");
 
   free(buffer);

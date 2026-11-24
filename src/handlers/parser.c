@@ -35,14 +35,14 @@ void *handle_a() {
     }
 
     log_trace("Parsed:\nmethod: %d, uri_tokens: %s %s %s %s, version: %s, "
-             "host: %s, user_agent: %s, accept: %s, "
-             "accept_language: %s, accept_encoding: %s, connection: %d",
-             session->request.method, session->request.uri[0],
-             session->request.uri[1], session->request.uri[2],
-             session->request.uri[3], session->request.version,
-             session->request.host, session->request.user_agent,
-             session->request.accept, session->request.accept_language,
-             session->request.accept_encoding, session->request.connection);
+              "host: %s, user_agent: %s, accept: %s, "
+              "accept_language: %s, accept_encoding: %s, connection: %d",
+              session->request.method, session->request.uri[0],
+              session->request.uri[1], session->request.uri[2],
+              session->request.uri[3], session->request.version,
+              session->request.host, session->request.user_agent,
+              session->request.accept, session->request.accept_language,
+              session->request.accept_encoding, session->request.connection);
 
     clear_current_session();
     push_session(session->meta.related_fd, WORK_STATUS_PARSED);

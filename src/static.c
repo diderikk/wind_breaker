@@ -1,5 +1,6 @@
 #include "static.h"
 #include <stdlib.h>
+#include <string.h>
 
 char *uri_to_file_name(const uri_token_t uri) {
   if (strcmp(uri[0], "") == 0) {
